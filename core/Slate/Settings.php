@@ -159,7 +159,7 @@ final class Settings
             'appearance' => ['label' => 'Appearance', 'icon' => 'palette', 'sections' => [
                 'theme' => ['label' => 'Theme', 'fields' => [
                     ['key' => 'theme', 'type' => 'select', 'label' => 'Active theme', 'default' => 'default', 'options' => 'themes'],
-                    ['key' => 'theme_accent', 'type' => 'color', 'label' => 'Accent colour', 'default' => '#4f46e5'],
+                    ['key' => 'theme_accent', 'type' => 'color', 'label' => 'Accent colour', 'default' => '#F26B2D'],
                     ['key' => 'admin_bar_frontend', 'type' => 'toggle', 'label' => 'Show admin bar on the website when logged in', 'default' => true],
                 ]],
                 'menus' => ['label' => 'Menus', 'render' => 'menus'],

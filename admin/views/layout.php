@@ -24,6 +24,9 @@ $navItem = static function (string $href, string $iconName, string $label, bool 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title><?= e(($title ?? 'Dashboard') . ' ‹ ' . Options::get('site_title') . ' — Slate') ?></title>
+<link rel="preload" href="<?= e(url('admin/assets/fonts/inter.woff2')) ?>" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="<?= e(url('admin/assets/fonts/instrument-serif.woff2')) ?>" as="font" type="font/woff2" crossorigin>
+<link rel="icon" type="image/svg+xml" href="<?= e(url('admin/assets/brand/favicon.svg')) ?>">
 <link rel="stylesheet" href="<?= e(asset_url('admin/assets/admin.css')) ?>">
 <script>
 (function(){var t=document.documentElement.dataset.theme;if(t==='auto'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.mode=t;if(localStorage.getItem('slate_nav')==='collapsed')document.documentElement.classList.add('nav-collapsed')})();
@@ -40,8 +43,7 @@ window.SLATE = <?= json_encode([
   <aside class="sidebar" id="sidebar">
     <div class="brand">
       <a href="<?= e(admin_url()) ?>" class="brand-link">
-        <span class="brand-mark"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="9" fill="url(#g)"/><path d="M10 11.5c0-1.9 1.6-3.5 3.5-3.5H22v4h-8v2.5h4.5c1.9 0 3.5 1.6 3.5 3.5v2.5c0 1.9-1.6 3.5-3.5 3.5H10v-4h8v-2.5h-4.5c-1.9 0-3.5-1.6-3.5-3.5z" fill="#fff"/><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs></svg></span>
-        <span class="brand-name">Slate</span>
+        <?= icon_logo() ?>
       </a>
       <button class="icon-btn nav-collapse" type="button" data-action="collapse-nav" aria-label="Collapse sidebar"><?= icon('chevron-left', 16) ?></button>
     </div>

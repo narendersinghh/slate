@@ -6,15 +6,17 @@ use Slate\Posts;
 $hour = (int)local_date(now(), 'G');
 $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
 ?>
-<div class="page-head">
+<section class="hero-panel">
   <div>
-    <h1><?= e($greet) ?>, <?= e(explode(' ', Auth::user()['display_name'])[0]) ?></h1>
-    <p class="muted">Here’s what’s happening on <?= e(site_name()) ?>.</p>
+    <span class="eyebrow"><?= e(local_date(now(), 'l, F j')) ?></span>
+    <h1><?= e($greet) ?>, <em><?= e(explode(' ', Auth::user()['display_name'])[0]) ?></em></h1>
+    <p>Here’s what’s happening on <?= e(site_name()) ?> today.</p>
   </div>
-  <div class="page-actions">
+  <div class="hero-actions">
     <a class="btn" href="<?= e(url()) ?>" target="_blank" rel="noopener"><?= icon('eye', 16) ?> View site</a>
+    <?php if (Auth::can('edit_posts')): ?><a class="btn btn-primary" href="<?= e(admin_url('content/post/new')) ?>"><?= icon('edit', 16) ?> Write a post</a><?php endif; ?>
   </div>
-</div>
+</section>
 
 <?php if (!empty($update) && version_compare($update['latest'] ?? '0', SLATE_VERSION, '>')): ?>
 <div class="banner banner-accent">
@@ -25,19 +27,17 @@ $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good ev
 <?php endif; ?>
 
 <div class="stat-grid">
-  <?php foreach ($stats as $slug => $s): ?>
+  <?php foreach ($stats as $slug => $st): ?>
   <a class="stat" href="<?= e(admin_url("content/$slug")) ?>">
-    <span class="stat-icon"><?= icon($s['type']['icon'] ?? 'file', 18) ?></span>
-    <span class="stat-label"><?= e($s['type']['plural']) ?></span>
-    <span class="stat-value"><?= number_format($s['count']) ?></span>
-    <span class="stat-hint">published</span>
+    <span class="stat-top"><span class="stat-icon"><?= icon($st['type']['icon'] ?? 'file', 17) ?></span><span class="stat-arrow"><?= icon('arrow-up-right', 16) ?></span></span>
+    <span class="stat-value"><?= number_format($st['count']) ?></span>
+    <span class="stat-label"><?= e($st['type']['plural']) ?> <span class="stat-hint">· published</span></span>
   </a>
   <?php endforeach; ?>
   <a class="stat" href="<?= e(admin_url('media')) ?>">
-    <span class="stat-icon"><?= icon('image', 18) ?></span>
-    <span class="stat-label">Media</span>
+    <span class="stat-top"><span class="stat-icon"><?= icon('image', 17) ?></span><span class="stat-arrow"><?= icon('arrow-up-right', 16) ?></span></span>
     <span class="stat-value"><?= number_format($media['count']) ?></span>
-    <span class="stat-hint"><?= e(format_bytes($media['size'])) ?> · <?= e(format_bytes($media['saved'])) ?> saved by compression</span>
+    <span class="stat-label">Media files <span class="stat-hint">· <?= e(format_bytes($media['saved'])) ?> saved</span></span>
   </a>
 </div>
 

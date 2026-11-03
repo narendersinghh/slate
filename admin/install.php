@@ -29,20 +29,16 @@ $critical = ['PHP ' . SLATE_MIN_PHP . '+', 'PDO (MySQL or SQLite)', 'sodium (enc
 $blocked = (bool)array_filter($critical, static fn($k) => empty($req[$k]));
 $v = static fn(string $k, string $d = '') => e($_POST[$k] ?? $d);
 $guessUrl = (is_https() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost') . base_path();
-?><!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
-<title>Install Slate</title>
-<link rel="stylesheet" href="<?= e(asset_url('admin/assets/admin.css')) ?>">
-<script>document.documentElement.dataset.mode=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'</script>
-</head>
-<body class="auth-page">
-<main class="auth-card auth-card-wide">
+$pageTitle = 'Install Slate';
+$quote = $done ? 'You’re all <em>set</em>. Time to build something great.' : 'A CMS that gets out of your <em>way</em>.';
+require SLATE_ADMIN . '/views/partials/auth-head.php';
+?>
+<div class="auth-card auth-card-wide">
   <div class="auth-brand">
-    <svg viewBox="0 0 32 32" width="44" height="44" aria-hidden="true"><rect width="32" height="32" rx="9" fill="url(#g)"/><path d="M10 11.5c0-1.9 1.6-3.5 3.5-3.5H22v4h-8v2.5h4.5c1.9 0 3.5 1.6 3.5 3.5v2.5c0 1.9-1.6 3.5-3.5 3.5H10v-4h8v-2.5h-4.5c-1.9 0-3.5-1.6-3.5-3.5z" fill="#fff"/><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs></svg>
-    <h1><?= $done ? 'Slate is installed 🎉' : 'Install Slate ' . e(SLATE_VERSION) ?></h1>
-    <p class="muted"><?= $done ? 'Your website is ready.' : 'A fast, secure, SEO-ready CMS. This takes about a minute.' ?></p>
+    <?= \Slate\Icons::logo(48) ?>
+    <span class="eyebrow"><?= $done ? 'Installation complete' : 'Setup · Slate ' . e(SLATE_VERSION) ?></span>
+    <h1><?= $done ? 'Slate is <em>ready</em>' : 'Let’s set up <em>Slate</em>' ?></h1>
+    <p class="muted"><?= $done ? 'Your website and dashboard are live.' : 'Fast, secure and SEO-ready. This takes about a minute.' ?></p>
   </div>
 
   <?php if ($done): ?>
@@ -97,6 +93,7 @@ $guessUrl = (is_https() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'l
     (function(){var f=document.querySelector('[data-install]');function u(){var s=f.querySelector('[name=db_driver]:checked');f.querySelector('[data-mysql]').hidden=s&&s.value==='sqlite'}f.addEventListener('change',u);u()})();
   </script>
   <?php endif; ?>
+</div>
 </main>
 </body>
 </html>

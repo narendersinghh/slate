@@ -1,3 +1,5 @@
+<p align="center"><img src="admin/assets/brand/logo.svg" alt="Slate" height="64"></p>
+
 # Slate CMS
 
 A fast, secure, SEO-first content management system — the flexibility of WordPress without the bloat.
@@ -14,6 +16,11 @@ A fast, secure, SEO-first content management system — the flexibility of WordP
 - **Roles** — Administrator, Editor, Author, Contributor, Subscriber with granular capabilities.
 - **Modules** — Slate’s name for plugins. Drop a folder into `/modules`, activate it in the admin.
 - **Updates** — one-click core updates from GitHub Releases with automatic backup and rollback.
+
+## Brand
+
+Logo files live in `admin/assets/brand/` — `logo.svg` (wordmark), `logo-white.svg`, `logo-mark.svg`, `logo-mark-light.svg`, `logo-glyph.svg`, `favicon.svg` and `brand-sheet.png`.
+Colours: brand orange `#F26B2D` (scale `#FFF5EF` → `#5C2008`) and ink `#0D0D0E`. Type: **Instrument Serif** for headings, **Inter** for UI text (self-hosted).
 
 ## Requirements
 

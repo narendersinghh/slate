@@ -30,6 +30,7 @@ final class Icons
         'edit' => '<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/>',
         'trash' => '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
         'eye' => '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/>',
+        'arrow-up-right' => '<path d="M7 17 17 7M8 7h9v9"/>',
         'external' => '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
         'logout' => '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
         'menu' => '<path d="M4 6h16M4 12h16M4 18h16"/>',
@@ -79,5 +80,32 @@ final class Icons
     {
         $p = self::PATHS[$name] ?? self::PATHS['file'];
         return '<svg class="ic" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p . '</svg>';
+    }
+
+    /** Slate logo mark (inline SVG). Variants: 'dark' (black tile) or 'light' (orange tile). */
+    public static function logo(int $size = 32, string $variant = 'dark'): string
+    {
+        static $n = 0;
+        $n++;
+        $S = 'M31.5 14.5H20.75a4.75 4.75 0 0 0 0 9.5h6.5a4.75 4.75 0 0 1 0 9.5H16.5';
+        $spark = 'M37.5 8l1.05 2.55L41.1 11.6l-2.55 1.05L37.5 15.2l-1.05-2.55L33.9 11.6l2.55-1.05z';
+        if ($variant === 'light') {
+            return '<svg class="logo-mark" width="' . $size . '" height="' . $size . '" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="13" fill="#F26B2D"/>'
+                . '<path d="' . $S . '" fill="none" stroke="#8C3312" stroke-opacity=".55" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round" transform="translate(1.5 1.7)"/>'
+                . '<path d="' . $S . '" fill="none" stroke="#0D0D0E" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"/><path d="' . $spark . '" fill="#fff"/></svg>';
+        }
+        return '<svg class="logo-mark" width="' . $size . '" height="' . $size . '" viewBox="0 0 48 48" aria-hidden="true"><defs>'
+            . '<linearGradient id="slg' . $n . '" x1="12" y1="12" x2="36" y2="36" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FF9259"/><stop offset=".55" stop-color="#F26B2D"/><stop offset="1" stop-color="#D9531A"/></linearGradient>'
+            . '<radialGradient id="slh' . $n . '" cx="14" cy="6" r="34" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>'
+            . '<rect width="48" height="48" rx="13" fill="#0D0D0E"/><rect width="48" height="48" rx="13" fill="url(#slh' . $n . ')"/>'
+            . '<path d="' . $S . '" fill="none" stroke="#5C2008" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round" transform="translate(1.5 1.7)"/>'
+            . '<path d="' . $S . '" fill="none" stroke="url(#slg' . $n . ')" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"/>'
+            . '<path d="' . $spark . '" fill="#FFD2B8"/></svg>';
+    }
+
+    /** Logo mark + "Slate" wordmark (wordmark uses Instrument Serif via CSS). */
+    public static function wordmark(int $size = 30, string $variant = 'dark'): string
+    {
+        return '<span class="wordmark">' . self::logo($size, $variant) . '<span class="wordmark-text">Slate<i>.</i></span></span>';
     }
 }

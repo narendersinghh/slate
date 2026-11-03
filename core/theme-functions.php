@@ -75,7 +75,7 @@ function slate_body_open(): void
         $p = post();
         $edit = $p && Auth::can('edit_posts') ? admin_url('content/' . $p['type'] . '/' . $p['id']) : '';
         echo '<div id="slate-bar" role="toolbar" aria-label="Slate admin bar">'
-            . '<a class="sb-logo" href="' . e(admin_url()) . '">' . icon('layers', 16) . ' Slate</a>'
+            . '<a class="sb-logo" href="' . e(admin_url()) . '">' . \Slate\Icons::logo(22) . ' Slate</a>'
             . ($edit ? '<a href="' . e($edit) . '">' . icon('edit', 15) . ' Edit in dashboard</a>' : '')
             . ($p && can_frontend_edit() && ContentModel::supports($p['type'], 'frontend_edit')
                 ? '<button type="button" id="sb-edit" data-id="' . (int)$p['id'] . '">' . icon('sparkles', 15) . ' Edit on page</button>'

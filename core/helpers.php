@@ -223,3 +223,9 @@ function icon(string $name, int $size = 18): string
 {
     return \Slate\Icons::svg($name, $size);
 }
+
+/** Slate wordmark (logo mark + serif name). */
+function icon_logo(int $size = 32, string $variant = 'dark'): string
+{
+    return \Slate\Icons::wordmark($size, $variant);
+}

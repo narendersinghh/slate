@@ -6,6 +6,9 @@ $backups = glob(SLATE_CONTENT . '/backups/slate-*.zip') ?: [];
 rsort($backups);
 ?>
 <div class="card-pad stack">
+  <?php if (Updater::isGitDeploy()): ?>
+  <div class="banner banner-accent"><?= icon('refresh', 18) ?><div><strong>Deployed from Git.</strong> This site updates automatically whenever new code is pushed to its branch on GitHub (e.g. via Hostinger → Git auto-deployment). The one-click updater below is disabled to avoid conflicts.</div></div>
+  <?php endif; ?>
   <div class="update-box<?= $available ? ' has-update' : '' ?>">
     <div class="update-version">
       <small class="muted">Installed</small><strong><?= e(SLATE_VERSION) ?></strong>
@@ -17,7 +20,7 @@ rsort($backups);
     </div>
     <div class="update-actions">
       <button class="btn" type="submit" formaction="<?= e(admin_url('system/updates/check')) ?>" formnovalidate><?= icon('refresh', 15) ?> Check now</button>
-      <?php if ($available): ?>
+      <?php if ($available && !Updater::isGitDeploy()): ?>
         <button class="btn btn-primary" type="submit" formaction="<?= e(admin_url('system/updates/install')) ?>" data-confirm="Install Slate <?= e($info['latest']) ?>? A backup of the current core is created first." formnovalidate><?= icon('download', 15) ?> Update to <?= e($info['latest']) ?></button>
       <?php endif; ?>
     </div>

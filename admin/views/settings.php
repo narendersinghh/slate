@@ -88,7 +88,7 @@ $tabDef = $tabs[$tab];
       <div class="settings-custom"><?php require __DIR__ . '/settings/' . basename($def['render']) . '.php'; ?></div>
     <?php endif; ?>
 
-    <?php if (!empty($def['fields']) || in_array($def['render'] ?? '', ['seo-types', 'redirects', 'menus'], true)): ?>
+    <?php if (!empty($def['fields']) || in_array($def['render'] ?? '', ['seo-types', 'redirects', 'menus', 'design-system'], true)): ?>
     <div class="card-foot sticky-foot">
       <span class="muted" data-dirty hidden>Unsaved changes</span>
       <button class="btn btn-primary" type="submit"><?= icon('check', 16) ?> Save changes</button>

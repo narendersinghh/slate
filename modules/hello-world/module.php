@@ -19,6 +19,6 @@ Hooks::add('the_content', static function (string $html, array $post): string {
 });
 
 Modules::adminPage('Hello World', 'hello-world', static function (): void {
-    echo '<p>👋 This page is rendered by <code>modules/hello-world/module.php</code>.</p>';
-    echo '<p class="muted">Modules can add admin pages, hook into content, SEO output, saving, uploads and more.</p>';
+    echo '<div class="card card-pad"><p>👋 This page is rendered by <code>modules/hello-world/module.php</code>.</p>';
+    echo '<p class="muted">Modules can add admin pages, hook into content, SEO output, saving, uploads and more.</p></div>';
 }, 'manage_modules', 'puzzle');

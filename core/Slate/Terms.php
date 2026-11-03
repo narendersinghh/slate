@@ -52,6 +52,11 @@ final class Terms
         return $out;
     }
 
+    public static function flush(): void
+    {
+        self::$byTax = [];
+    }
+
     public static function find(int $id): ?array
     {
         $row = DB::row('SELECT * FROM {{terms}} WHERE id = :id', ['id' => $id]);
@@ -179,7 +184,18 @@ final class Terms
     {
         $tax = ContentModel::taxonomy($term['taxonomy']);
         $base = trim((string)($tax['rewrite'] ?? $term['taxonomy']), '/');
-        $path = Posts::trail('/' . $base . '/' . $term['slug']);
+        // Hierarchical taxonomies nest parent slugs like WordPress: /category/parent/child/
+        $slugs = [$term['slug']];
+        if (!empty($tax['hierarchical']) && !empty($term['parent_id'])) {
+            $byId = array_column(self::all($term['taxonomy']), null, 'id');
+            $pid = (int)$term['parent_id'];
+            $guard = 0;
+            while ($pid && isset($byId[$pid]) && $guard++ < 10) {
+                array_unshift($slugs, $byId[$pid]['slug']);
+                $pid = (int)$byId[$pid]['parent_id'];
+            }
+        }
+        $path = Posts::trail('/' . $base . '/' . implode('/', $slugs));
         return $absolute ? site_url($path) : url($path);
     }
 }

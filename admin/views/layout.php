@@ -28,6 +28,7 @@ $navItem = static function (string $href, string $iconName, string $label, bool 
 <link rel="preload" href="<?= e(url('admin/assets/fonts/instrument-serif.woff2')) ?>" as="font" type="font/woff2" crossorigin>
 <link rel="icon" type="image/svg+xml" href="<?= e(url('admin/assets/brand/favicon.svg')) ?>">
 <link rel="stylesheet" href="<?= e(asset_url('admin/assets/admin.css')) ?>">
+<?= \Slate\DesignSystem::adminCss() ?>
 <script>
 (function(){var t=document.documentElement.dataset.theme;if(t==='auto'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.mode=t;if(localStorage.getItem('slate_nav')==='collapsed')document.documentElement.classList.add('nav-collapsed')})();
 window.SLATE = <?= json_encode([

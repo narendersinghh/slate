@@ -20,7 +20,19 @@ A fast, secure, SEO-first content management system — the flexibility of WordP
 ## Brand
 
 Logo files live in `admin/assets/brand/` — `logo.svg` (wordmark), `logo-white.svg`, `logo-mark.svg`, `logo-mark-light.svg`, `logo-glyph.svg`, `favicon.svg` and `brand-sheet.png`.
-Colours: brand orange `#F26B2D` (scale `#FFF5EF` → `#5C2008`) and ink `#0D0D0E`. Type: **Instrument Serif** for headings, **Inter** for UI text (self-hosted).
+Logo: a faceted origami songbird perched on a chalk line on a slate. Colours: brand orange `#F26B2D` (scale `#FFF5EF` → `#5C2008`) and ink `#0D0D0E`. Type: **Instrument Serif** for headings, **Inter** for UI text (self-hosted).
+
+## Migrating a WordPress site
+
+1. **Modules** → activate **Auto CPT Generator** and **WordPress Importer**.
+2. In WordPress: **Users → Profile → Application Passwords** → create one named “Slate”.
+3. In Slate: **WordPress import** → enter the site URL, admin username and the application password → **Analyse site**.
+4. Review what was detected, keep the options on (including *Mirror the design*) → **Start import**. Keep the tab open; it runs in resumable batches.
+5. Check the site, then point the domain at Slate. Old URLs keep working (identical paths or 301 redirects).
+
+Elementor forms keep working: submissions appear under **Form submissions** and are emailed to the admin address.
+After the domain switch, theme assets that were never requested during testing can no longer be fetched from the old server —
+browse the main pages on the Slate URL before switching DNS so everything is cached locally.
 
 ## Requirements
 

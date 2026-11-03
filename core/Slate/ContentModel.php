@@ -179,11 +179,11 @@ final class ContentModel
             return 'Slug must be 2–39 lowercase letters, numbers, dashes or underscores, starting with a letter.';
         }
         if (in_array($slug, self::RESERVED, true)) {
-            return "“$slug” is reserved.";
+            return "“{$slug}” is reserved.";
         }
         $exists = $kind === 'type' ? isset(self::types()[$slug]) : isset(self::taxonomies()[$slug]);
         if ($exists && $slug !== $original) {
-            return "“$slug” already exists.";
+            return "“{$slug}” already exists.";
         }
         return null;
     }

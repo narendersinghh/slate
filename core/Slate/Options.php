@@ -13,8 +13,13 @@ final class Options
     private static bool $loaded = false;
     private static array $missing = [];
 
-    /** Options stored with autoload = 0 (fetched on demand). */
-    public const LAZY = ['update_info'];
+    /** Options stored with autoload = 0 (fetched on demand). Modules can register more with Options::lazy(). */
+    private static array $lazy = ['update_info'];
+
+    public static function lazy(string ...$names): void
+    {
+        self::$lazy = array_values(array_unique(array_merge(self::$lazy, $names)));
+    }
 
     public static function load(): void
     {
@@ -35,7 +40,7 @@ final class Options
         }
         // Everything is autoloaded except a few large, rarely-read values. Unknown keys fall back to
         // their default WITHOUT a query, so a page view costs exactly one options query.
-        if (isset(self::$missing[$name]) || !in_array($name, self::LAZY, true)) {
+        if (isset(self::$missing[$name]) || !in_array($name, self::$lazy, true)) {
             return $default ?? Settings::default($name);
         }
         $value = DB::val('SELECT value FROM {{options}} WHERE name = :n', ['n' => $name]);

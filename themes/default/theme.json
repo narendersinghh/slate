@@ -1,0 +1,7 @@
+{
+  "name": "Slate Default",
+  "version": "0.1.0",
+  "description": "Fast, accessible starter theme with SEO-friendly markup.",
+  "menus": { "primary": "Primary navigation", "footer": "Footer navigation" },
+  "templates": { "full-width": "Full width (no sidebar)", "landing": "Landing page (no header/footer)" }
+}

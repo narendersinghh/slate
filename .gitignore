@@ -1,0 +1,15 @@
+/config.php
+/content/*.sqlite
+/content/*.sqlite-*
+/content/*.log
+/content/uploads/*
+!/content/uploads/.htaccess
+!/content/uploads/index.html
+/content/cache/*
+!/content/cache/.htaccess
+!/content/cache/index.html
+/content/backups/*
+!/content/backups/.htaccess
+!/content/backups/index.html
+.DS_Store
+/node_modules

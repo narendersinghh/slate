@@ -1,0 +1,7 @@
+{
+  "name": "Hello World",
+  "description": "Example module: adds a reading-time badge to posts and a small admin page. Use it as a starting point for your own modules.",
+  "version": "1.0.0",
+  "author": "Slate",
+  "requires": "0.1.0"
+}

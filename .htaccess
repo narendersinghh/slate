@@ -1,0 +1,34 @@
+# Slate CMS — Apache configuration
+Options -Indexes
+DirectoryIndex index.php
+ServerSignature Off
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # RewriteBase /   (uncomment & adjust when installed in a sub-folder)
+
+    # Block direct access to sensitive files and folders
+    RewriteRule ^(config\.php|config\.sample\.php|composer\.(json|lock)|\.git.*|.*\.sqlite|.*\.log|.*\.md)$ - [F,L,NC]
+    RewriteRule ^(core|modules|content/backups|content/cache)/.*\.php$ - [F,L,NC]
+    RewriteRule ^content/.*\.(sqlite|log|zip)$ - [F,L,NC]
+    RewriteRule ^themes/.*\.php$ - [F,L,NC]
+    RewriteRule ^admin/(views|install\.php|routes\.php|api\.php)(/.*)?$ - [F,L,NC]
+
+    # Serve existing static files directly
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Everything else → front controller
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    <FilesMatch "\.(css|js|webp|avif|jpg|jpeg|png|gif|svg|woff2?|ico|mp4|webm)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json application/xml text/plain image/svg+xml
+</IfModule>

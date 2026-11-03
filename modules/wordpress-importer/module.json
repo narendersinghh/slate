@@ -1,0 +1,7 @@
+{
+  "name": "WordPress Importer",
+  "description": "Move a WordPress / Elementor website to Slate: content, custom post types, taxonomies, ACF fields, media (auto-optimized), SEO (Yoast, Rank Math…), menus, settings, URLs with automatic redirects — and an exact mirror of the design. Includes an Elementor form handler and inbox.",
+  "version": "1.0.0",
+  "author": "Slate",
+  "requires": "0.1.0"
+}

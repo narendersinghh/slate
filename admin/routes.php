@@ -533,6 +533,7 @@ function admin_dispatch(string $path): void
             'seo-types' => admin_save_seo_types(),
             'redirects' => admin_save_redirects(),
             'menus' => admin_save_menus(),
+            'design-system' => admin_save_design(),
             default => null,
         };
         log_activity('settings_saved', "$tab/$section");
@@ -854,4 +855,20 @@ function admin_save_menus(): void
     if (is_array($data)) {
         Menus::save($data);
     }
+}
+
+function admin_save_design(): void
+{
+    $in = (array)input('ds', []);
+    $colors = [];
+    foreach ((array)($in['color_id'] ?? []) as $i => $id) {
+        $colors[] = ['id' => $id ?: ($in['color_name'][$i] ?? ''), 'name' => $in['color_name'][$i] ?? '', 'value' => $in['color_value'][$i] ?? ''];
+    }
+    $classes = [];
+    foreach ((array)($in['class_name'] ?? []) as $i => $n) {
+        $classes[] = ['name' => $n, 'css' => $in['class_css'][$i] ?? ''];
+    }
+    \Slate\DesignSystem::save(['colors' => $colors, 'classes' => $classes, 'fonts' => (array)($in['fonts'] ?? []), 'type' => (array)($in['type'] ?? []),
+        'layout' => (array)($in['layout'] ?? []), 'apply_elements' => !empty($in['apply_elements']), 'responsive' => !empty($in['responsive']),
+        'admin_match' => !empty($in['admin_match'])]);
 }

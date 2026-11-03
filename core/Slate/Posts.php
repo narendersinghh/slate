@@ -22,6 +22,16 @@ final class Posts
         return self::$cache[$row['id']] = $row;
     }
 
+    /** Drop the in-memory cache (after direct DB updates). */
+    public static function flush(?int $id = null): void
+    {
+        if ($id === null) {
+            self::$cache = [];
+        } else {
+            unset(self::$cache[$id]);
+        }
+    }
+
     public static function find(int $id): ?array
     {
         if (isset(self::$cache[$id])) {
@@ -211,7 +221,10 @@ final class Posts
         if ($existing) {
             DB::update('posts', $row, ['id' => $id]);
         } else {
-            $row['created_at'] = now();
+            $row['created_at'] = $data['created_at'] ?? now();
+            if (!empty($data['updated_at'])) {
+                $row['updated_at'] = $data['updated_at'];
+            }
             $id = DB::insert('posts', $row);
         }
         unset(self::$cache[$id]);

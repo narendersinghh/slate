@@ -13,3 +13,5 @@
 !/content/backups/index.html
 .DS_Store
 /node_modules
+/wp-content/
+/wp-includes/

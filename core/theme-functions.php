@@ -62,6 +62,7 @@ function can_frontend_edit(): bool
 function slate_head(): void
 {
     echo Seo::head(), "\n";
+    echo \Slate\DesignSystem::head(), "\n";
     if (can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
         echo '<link rel="stylesheet" href="' . e(asset_url('admin/assets/frontend-edit.css')) . '">' . "\n";
     }

@@ -31,6 +31,12 @@ final class Updater
         return preg_match('#^[\w.-]+/[\w.-]+$#', $repo) ? $repo : 'narendersinghh/slate';
     }
 
+    /** True when this install is a Git checkout (e.g. Hostinger Git deploy): updates arrive via `git pull`. */
+    public static function isGitDeploy(): bool
+    {
+        return is_dir(SLATE_ROOT . '/.git') || is_file(SLATE_ROOT . '/.git');
+    }
+
     /** @return array{ok:bool, error?:string, current:string, latest?:string, available?:bool, notes?:string, url?:string, published?:string, zip?:string} */
     public static function check(bool $force = false): array
     {
@@ -54,6 +60,21 @@ final class Updater
             break;
         }
         if (!$release) {
+            // No published release: fall back to the highest semantic-version tag.
+            $tags = Http::json('GET', 'https://api.github.com/repos/' . self::repo() . '/tags?per_page=50', self::headers(), null, 20);
+            $best = null;
+            foreach (is_array($tags['json']) ? $tags['json'] : [] as $t) {
+                $v = ltrim((string)($t['name'] ?? ''), 'vV');
+                if (preg_match('/^\d+\.\d+\.\d+$/', $v) && ($best === null || version_compare($v, $best['v'], '>'))) {
+                    $best = ['v' => $v, 'zip' => (string)($t['zipball_url'] ?? '')];
+                }
+            }
+            if ($best) {
+                $info = ['ok' => true, 'checked_at' => time(), 'latest' => $best['v'], 'name' => 'v' . $best['v'], 'notes' => 'Tagged version ' . $best['v'] . '. See CHANGELOG.md for details.',
+                    'url' => 'https://github.com/' . self::repo() . '/releases/tag/v' . $best['v'], 'published' => '', 'zip' => $best['zip']];
+                Options::set('update_info', $info, false);
+                return $info + ['current' => SLATE_VERSION, 'available' => version_compare($best['v'], SLATE_VERSION, '>')];
+            }
             $info = ['ok' => true, 'checked_at' => time(), 'latest' => SLATE_VERSION, 'notes' => '', 'url' => '', 'zip' => ''];
             Options::set('update_info', $info, false);
             return $info + ['current' => SLATE_VERSION, 'available' => false];
@@ -81,6 +102,9 @@ final class Updater
     /** Download and install the latest release. */
     public static function install(): array
     {
+        if (self::isGitDeploy()) {
+            return ['ok' => false, 'error' => 'This site is deployed from Git. Updates arrive automatically when you push to the deployed branch, so the in-app updater is disabled to avoid conflicts.'];
+        }
         if (!class_exists('ZipArchive')) {
             return ['ok' => false, 'error' => 'The PHP zip extension is required for updates.'];
         }

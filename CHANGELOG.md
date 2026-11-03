@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0 — WordPress migration, design system, new brand
+- New brand: origami-bird-on-slate logo, Instrument Serif + Inter, #F26B2D palette; redesigned admin (light & dark).
+- **Design system** (Settings → Appearance → Design system): global colours, fonts, type scale, layout tokens and global CSS classes
+  for the website, exposed as CSS variables and mapped to Elementor `--e-global-*` variables; optional "match the admin to my website".
+- **Auto CPT Generator** module: create post types, taxonomies and custom fields from a live WordPress site, a WXR export,
+  a plain-English description (AI) or JSON.
+- **WordPress Importer** module: REST API (application password) or WXR import of settings, content model, terms, media
+  (auto-optimized), all post types, ACF fields (incl. repeaters, images, relations), SEO (Yoast, Rank Math, or any plugin via page head),
+  menus, front/blog page, logo, permalink structure, identical URLs (hierarchical pages & categories) and automatic 301s for anything that differs.
+  Resumable batches; re-running updates instead of duplicating.
+- **Design mirror**: captures theme / Elementor CSS, JS, fonts, header, footer, popups, per-page Elementor CSS and single-post layouts
+  into the new "WordPress mirror" theme; brand colours & fonts imported into the design system.
+- Compatibility layer: old `/wp-content/uploads/…` URLs 301 to optimized copies, missing theme/plugin assets are fetched on demand,
+  `?p=` / `?page_id=` links redirect, Elementor form submissions are stored (Form submissions inbox) and emailed.
+- Updater: falls back to tags when no release exists; disabled automatically on Git-deployed sites (updates arrive via push).
+- Hierarchical taxonomy URLs (/category/parent/child/), Posts::flush(), lazy options API for modules, PHP blocked under wp-content/.
+
 ## 0.1.0 — Initial release
 - Core: PHP 8.2+, MySQL/MariaDB or SQLite, front controller, hooks, modules.
 - Admin: modern dashboard, command palette (⌘K), dark mode, responsive.

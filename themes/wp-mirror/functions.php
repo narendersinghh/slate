@@ -61,10 +61,10 @@ function wpm_head_items(): array
             break;
         }
     }
-    $own = [];
+    $own = []; // "global/desktop" => [href, ...] in the page's original order
     foreach ((array)(wpm_page_fields()['_wpm_css'] ?? []) as $href) {
         if (preg_match($re, (string)$href, $m) && $m[2] !== $captured) {
-            $own[$m[1] . '/' . $m[3]] ??= (string)$href;
+            $own[$m[1] . '/' . $m[3]][] = (string)$href;
         }
     }
     if ($captured === null || !$own) {
@@ -76,11 +76,11 @@ function wpm_head_items(): array
     foreach ($head as $a) {
         if (($a['t'] ?? '') === 'css' && preg_match($re, (string)$a['href'], $m) && $m[2] === $captured) {
             $key = $m[1] . '/' . $m[3];
-            if (isset($own[$key])) {
-                $a['href'] = $own[$key];
-                unset($a['id']);
-                $placed[$own[$key]] = true;
-                $out[] = $a;
+            if (!empty($own[$key])) {
+                foreach ($own[$key] as $href) {
+                    $out[] = ['t' => 'css', 'href' => $href, 'media' => $a['media'] ?? 'all'];
+                    $placed[$href] = true;
+                }
             } elseif ($m[1] === 'global') {
                 $out[] = $a; // global classes are site-wide; keep them when the page has no copy
             }

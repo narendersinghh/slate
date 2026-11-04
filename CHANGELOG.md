@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3
+- Mirror theme: pages and archives with several Elementor CSS sets (e.g. archive templates) keep all of them in the
+  global / local slots, in their original order.
+
 ## 0.3.2
 - WordPress mirror theme: a page's own Elementor `global-N` / `local-N` stylesheets now take the place of the captured
   page's files in the head, keeping WordPress's cascade order (fixes per-element sizes being overridden by generic rules).

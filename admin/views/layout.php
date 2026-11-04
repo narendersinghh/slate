@@ -89,6 +89,9 @@ window.SLATE = <?= json_encode([
           <?php endif; ?>
         </div>
       <?php endif; ?>
+      <?php if (Auth::can('manage_content_model')): ?>
+        <?= $navItem(admin_url('templates'), 'code', 'Templates', $is('/templates')) ?>
+      <?php endif; ?>
       <?php if (Auth::can('manage_users')): ?>
         <?= $navItem(admin_url('users'), 'users', 'Users', $is('/users')) ?>
       <?php endif; ?>

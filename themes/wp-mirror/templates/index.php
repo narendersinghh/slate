@@ -1,4 +1,16 @@
-<?php partial('header'); $result = page_data('result'); ?>
+<?php $result = page_data('result');
+$snap = null;
+if ((int)($result['page'] ?? 1) === 1) {
+    if (($t = page_data('term'))) {
+        $snap = wpm_archive_snapshot('term-' . $t['taxonomy'] . '-' . $t['slug']);
+    } elseif (page_data('kind') === 'archive' && ($ty = page_data('type'))) {
+        $snap = wpm_archive_snapshot('type-' . ($ty['slug'] ?? ''));
+    }
+}
+partial('header');
+if ($snap !== null): ?>
+<?= $snap ?>
+<?php partial('footer'); return; endif; ?>
 <main id="content" class="site-main slate-mirror-main">
   <div class="smx-wrap smx-archive">
     <header class="smx-archive-head">

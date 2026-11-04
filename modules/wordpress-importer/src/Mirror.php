@@ -23,6 +23,8 @@ final class Mirror
     private WpClient $http;
     private int $downloaded = 0;
     private array $seen = [];
+    /** captureSite() re-downloads top-level CSS/JS so design changes on the old site are picked up. */
+    private bool $refresh = false;
 
     public function __construct(string $origin)
     {
@@ -123,7 +125,8 @@ final class Mirror
         }
         $rel = url(ltrim($path, '/'));
         $dest = SLATE_ROOT . $path;
-        if (isset($this->seen[$path]) || (is_file($dest) && filesize($dest) > 0 && $depth > 0)) {
+        // Reuse files mirrored in the last 12 hours (the homepage capture refreshes theme assets once per run).
+        if (isset($this->seen[$path]) || (is_file($dest) && filesize($dest) > 0 && ($depth > 0 || !$this->refresh || filemtime($dest) > time() - 43200 && !$this->refresh))) {
             return $rel;
         }
         $this->seen[$path] = true;
@@ -142,6 +145,41 @@ final class Mirror
         @rename($tmp, $dest);
         $this->downloaded++;
         return $rel;
+    }
+
+    /** Download (in parallel) the own stylesheets referenced by several pages that are not mirrored yet. */
+    public function prefetchAssets(array $htmlPages): void
+    {
+        $map = [];
+        foreach ($htmlPages as $html) {
+            if (!is_string($html) || !preg_match_all('#<link[^>]+rel=[\'"]stylesheet[\'"][^>]*>#i', $html, $mm)) {
+                continue;
+            }
+            foreach ($mm[0] as $tag) {
+                if (!preg_match('#href=[\'"]([^\'"]+)#i', $tag, $h)) {
+                    continue;
+                }
+                $abs = $this->abs($h[1]);
+                $path = $this->localPath($abs);
+                if ($path && !is_file(SLATE_ROOT . $path) && !isset($this->seen[$path])) {
+                    @mkdir(dirname(SLATE_ROOT . $path), 0755, true);
+                    $map[$abs] = SLATE_ROOT . $path . '.part';
+                }
+            }
+        }
+        if (!$map) {
+            return;
+        }
+        foreach ($this->http->downloadMulti($map, 8) as $url => $ok) {
+            $part = $map[$url];
+            if (!$ok || !is_file($part)) {
+                continue;
+            }
+            $dest = substr($part, 0, -5);
+            file_put_contents($part, $this->rewriteCss((string)file_get_contents($part), $url, 1));
+            @rename($part, $dest);
+            $this->seen[(string)$this->localPath($url)] = true;
+        }
     }
 
     /** Download assets referenced by CSS; make absolute own URLs root-relative. */
@@ -184,6 +222,7 @@ final class Mirror
 
     public function captureSite(string $html): array
     {
+        $this->refresh = true;
         $doc = self::dom($html);
         $x = new \DOMXPath($doc);
         $head = [];
@@ -236,7 +275,7 @@ final class Mirror
                         if (trim($code) === '' || preg_match(self::SKIP_JS, $code)) {
                             continue;
                         }
-                        $into[] = ['t' => 'inline', 'js' => $this->rewriteMarkup($code), 'id' => $n->getAttribute('id')];
+                        $into[] = ['t' => 'inline', 'js' => $this->rewriteMarkup($code), 'id' => $n->getAttribute('id'), 'type' => $type];
                     }
                 }
             }
@@ -252,7 +291,7 @@ final class Mirror
         foreach ($x->query('//*[@data-elementor-type="popup"]') as $p) {
             $popups[] = $this->rewriteMarkup(self::outer($p));
         }
-        $headerHtml = $header ? $this->rewriteMarkup($this->fixMedia(self::outer($header))) : '';
+        $headerHtml = $header ? self::stripActive($this->rewriteMarkup($this->fixMedia(self::outer($header)))) : '';
         $footerHtml = $footer ? $this->rewriteMarkup($this->fixMedia(self::outer($footer))) : '';
         // Wrapper elements that hold page content in classic themes (e.g. <div id="page" class="site">).
         $wrapOpen = '';
@@ -282,6 +321,13 @@ final class Mirror
         Options::set('wpm_site', $site);
         Options::set('wpm_brand', $this->brand($html));
         return ['css' => $css, 'js' => $js, 'header' => $headerHtml !== '', 'footer' => $footerHtml !== '', 'files' => $this->downloaded];
+    }
+
+    /** Remove server-rendered "current page" states from captured navigation (set client-side instead). */
+    public static function stripActive(string $html): string
+    {
+        $html = preg_replace('/\s(current-menu-item|current_page_item|current-menu-ancestor|current-menu-parent|current_page_parent|current_page_ancestor|elementor-item-active)(?=[\s"])/', '', $html);
+        return (string)preg_replace('/\saria-current="page"/', '', (string)$html);
     }
 
     private function kitId(\DOMDocument $doc): string
@@ -381,10 +427,18 @@ final class Mirror
                 $styles[] = $m->rewriteMarkup($t);
             }
         }
+        $js = [];
+        foreach ($x->query('//script[@src]') as $n) {
+            $src = $n->getAttribute('src');
+            if ($src !== '' && !isset($known[$src]) && !preg_match('#(googletagmanager|gtag|fbq|clarity\.ms|hotjar|wp-emoji|admin-bar|comment-reply)#i', $src)) {
+                $js[] = ['src' => $m->asset($src), 'id' => $n->getAttribute('id')];
+            }
+        }
         $body = $doc->getElementsByTagName('body')->item(0);
         $classes = $body instanceof \DOMElement ? $body->getAttribute('class') : '';
         preg_match_all('/\b(elementor-page(?:-\d+)?|elementor-template-[\w-]+|page-template[\w-]*|elementor-default|single-[\w-]+|page)\b/', $classes, $mm);
-        return array_filter(['_wpm_css' => array_values(array_unique($css)), '_wpm_style' => implode("\n", $styles), '_wpm_body_class' => implode(' ', array_unique($mm[0]))]);
+        return array_filter(['_wpm_css' => array_values(array_unique($css)), '_wpm_style' => implode("\n", $styles), '_wpm_js' => $js,
+            '_wpm_body_class' => implode(' ', array_unique($mm[0]))]);
     }
 
     private static function inSite(array $site, string $css): bool
@@ -410,7 +464,7 @@ final class Mirror
             return null;
         }
         $content = self::first($x, ['.//*[contains(@class,"elementor-widget-theme-post-content")]//*[contains(@class,"elementor-widget-container")]',
-            './/*[contains(@class,"elementor-widget-theme-post-content")]', './/*[contains(@class,"entry-content")]', './/article']);
+            './/*[contains(@class,"elementor-widget-theme-post-content")]', './/*[contains(@class,"entry-content")]', './/*[contains(@class,"page-content")]']);
         if (!$content || !$main->contains($content) && $main !== $content) {
             return null;
         }
@@ -441,6 +495,82 @@ final class Mirror
         $out = self::outer($main);
         $out = str_replace(htmlspecialchars($title, ENT_QUOTES), '{{SLATE_TITLE}}', $out);
         return (new self($origin))->rewriteMarkup($out);
+    }
+
+    public const STORE = SLATE_CONTENT . '/wpm';
+
+    /**
+     * The rendered page body between the site header and footer: every top-level Elementor document that is not
+     * header / footer / popup (e.g. an Elementor Pro "single" template filled with ACF data), else <main>.
+     */
+    public function snapshot(string $html): ?string
+    {
+        $doc = self::dom($html);
+        $x = new \DOMXPath($doc);
+        $parts = [];
+        foreach ($x->query('//body//*[@data-elementor-type][not(ancestor::*[@data-elementor-type])]') as $n) {
+            /** @var \DOMElement $n */
+            if (!in_array($n->getAttribute('data-elementor-type'), ['header', 'footer', 'popup'], true)) {
+                $parts[] = self::outer($n);
+            }
+        }
+        if (!$parts && ($main = self::first($x, ['//main', '//*[@id="content"]']))) {
+            $parts[] = self::outer($main);
+        }
+        if (!$parts) {
+            return null;
+        }
+        return $this->rewriteMarkup($this->fixMedia(implode("\n", $parts)));
+    }
+
+    public static function store(string $bucket, string $key, string $html): void
+    {
+        $dir = self::STORE . '/' . preg_replace('/[^a-z0-9_-]/i', '', $bucket);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+            @file_put_contents(self::STORE . '/.htaccess', "Require all denied\n");
+        }
+        file_put_contents($dir . '/' . preg_replace('/[^a-z0-9_.-]/i', '_', $key) . '.html', $html, LOCK_EX);
+    }
+
+    public static function load(string $bucket, string $key): ?string
+    {
+        $f = self::STORE . '/' . preg_replace('/[^a-z0-9_-]/i', '', $bucket) . '/' . preg_replace('/[^a-z0-9_.-]/i', '_', $key) . '.html';
+        return is_file($f) ? (string)file_get_contents($f) : null;
+    }
+
+    /** Rank Math / Yoast / other JSON-LD nodes worth keeping (Person, Book, Event, FAQPage, Article…), with the new origin. */
+    public static function schemaNodes(string $html, string $origin, string $newOrigin): ?string
+    {
+        if (!preg_match_all('#<script[^>]+application/ld\+json[^>]*>(.*?)</script>#is', $html, $mm)) {
+            return null;
+        }
+        $keep = [];
+        $skipTypes = ['WebSite', 'WebPage', 'BreadcrumbList', 'ImageObject', 'SearchAction', 'CollectionPage', 'SiteNavigationElement'];
+        foreach ($mm[1] as $json) {
+            $data = json_decode(html_entity_decode(trim($json), ENT_QUOTES), true);
+            if (!is_array($data)) {
+                continue;
+            }
+            $nodes = $data['@graph'] ?? (array_is_list($data) ? $data : [$data]);
+            foreach ($nodes as $n) {
+                if (!is_array($n)) {
+                    continue;
+                }
+                $types = (array)($n['@type'] ?? []);
+                $id = (string)($n['@id'] ?? '');
+                if (array_intersect($types, $skipTypes) || preg_match('/#(website|organization|logo|webpage|breadcrumb|primaryimage|person)$/', $id) && !array_intersect($types, ['Person', 'Book', 'Event'])) {
+                    continue;
+                }
+                unset($n['@context']);
+                $keep[] = $n;
+            }
+        }
+        if (!$keep) {
+            return null;
+        }
+        $json = json_encode(['@graph' => $keep], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return str_replace([rtrim($origin, '/'), str_replace('/', '\\/', rtrim($origin, '/'))], [rtrim($newOrigin, '/'), str_replace('/', '\\/', rtrim($newOrigin, '/'))], (string)$json);
     }
 
     /** Elementor-rendered body of a page (for WXR imports). */

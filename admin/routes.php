@@ -318,7 +318,7 @@ function admin_dispatch(string $path): void
             back();
         }
         $rewrite = trim(strtolower((string)input('rewrite', $slug)), '/');
-        $rewrite = $rewrite === '' ? '' : implode('/', array_map('slugify', explode('/', $rewrite)));
+        $rewrite = $rewrite === '' ? '' : implode('/', array_map(static fn($seg) => preg_match('/^%[a-z0-9_-]+%$/', $seg) ? $seg : slugify($seg), explode('/', $rewrite)));
         if ($slug !== 'page' && $rewrite === '') {
             $rewrite = $slug;
         }
@@ -387,7 +387,8 @@ function admin_dispatch(string $path): void
             'post_types' => array_values(array_intersect((array)input('post_types', []), array_keys(ContentModel::types()))),
             'hierarchical' => (bool)input('hierarchical'),
             'public' => (bool)input('public'),
-            'rewrite' => slugify((string)input('rewrite', '') ?: $slug),
+            'rewrite' => trim(implode('/', array_map('slugify', array_filter(explode('/', (string)input('rewrite', '')), 'strlen'))), '/'),
+            'nested' => (bool)input('nested', true),
         ];
         ContentModel::saveTaxonomy($def, $original);
         PageCache::clear();
@@ -474,6 +475,43 @@ function admin_dispatch(string $path): void
         ContentModel::deleteFieldGroup($id);
         Session::flash('success', 'Field group deleted. Existing values stay stored on the content.');
         redirect(admin_url('model/fields'));
+    });
+
+    // ---------- Templates ----------
+    $r->get('/templates', static function () {
+        Auth::require('manage_content_model');
+        admin_view('templates', ['templates' => \Slate\Templates::all(), 'title' => 'Templates']);
+    });
+    $r->get('/templates/new', static function () {
+        Auth::require('manage_content_model');
+        $kind = (string)($_GET['kind'] ?? 'single');
+        $target = preg_replace('/[^a-z0-9_-]/', '', (string)($_GET['target'] ?? 'post'));
+        $tpl = ['id' => '', 'name' => \Slate\Templates::label($kind, $target), 'kind' => $kind, 'target' => $target,
+            'html' => \Slate\Templates::starter($kind, $target), 'css' => '', 'wrap' => true, 'enabled' => false];
+        admin_view('template-edit', ['tpl' => $tpl, 'title' => 'New template', 'bodyClass' => 'is-editor']);
+    });
+    $r->get('/templates/{id}', static function (string $id) {
+        Auth::require('manage_content_model');
+        admin_view('template-edit', ['tpl' => \Slate\Templates::find($id) ?? admin_404(), 'title' => 'Edit template', 'bodyClass' => 'is-editor']);
+    });
+    $r->post('/templates/save', static function () {
+        Auth::require('manage_content_model');
+        $id = \Slate\Templates::save([
+            'id' => (string)input('id', ''), 'name' => (string)input('name', ''), 'kind' => (string)input('kind', 'single'), 'target' => (string)input('target', ''),
+            'html' => (string)input('html', ''), 'css' => (string)input('css', ''), 'wrap' => (bool)input('wrap'), 'enabled' => (bool)input('enabled'),
+        ]);
+        log_activity('template_saved', $id);
+        if (is_ajax()) {
+            json_response(['ok' => true, 'id' => $id, 'edit_url' => admin_url('templates/' . $id), 'preview' => admin_template_preview_url(\Slate\Templates::find($id)), 'message' => 'Template saved.']);
+        }
+        Session::flash('success', 'Template saved.');
+        redirect(admin_url('templates/' . $id));
+    });
+    $r->post('/templates/{id}/delete', static function (string $id) {
+        Auth::require('manage_content_model');
+        \Slate\Templates::delete($id);
+        Session::flash('success', 'Template deleted.');
+        redirect(admin_url('templates'));
     });
 
     // ---------- Modules ----------
@@ -871,4 +909,27 @@ function admin_save_design(): void
     \Slate\DesignSystem::save(['colors' => $colors, 'classes' => $classes, 'fonts' => (array)($in['fonts'] ?? []), 'type' => (array)($in['type'] ?? []),
         'layout' => (array)($in['layout'] ?? []), 'apply_elements' => !empty($in['apply_elements']), 'responsive' => !empty($in['responsive']),
         'admin_match' => !empty($in['admin_match'])]);
+}
+
+/** A frontend URL that shows the template (even when not enabled) to its editors. */
+function admin_template_preview_url(?array $t): string
+{
+    if (!$t || $t['id'] === '') {
+        return '';
+    }
+    $q = 'slate_template=' . rawurlencode($t['id']);
+    switch ($t['kind']) {
+        case 'single':
+            $p = \Slate\Posts::query(['type' => $t['target'], 'limit' => 1, 'count' => false])['items'][0] ?? null;
+            return $p ? \Slate\Posts::permalink($p) . '?' . $q : '';
+        case 'archive':
+            $type = \Slate\ContentModel::type($t['target']);
+            $base = trim((string)($type['rewrite'] ?? ''), '/');
+            return $t['target'] === 'post' || $base === '' || str_contains($base, '%') ? url('?' . $q) : url(\Slate\Posts::trail('/' . $base)) . '?' . $q;
+        case 'term':
+            $term = \Slate\Terms::all($t['target'])[0] ?? null;
+            return $term ? \Slate\Terms::link($term) . '?' . $q : '';
+        default:
+            return $t['target'] === 'search' ? url('?s=a&' . $q) : url('slate-preview-not-found/?' . $q);
+    }
 }

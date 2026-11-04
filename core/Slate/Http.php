@@ -46,7 +46,7 @@ final class Http
         $result = curl_exec($ch);
         $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $error = curl_errno($ch) ? curl_error($ch) : null;
-        curl_close($ch);
+        unset($ch); // release the handle (and its file pointer) before closing the file
         if ($fh) {
             fclose($fh);
         }

@@ -34,6 +34,13 @@ final class Generator
 
     // ------------------------------------------------------------------ sources
 
+    public const ACF_TYPES = ['text' => 'text', 'textarea' => 'textarea', 'wysiwyg' => 'richtext', 'number' => 'number', 'range' => 'number',
+        'email' => 'email', 'url' => 'url', 'link' => 'url', 'oembed' => 'url', 'password' => 'text', 'true_false' => 'toggle',
+        'date_picker' => 'date', 'date_time_picker' => 'datetime', 'time_picker' => 'text', 'image' => 'image', 'file' => 'file',
+        'gallery' => 'gallery', 'relationship' => 'relation', 'post_object' => 'relation', 'page_link' => 'relation',
+        'select' => 'select', 'radio' => 'radio', 'button_group' => 'radio', 'checkbox' => 'checkbox', 'color_picker' => 'color',
+        'repeater' => 'repeater', 'flexible_content' => 'repeater', 'group' => 'repeater', 'taxonomy' => 'text', 'user' => 'text', 'google_map' => 'text'];
+
     public static function fromWordPress(WpClient $wp): array
     {
         $ctx = $wp->authenticated() ? 'edit' : 'view';
@@ -48,7 +55,23 @@ final class Generator
         if (!$taxes['ok']) {
             $taxes = $wp->get('/wp/v2/taxonomies');
         }
+        $taxList = $taxes['ok'] && is_array($taxes['data']) ? $taxes['data'] : [];
         $spec = ['post_types' => [], 'taxonomies' => [], 'field_groups' => [], 'wp_map' => ['types' => [], 'taxonomies' => []]];
+        $taxRest = [];
+        foreach ($taxList as $wpSlug => $t) {
+            $taxRest[(string)($t['slug'] ?? $wpSlug)] = (string)($t['rest_base'] ?? '');
+        }
+        $termSlugCache = [];
+        $termSlugs = function (string $wpTax, array $ids) use ($wp, $taxRest, &$termSlugCache): array {
+            $need = array_diff($ids, array_keys($termSlugCache[$wpTax] ?? []));
+            if ($need && !empty($taxRest[$wpTax])) {
+                $r = $wp->get('/wp/v2/' . $taxRest[$wpTax], ['include' => implode(',', $need), 'per_page' => 100]);
+                foreach ($r['ok'] && is_array($r['data']) ? $r['data'] : [] as $t) {
+                    $termSlugCache[$wpTax][(int)$t['id']] = (string)$t['slug'];
+                }
+            }
+            return array_values(array_filter(array_map(static fn($id) => $termSlugCache[$wpTax][(int)$id] ?? null, $ids)));
+        };
 
         foreach ($types['data'] as $wpSlug => $t) {
             $wpSlug = (string)($t['slug'] ?? $wpSlug);
@@ -64,12 +87,11 @@ final class Generator
             $slug = self::TYPE_ALIASES[$wpSlug] ?? self::slug($wpSlug);
             $spec['wp_map']['types'][$wpSlug] = ['slug' => $slug, 'rest_base' => $restBase, 'total' => $sample['total'], 'taxonomies' => $t['taxonomies'] ?? []];
             if (!isset(self::TYPE_ALIASES[$wpSlug])) {
-                $first = $items[0] ?? [];
                 $spec['post_types'][] = [
                     'slug' => $slug,
                     'singular' => html_entity_decode((string)($t['labels']['singular_name'] ?? self::singular((string)($t['name'] ?? $wpSlug))), ENT_QUOTES),
                     'plural' => html_entity_decode((string)($t['name'] ?? ucfirst($wpSlug)), ENT_QUOTES),
-                    'rewrite' => self::rewriteFromLink((string)($first['link'] ?? ''), $wp->site, (string)($first['slug'] ?? '')) ?? $slug,
+                    'rewrite' => self::rewriteWithTokens($items, $wp->site, (array)($t['taxonomies'] ?? []), $termSlugs) ?? $slug,
                     'hierarchical' => (bool)($t['hierarchical'] ?? false),
                     'has_archive' => true,
                     'public' => true,
@@ -78,26 +100,58 @@ final class Generator
                     'description' => trim(strip_tags((string)($t['description'] ?? ''))),
                 ];
             }
-            // Custom fields from ACF ("acf" key, needs ACF "Show in REST") and registered meta.
+            // Custom fields: ACF ("acf", with optional "<name>_source" type metadata) and registered meta.
             $fieldValues = [];
+            $meta = [];
             foreach ($items as $it) {
                 foreach (['acf', 'meta'] as $bucket) {
-                    if (!empty($it[$bucket]) && is_array($it[$bucket]) && !array_is_list($it[$bucket])) {
-                        foreach ($it[$bucket] as $k => $v) {
-                            if (!str_starts_with((string)$k, '_') && !self::isPluginMeta((string)$k)) {
-                                $fieldValues[$k][] = $v;
-                            }
+                    if (empty($it[$bucket]) || !is_array($it[$bucket]) || array_is_list($it[$bucket])) {
+                        continue;
+                    }
+                    foreach ($it[$bucket] as $k => $v) {
+                        $k = (string)$k;
+                        if (str_ends_with($k, '_source') && is_array($v) && isset($v['type'])) {
+                            $meta[substr($k, 0, -7)] = $v;
+                            continue;
+                        }
+                        if (!str_starts_with($k, '_') && !self::isPluginMeta($k)) {
+                            $fieldValues[$k][] = $v;
                         }
                     }
                 }
             }
             if ($fieldValues) {
+                $fields = self::inferFields($fieldValues);
+                foreach ($fields as &$f) {
+                    $m = $meta[$f['name']] ?? null;
+                    if (!$m) {
+                        continue;
+                    }
+                    $f['label'] = html_entity_decode((string)($m['label'] ?? $f['label']), ENT_QUOTES);
+                    $mapped = self::ACF_TYPES[$m['type']] ?? null;
+                    if ($mapped === 'relation') {
+                        $fv = $m['formatted_value'] ?? null;
+                        $first = is_array($fv) ? ($fv[0] ?? null) : null;
+                        if (is_array($first) && ($first['post_type'] ?? '') === 'attachment') {
+                            $mapped = 'gallery';
+                        } elseif (is_array($first) && !empty($first['post_type'])) {
+                            $f['post_type'] = self::TYPE_ALIASES[$first['post_type']] ?? self::slug((string)$first['post_type']);
+                        }
+                    }
+                    if ($mapped) {
+                        if ($mapped === 'repeater' && empty($f['sub_fields'])) {
+                            $f['sub_fields'] = self::inferSub(array_filter([$m['formatted_value'] ?? null]));
+                        }
+                        $f['type'] = $mapped;
+                    }
+                }
+                unset($f);
                 $spec['field_groups'][] = ['title' => html_entity_decode((string)($t['labels']['singular_name'] ?? self::singular((string)($t['name'] ?? $wpSlug))), ENT_QUOTES) . ' fields',
-                    'post_types' => [$slug], 'taxonomies' => [], 'position' => 'main', 'fields' => self::inferFields($fieldValues)];
+                    'post_types' => [$slug], 'taxonomies' => [], 'position' => 'main', 'fields' => $fields];
             }
         }
 
-        foreach (($taxes['ok'] && is_array($taxes['data']) ? $taxes['data'] : []) as $wpSlug => $t) {
+        foreach ($taxList as $wpSlug => $t) {
             $wpSlug = (string)($t['slug'] ?? $wpSlug);
             if (in_array($wpSlug, self::SKIP_TAXES, true) || empty($t['rest_base'])) {
                 continue;
@@ -109,23 +163,98 @@ final class Generator
                     $types[] = $spec['wp_map']['types'][$wt]['slug'];
                 }
             }
-            $sample = $wp->get('/wp/v2/' . $t['rest_base'], ['per_page' => 1]);
+            $sample = $wp->get('/wp/v2/' . $t['rest_base'], ['per_page' => 50, 'orderby' => 'count', 'order' => 'desc']);
             $spec['wp_map']['taxonomies'][$wpSlug] = ['slug' => $slug, 'rest_base' => (string)$t['rest_base'], 'total' => $sample['total']];
             if (!$types) {
                 continue;
             }
-            $firstTerm = $sample['ok'] && is_array($sample['data']) ? ($sample['data'][0] ?? []) : [];
+            $terms = $sample['ok'] && is_array($sample['data']) ? $sample['data'] : [];
+            [$rewrite, $nested] = self::termRewrite($terms, $wp->site);
             $spec['taxonomies'][] = [
                 'slug' => $slug,
                 'singular' => html_entity_decode((string)($t['labels']['singular_name'] ?? self::singular((string)($t['name'] ?? $wpSlug))), ENT_QUOTES),
                 'plural' => html_entity_decode((string)($t['name'] ?? ucfirst($wpSlug)), ENT_QUOTES),
                 'post_types' => array_values(array_unique($types)),
                 'hierarchical' => (bool)($t['hierarchical'] ?? false),
-                'rewrite' => self::rewriteFromLink((string)($firstTerm['link'] ?? ''), $wp->site, (string)($firstTerm['slug'] ?? '')) ?? $slug,
+                'rewrite' => $rewrite ?? $slug,
+                'nested' => $nested,
                 'builtin' => isset(self::TAX_ALIASES[$wpSlug]),
             ];
         }
         return $spec;
+    }
+
+    /** CPT URL base from sample links; segments that equal an item's term slug become %taxonomy% tokens. */
+    private static function rewriteWithTokens(array $items, string $site, array $wpTaxes, callable $termSlugs): ?string
+    {
+        $bases = [];
+        foreach ($items as $it) {
+            $link = (string)($it['link'] ?? '');
+            if ($link === '' || str_contains($link, '?')) {
+                continue;
+            }
+            $base = self::rewriteFromLink($link, $site, (string)($it['slug'] ?? ''));
+            if ($base === null) {
+                continue;
+            }
+            $segs = explode('/', $base);
+            foreach ($segs as $i => $seg) {
+                foreach ($wpTaxes as $wpTax) {
+                    $ids = array_map('intval', (array)($it[$wpTax] ?? []));
+                    if ($ids && in_array($seg, $termSlugs($wpTax, $ids), true)) {
+                        $segs[$i] = '%' . (Generator::TAX_ALIASES[$wpTax] ?? self::slug($wpTax, 'tax')) . '%';
+                        break;
+                    }
+                }
+            }
+            $bases[] = implode('/', $segs);
+        }
+        if (!$bases) {
+            return null;
+        }
+        $counts = array_count_values($bases);
+        arsort($counts);
+        return (string)array_key_first($counts);
+    }
+
+    /** Term URL base ('' = site root) and whether child terms nest their parent's slug. */
+    private static function termRewrite(array $terms, string $site): array
+    {
+        $base = null;
+        $nested = true;
+        foreach ($terms as $t) {
+            $path = trim((string)parse_url((string)($t['link'] ?? ''), PHP_URL_PATH), '/');
+            $sitePath = trim((string)parse_url($site, PHP_URL_PATH), '/');
+            if ($sitePath !== '' && str_starts_with($path, $sitePath)) {
+                $path = trim(substr($path, strlen($sitePath)), '/');
+            }
+            if ($path === '' || str_contains((string)($t['link'] ?? ''), '?')) {
+                continue;
+            }
+            $parts = explode('/', $path);
+            if (end($parts) !== (string)$t['slug']) {
+                continue;
+            }
+            array_pop($parts);
+            if (!empty($t['parent'])) {
+                // A child whose URL has no extra segment compared to the base → flat URLs.
+                if ($base !== null) {
+                    $nested = count($parts) > count(array_filter(explode('/', $base), 'strlen'));
+                }
+                continue;
+            }
+            $base ??= implode('/', $parts);
+        }
+        if ($base !== null) {
+            foreach ($terms as $t) {
+                if (!empty($t['parent'])) {
+                    $path = trim((string)parse_url((string)($t['link'] ?? ''), PHP_URL_PATH), '/');
+                    $nested = substr_count($path, '/') > substr_count(trim($base . '/' . $t['slug'], '/'), '/');
+                    break;
+                }
+            }
+        }
+        return [$base, $nested];
     }
 
     /** Build a spec from a WordPress export (WXR) parsed by Wxr::parse(). */
@@ -228,8 +357,10 @@ final class Generator
         unset($t);
         foreach ($spec['taxonomies'] as &$x) {
             $x['slug'] = self::TAX_ALIASES[$x['slug'] ?? ''] ?? self::slug((string)($x['slug'] ?? 'group'), 'tax');
-            $x += ['singular' => self::humanize($x['slug']), 'plural' => self::humanize(self::plural($x['slug'])), 'post_types' => [], 'hierarchical' => true,
-                'rewrite' => str_replace('_', '-', $x['slug'])];
+            $x += ['singular' => self::humanize($x['slug']), 'plural' => self::humanize(self::plural($x['slug'])), 'post_types' => [], 'hierarchical' => true];
+            if (!array_key_exists('rewrite', $x) || $x['rewrite'] === null) {
+                $x['rewrite'] = str_replace('_', '-', $x['slug']);
+            }
         }
         unset($x);
         foreach ($spec['field_groups'] as &$g) {
@@ -270,7 +401,7 @@ final class Generator
                 'has_archive' => (bool)$t['has_archive'],
                 'hierarchical' => (bool)$t['hierarchical'],
                 'show_in_menu' => true,
-                'rewrite' => trim(implode('/', array_map('slugify', array_filter(explode('/', (string)$t['rewrite'])))), '/') ?: $slug,
+                'rewrite' => self::cleanRewrite((string)$t['rewrite']) ?: $slug,
                 'menu_position' => (int)($existing['menu_position'] ?? 30),
                 'supports' => array_values(array_intersect((array)$t['supports'], array_keys(ContentModel::SUPPORTS))),
                 'description' => (string)($t['description'] ?? ''),
@@ -282,14 +413,15 @@ final class Generator
             $slug = $x['slug'];
             $pts = array_values(array_filter((array)$x['post_types'], static fn($p) => ContentModel::type($p) !== null));
             $existing = ContentModel::taxonomy($slug);
+            $rewrite = array_key_exists('rewrite', $x) && $x['rewrite'] === '' ? '' : (self::cleanRewrite((string)($x['rewrite'] ?? '')) ?: $slug);
             if ($existing) {
                 $merged = array_values(array_unique(array_merge($existing['post_types'], $pts)));
-                ContentModel::saveTaxonomy(array_merge($existing, ['post_types' => $merged, 'rewrite' => $existing['builtin'] ? $existing['rewrite'] : ($x['rewrite'] ?: $existing['rewrite'])]));
-                $log[] = "Updated taxonomy “{$existing['plural']}” → " . implode(', ', $merged);
+                ContentModel::saveTaxonomy(array_merge($existing, ['post_types' => $merged, 'rewrite' => $rewrite, 'nested' => (bool)($x['nested'] ?? ($existing['nested'] ?? true))]));
+                $log[] = "Updated taxonomy “{$existing['plural']}” → " . implode(', ', $merged) . ' (/' . $rewrite . ($rewrite !== '' ? '/' : '') . '…)';
                 continue;
             }
             ContentModel::saveTaxonomy(['slug' => $slug, 'singular' => strip_tags($x['singular']), 'plural' => strip_tags($x['plural']), 'post_types' => $pts,
-                'hierarchical' => (bool)$x['hierarchical'], 'public' => true, 'rewrite' => slugify((string)$x['rewrite']) ?: $slug]);
+                'hierarchical' => (bool)$x['hierarchical'], 'public' => true, 'rewrite' => $rewrite, 'nested' => (bool)($x['nested'] ?? true)]);
             $log[] = "Created taxonomy “{$x['plural']}” for " . (implode(', ', $pts) ?: '—');
         }
         $groups = ContentModel::fieldGroups();
@@ -314,6 +446,13 @@ final class Generator
         }
         PageCache::clear();
         return $log ?: ['Nothing to create — the content model already matches.'];
+    }
+
+    /** Slugify each URL segment but keep %taxonomy% tokens. */
+    public static function cleanRewrite(string $r): string
+    {
+        $segs = array_filter(explode('/', trim($r, '/')), 'strlen');
+        return implode('/', array_map(static fn($seg) => preg_match('/^%[a-z0-9_-]+%$/', $seg) ? $seg : slugify($seg), $segs));
     }
 
     private static function cleanField(array $f): array
@@ -349,7 +488,7 @@ final class Generator
         return $fields;
     }
 
-    private static function inferSub(array $samples): array
+    public static function inferSub(array $samples): array
     {
         $vals = [];
         foreach ($samples as $s) {

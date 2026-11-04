@@ -16,9 +16,11 @@ final class DB
     public static string $prefix = 'sl_';
     public static string $driver = 'mysql';
     public static int $count = 0;
+    private static array $cfg = [];
 
     public static function connect(array $cfg): void
     {
+        self::$cfg = $cfg;
         self::$driver = $cfg['driver'] ?? 'mysql';
         self::$prefix = $cfg['prefix'] ?? 'sl_';
         $options = [
@@ -68,6 +70,21 @@ final class DB
     }
 
     public static function query(string $sql, array $params = []): PDOStatement
+    {
+        try {
+            return self::run($sql, $params);
+        } catch (\PDOException $e) {
+            // Shared hosts close idle MySQL connections (e.g. during long imports): reconnect once and retry.
+            if (self::$driver === 'mysql' && self::$cfg && preg_match('/gone away|Lost connection|2006|2013/i', $e->getMessage()) && !self::pdo()->inTransaction()) {
+                self::$pdo = null;
+                self::connect(self::$cfg);
+                return self::run($sql, $params);
+            }
+            throw $e;
+        }
+    }
+
+    private static function run(string $sql, array $params): PDOStatement
     {
         self::$count++;
         $stmt = self::pdo()->prepare(self::prepareSql($sql));

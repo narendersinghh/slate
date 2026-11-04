@@ -13,6 +13,7 @@ ServerSignature Off
     RewriteRule ^content/.*\.(sqlite|log|zip)$ - [F,L,NC]
     RewriteRule ^themes/.*\.php$ - [F,L,NC]
     RewriteRule ^(wp-content|wp-includes)/.*\.(php\d?|phtml|phar)$ - [F,L,NC]
+    RewriteRule ^bin(/.*)?$ - [F,L,NC]
     RewriteRule ^admin/(views|install\.php|routes\.php|api\.php)(/.*)?$ - [F,L,NC]
 
     # Serve existing static files directly

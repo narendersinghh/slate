@@ -14,6 +14,7 @@ server {
     location ^~ /wp-includes/ { try_files $uri /index.php?$query_string; }
     location ~* ^/admin/(views|install\.php|routes\.php|api\.php) { deny all; }
     location ^~ /content/cache/   { deny all; }
+    location ^~ /bin/ { deny all; }
     location ^~ /content/backups/ { deny all; }
 
     # Long cache for static assets

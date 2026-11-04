@@ -30,6 +30,12 @@ Logo: a faceted origami songbird perched on a chalk line on a slate. Colours: br
 4. Review what was detected, keep the options on (including *Mirror the design*) → **Start import**. Keep the tab open; it runs in resumable batches.
 5. Check the site, then point the domain at Slate. Old URLs keep working (identical paths or 301 redirects).
 
+Or over SSH, from the Slate folder (prompts for the application password, never stored in shell history):
+
+```bash
+php bin/slate import:wordpress --url=https://example.com --user=your-wp-admin
+```
+
 Elementor forms keep working: submissions appear under **Form submissions** and are emailed to the admin address.
 After the domain switch, theme assets that were never requested during testing can no longer be fetched from the old server —
 browse the main pages on the Slate URL before switching DNS so everything is cached locally.

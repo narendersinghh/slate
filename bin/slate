@@ -1,0 +1,141 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Slate command-line tool.
+ *
+ *   php bin/slate import:wordpress --url=https://example.com --user=admin [--password=APP_PASSWORD]
+ *        [--no-design] [--no-theme] [--no-media] [--no-drafts] [--types=post,page,...] [--fresh]
+ *   php bin/slate cache:clear
+ *   php bin/slate version
+ *
+ * The password can also be given via the WP_APP_PASSWORD environment variable, or typed when prompted
+ * (recommended: it then never appears in your shell history).
+ */
+declare(strict_types=1);
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
+require dirname(__DIR__) . '/core/bootstrap.php';
+
+use Slate\Crypto;
+use Slate\DB;
+use Slate\Modules;
+use Slate\Options;
+use Slate\PageCache;
+use SlateModules\WpImport\Importer;
+
+$argvList = array_slice($argv, 1);
+$cmd = $argvList[0] ?? 'help';
+$opts = [];
+foreach (array_slice($argvList, 1) as $a) {
+    if (preg_match('/^--([a-z-]+)(?:=(.*))?$/', $a, $m)) {
+        $opts[$m[1]] = $m[2] ?? true;
+    }
+}
+$out = static function (string $s): void {
+    fwrite(STDOUT, $s . PHP_EOL);
+};
+$fail = static function (string $s): never {
+    fwrite(STDERR, "✕ $s" . PHP_EOL);
+    exit(1);
+};
+
+if (!defined('SLATE_CONFIG')) {
+    $fail('Slate is not installed yet (config.php missing). Run the web installer first.');
+}
+DB::connect(SLATE_CONFIG['db']);
+Options::load();
+\Slate\Schema::migrate();
+Modules::boot();
+\Slate\Theme::boot();
+
+switch ($cmd) {
+    case 'version':
+        $out('Slate ' . SLATE_VERSION);
+        break;
+
+    case 'cache:clear':
+        $out('Cleared ' . PageCache::clear() . ' cached pages.');
+        break;
+
+    case 'import:wordpress':
+        $url = (string)($opts['url'] ?? '');
+        $user = (string)($opts['user'] ?? '');
+        $pass = (string)($opts['password'] ?? (getenv('WP_APP_PASSWORD') ?: ''));
+        if ($url === '') {
+            $fail('Missing --url=https://your-wordpress-site.com');
+        }
+        if ($user !== '' && $pass === '') {
+            fwrite(STDOUT, 'WordPress application password for ' . $user . ': ');
+            if (DIRECTORY_SEPARATOR === '/') {
+                @shell_exec('stty -echo 2>/dev/null');
+            }
+            $pass = trim((string)fgets(STDIN));
+            if (DIRECTORY_SEPARATOR === '/') {
+                @shell_exec('stty echo 2>/dev/null');
+            }
+            fwrite(STDOUT, PHP_EOL);
+        }
+        foreach (['auto-cpt-generator', 'wordpress-importer'] as $m) {
+            if (!Modules::isActive($m)) {
+                if ($err = Modules::activate($m)) {
+                    $fail("Could not activate $m: $err");
+                }
+                $out("✓ Activated module: $m");
+            }
+        }
+        require_once SLATE_MODULES . '/wordpress-importer/module.php';
+        Importer::install();
+        if (!empty($opts['fresh'])) {
+            Importer::reset(true);
+            $out('✓ Removed previously imported content (--fresh)');
+        }
+        @set_time_limit(0);
+        $conn = ['source' => 'rest', 'url' => $url, 'user' => $user, 'pass' => Crypto::encrypt(preg_replace('/\s+/', '', $pass))];
+        $out("→ Analysing $url …");
+        try {
+            $scan = Importer::scan($conn);
+        } catch (Throwable $e) {
+            $fail($e->getMessage());
+        }
+        $s = $scan['summary'];
+        $conn['url'] = $s['url'];
+        $out('  Site: ' . $s['site'] . ($s['auth'] ? '  (signed in as ' . $s['user'] . ')' : '  (public access only — drafts, menus and settings need an application password)'));
+        foreach ($scan['counts']['types'] ?? [] as $wp => $c) {
+            $out(sprintf('  %-22s %5d  → %s', $wp, $c['total'], $c['slug']));
+        }
+        $out(sprintf('  %-22s %5s', 'media', (string)($s['media'] ?? '?')));
+        $out('  Detected: ' . (implode(', ', array_filter([$s['elementor'] ? 'Elementor' : null, $s['seo'] ?: null, $s['acf'] ? 'ACF' : null])) ?: '—'));
+        Options::set('wpi_conn', $conn, false);
+        Options::set('wpi_scan', $scan, false);
+        $types = !empty($opts['types']) ? array_map('trim', explode(',', (string)$opts['types'])) : array_keys($scan['counts']['types'] ?? []);
+        $job = Importer::start($conn, $scan, [
+            'types' => $types, 'model' => true, 'media' => empty($opts['no-media']), 'seo' => true, 'menus' => true, 'settings' => true,
+            'redirects' => true, 'design' => empty($opts['no-design']), 'activate_theme' => empty($opts['no-theme']) && empty($opts['no-design']),
+            'drafts' => empty($opts['no-drafts']),
+        ]);
+        $out('→ Importing (' . count($job['steps']) . ' steps) …');
+        $shown = 0;
+        do {
+            try {
+                $r = Importer::step();
+            } catch (Throwable $e) {
+                $fail($e->getMessage());
+            }
+            $all = Importer::job()['log'] ?? [];
+            foreach (array_slice($all, $shown) as $line) {
+                $out('  ' . $line);
+            }
+            $shown = count($all);
+            fwrite(STDOUT, sprintf("\r  [%3d%%] %-60s", $r['progress'], mb_substr($r['step'], 0, 60)));
+        } while (!$r['done']);
+        $out(PHP_EOL . '✓ Import finished: ' . json_encode($r['stats']));
+        $out('  Open ' . site_url() . ' to review. Re-run this command any time to sync changes (it updates, never duplicates).');
+        break;
+
+    default:
+        $out("Slate CLI\n\n  php bin/slate import:wordpress --url=https://example.com --user=admin   Import a WordPress site\n  php bin/slate cache:clear                                              Clear the page cache\n  php bin/slate version");
+}

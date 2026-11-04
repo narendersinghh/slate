@@ -143,7 +143,7 @@
               const sel = $('[data-pick-form]', m);
               const title = sel.options[sel.selectedIndex].textContent;
               this.restoreRange(range);
-              document.execCommand('insertHTML', false, '<div class="slate-form-widget ed-form-widget" data-slate-form-widget="' + sel.value + '" contenteditable="false">☑ Form: ' + esc(title) + ' [form id="' + sel.value + '"]</div><p></p>');
+              document.execCommand('insertHTML', false, '<div class="slate-form-widget ed-form-widget" data-slate-form-widget="' + sel.value + '" contenteditable="false">' + esc(title) + ' [form id="' + sel.value + '"]</div><p></p>');
               m.close(); this.sync(); resolve();
             } else if (e.target.closest('[data-close]')) { m.close(); resolve(); }
           });

@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<?php wpm_assets($site['head']); ?>
+<?php wpm_assets(wpm_head_items()); ?>
 <?php wpm_page_assets(); ?>
 <link rel="stylesheet" href="<?= e(theme_url('assets/mirror.css')) ?>">
 <?php slate_head(); ?>

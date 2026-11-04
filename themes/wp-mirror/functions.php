@@ -44,6 +44,54 @@ function wpm_page_fields(): array
     return (array)(post()['fields'] ?? []);
 }
 
+/**
+ * The captured site <head> plus this page's Elementor CSS in WordPress's cascade order.
+ * The head was captured from one page (e.g. the home page, post 1279), so it carries that page's
+ * global-1279 / local-1279 files. On another page those slots must hold the page's own
+ * global-N / local-N files; appending them at the end lets generic rules beat per-element ones.
+ */
+function wpm_head_items(): array
+{
+    $head = wpm_site()['head'] ?? [];
+    $re = '#/elementor/css/(global|local)-(\d+)-frontend-(desktop|tablet|mobile)\.css#';
+    $captured = null;
+    foreach ($head as $a) {
+        if (($a['t'] ?? '') === 'css' && preg_match($re, (string)$a['href'], $m) && $m[1] === 'global') {
+            $captured = $m[2];
+            break;
+        }
+    }
+    $own = [];
+    foreach ((array)(wpm_page_fields()['_wpm_css'] ?? []) as $href) {
+        if (preg_match($re, (string)$href, $m) && $m[2] !== $captured) {
+            $own[$m[1] . '/' . $m[3]] ??= (string)$href;
+        }
+    }
+    if ($captured === null || !$own) {
+        $GLOBALS['wpm_css_placed'] = [];
+        return $head;
+    }
+    $placed = [];
+    $out = [];
+    foreach ($head as $a) {
+        if (($a['t'] ?? '') === 'css' && preg_match($re, (string)$a['href'], $m) && $m[2] === $captured) {
+            $key = $m[1] . '/' . $m[3];
+            if (isset($own[$key])) {
+                $a['href'] = $own[$key];
+                unset($a['id']);
+                $placed[$own[$key]] = true;
+                $out[] = $a;
+            } elseif ($m[1] === 'global') {
+                $out[] = $a; // global classes are site-wide; keep them when the page has no copy
+            }
+            continue; // the captured page's own local-N CSS does not belong on this page
+        }
+        $out[] = $a;
+    }
+    $GLOBALS['wpm_css_placed'] = $placed;
+    return $out;
+}
+
 function wpm_page_assets(): void
 {
     $f = wpm_page_fields();
@@ -51,7 +99,11 @@ function wpm_page_assets(): void
         return;
     }
     $p = ['fields' => $f];
+    $placed = $GLOBALS['wpm_css_placed'] ?? [];
     foreach ((array)($p['fields']['_wpm_css'] ?? []) as $href) {
+        if (isset($placed[$href])) {
+            continue;
+        }
         echo '<link rel="stylesheet" href="' . e((string)$href) . '">', "\n";
     }
     if (!empty($p['fields']['_wpm_style'])) {

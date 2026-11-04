@@ -87,8 +87,9 @@ function smx_rebrand(string $s): string
         return $s;
     }
     $s = strtr($s, smx_strtr_table());
-    // Generator tags of the old stack.
+    // Generator tags and the old platform's prefetch rules (they list its private paths).
     $s = (string)preg_replace('#<meta\s+name=["\']generator["\'][^>]*>\s*#i', '', $s);
+    $s = (string)preg_replace('#<script\b[^>]*type=["\']speculationrules["\'][^>]*>.*?</script>\s*#is', '', $s);
     return smx_rename($s);
 }
 

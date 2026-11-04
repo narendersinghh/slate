@@ -111,6 +111,20 @@ Hooks::add('init', static function (): void {
         wpi_serve_asset($path);
     }
 
+    // ?post_type=books links from the old site → that type's listing.
+    if ($method === 'GET' && $path === '/' && isset($_GET['post_type']) && is_string($_GET['post_type'])) {
+        $type = \Slate\ContentModel::type(preg_replace('/[^a-z0-9_-]/', '', $_GET['post_type']));
+        $base = trim((string)($type['rewrite'] ?? ''), '/');
+        if ($type && !empty($type['public'])) {
+            if (!empty($type['has_archive']) && $base !== '' && !str_contains($base, '%')) {
+                redirect(url($base . '/'), 301);
+            }
+            if ($page = Posts::findBySlug('page', (string)$type['slug'])) {
+                redirect(Posts::permalink($page), 301);
+            }
+        }
+    }
+
     // ?p=123 / ?page_id=123 links from the old site.
     if ($method === 'GET' && $path === '/' && (isset($_GET['p']) || isset($_GET['page_id']))) {
         $id = Importer::map('post_id', (string)(int)($_GET['p'] ?? $_GET['page_id']));

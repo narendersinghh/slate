@@ -35,6 +35,8 @@ final class Seo
 
     public static function vars(string $template, array $extra = []): string
     {
+        // Aliases used by imported SEO templates (e.g. %term%, %sitedesc%).
+        $extra += ['%term%' => $extra['%title%'] ?? '', '%sitedesc%' => (string)Options::get('tagline')];
         $out = strtr($template, $extra + [
             '%site%' => (string)Options::get('site_title'),
             '%sitename%' => (string)Options::get('site_title'),

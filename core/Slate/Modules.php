@@ -80,9 +80,14 @@ final class Modules
     /** Admin menu items registered by modules: Modules::adminPage('My module', 'my-module', fn() => ...) */
     private static array $pages = [];
 
-    public static function adminPage(string $label, string $slug, callable $render, string $cap = 'manage_settings', string $icon = 'puzzle'): void
+    /**
+     * @param string        $section "build" (sidebar Build group) or "content" (after the content types)
+     * @param callable|null $badge   returns a number shown next to the label (e.g. unread items), 0 = none
+     */
+    public static function adminPage(string $label, string $slug, callable $render, string $cap = 'manage_settings', string $icon = 'puzzle',
+        string $section = 'build', ?callable $badge = null): void
     {
-        self::$pages[$slug] = compact('label', 'slug', 'render', 'cap', 'icon');
+        self::$pages[$slug] = compact('label', 'slug', 'render', 'cap', 'icon', 'section', 'badge');
     }
 
     public static function adminPages(): array

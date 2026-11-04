@@ -71,6 +71,10 @@ window.SLATE = <?= json_encode([
       <?php endforeach; ?>
       <?php endif; ?>
 
+      <?php foreach (Modules::adminPages() as $mp): if (($mp['section'] ?? 'build') !== 'content' || !Auth::can($mp['cap'])) continue;
+          $count = isset($mp['badge']) && is_callable($mp['badge']) ? (int)($mp['badge'])() : 0; ?>
+        <?= $navItem(admin_url('m/' . $mp['slug']), $mp['icon'], $mp['label'], $is('/m/' . $mp['slug']), $count > 0 ? '<span class="nav-count">' . ($count > 99 ? '99+' : $count) . '</span>' : '') ?>
+      <?php endforeach; ?>
       <?php if (Auth::can('upload_media')): ?>
         <?= $navItem(admin_url('media'), 'image', 'Media', $is('/media')) ?>
       <?php endif; ?>
@@ -99,7 +103,7 @@ window.SLATE = <?= json_encode([
       <?php if (Auth::can('manage_modules')): ?>
         <?= $navItem(admin_url('modules'), 'puzzle', 'Modules', $is('/modules')) ?>
       <?php endif; ?>
-      <?php foreach (Modules::adminPages() as $mp): if (!Auth::can($mp['cap'])) continue; ?>
+      <?php foreach (Modules::adminPages() as $mp): if (($mp['section'] ?? 'build') === 'content' || !Auth::can($mp['cap'])) continue; ?>
         <?= $navItem(admin_url('m/' . $mp['slug']), $mp['icon'], $mp['label'], $is('/m/' . $mp['slug'])) ?>
       <?php endforeach; ?>
 

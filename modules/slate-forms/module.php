@@ -45,7 +45,7 @@ if (!function_exists('slate_form')) {
 Modules::adminPage('Submissions', 'submissions', static function (): void {
     Forms::install();
     require __DIR__ . '/views/submissions.php';
-}, 'edit_others_posts', 'message');
+}, 'edit_others_posts', 'message', 'content', [Forms::class, 'newCount']);
 
 Hooks::add('admin_routes', static function (Router $r): void {
     $r->post('/m/submissions/bulk', static function (): void {

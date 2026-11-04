@@ -6,7 +6,7 @@ $job = Importer::job();
 $conn = Options::get('wpi_conn') ?: [];
 ?>
 <div class="wpi" data-wpi data-base="<?= e(admin_url('m/wp-import')) ?>">
-  <p class="muted" style="margin-top:0">Move a WordPress site to Slate: post types, taxonomies, ACF fields, content, media (optimized to WebP), SEO meta, menus, settings and URLs — plus a mirror of the theme / Elementor design. Running it again updates what was imported; it never duplicates.</p>
+  <p class="muted" style="margin-top:0">Move a WordPress site to Slate: post types, taxonomies, ACF fields, content, media (optimized to WebP), SEO meta, menus, settings and URLs — plus a mirror of the theme and page-builder design. Running it again updates what was imported; it never duplicates.</p>
 
   <section class="card" data-step="connect">
     <div class="card-head"><h2>1 · Connect</h2></div>

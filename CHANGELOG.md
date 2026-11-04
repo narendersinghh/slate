@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1
+- Database layer reconnects and retries once when a shared host closes an idle MySQL connection ("server has gone away").
+
 ## 0.3.0 — Templates, URL tokens, faithful Elementor Pro migration
 - **Templates** (sidebar → Templates): site-wide templates for every post type (single + archive), every taxonomy and the
   404 / search pages. HTML + safe tags (`{{title}}`, `{{field:name}}`, `{{#each field:repeater}}`, `{{#query …}}`, `{{#posts}}`,

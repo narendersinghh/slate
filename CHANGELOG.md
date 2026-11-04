@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — Live templates
+- Templates engine: modules can add tags (`template_tag`), conditions (`template_lookup`) and loop blocks (`template_block`);
+  `{{term.*}}` values and `{{#each term.field:…}}` on taxonomy archives; dotted paths (`{{item.fields.color}}`);
+  templates for one specific item (target `page__home`); filters `|texturize` `|slug` `|pad2` `|host` `|strip` `|upper` `|number`.
+- `texturize()` helper (curly quotes, dashes, ellipses outside tags/scripts).
+- Hooks `route_path` (modules map their URL schemes) and `term_link`.
+- Site Mirror: items created in Slate and listings rendered by Templates get the design's assets automatically.
+- Site modules can now render every page of a site from live content through Templates instead of frozen copies.
+
 ## 0.4.0 — Forms, richer custom fields, brand-neutral mirror
 - **Forms module**: build forms under Content → Forms (text, email, phone, URL, number, paragraph, dropdown, radio, checkboxes,
   date, consent, hidden and text blocks; required, width, placeholder, help). Place a saved form anywhere with the **Form** button

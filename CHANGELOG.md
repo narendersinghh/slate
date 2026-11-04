@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+- WordPress mirror theme: a page's own Elementor `global-N` / `local-N` stylesheets now take the place of the captured
+  page's files in the head, keeping WordPress's cascade order (fixes per-element sizes being overridden by generic rules).
+
 ## 0.3.1
 - Database layer reconnects and retries once when a shared host closes an idle MySQL connection ("server has gone away").
 

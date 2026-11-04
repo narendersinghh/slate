@@ -85,6 +85,9 @@ Hooks::add('admin_routes', static function (Router $r): void {
         foreach (['model', 'media', 'seo', 'menus', 'settings', 'redirects', 'design', 'activate_theme', 'drafts'] as $k) {
             $opts[$k] = !empty($o[$k]);
         }
+        if (!empty($o['only'])) {
+            $opts['only'] = array_values(array_map('strval', (array)$o['only']));
+        }
         $job = Importer::start($conn, $scan, $opts);
         log_activity('wp_import_started', $job['origin']);
         return ['steps' => count($job['steps'])];

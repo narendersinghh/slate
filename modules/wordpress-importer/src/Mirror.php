@@ -533,6 +533,13 @@ final class Mirror
         file_put_contents($dir . '/' . preg_replace('/[^a-z0-9_.-]/i', '_', $key) . '.html', $html, LOCK_EX);
     }
 
+    public static function forget(string $bucket, string $key): void
+    {
+        $base = self::STORE . '/' . preg_replace('/[^a-z0-9_-]/i', '', $bucket) . '/' . preg_replace('/[^a-z0-9_.-]/i', '_', $key);
+        @unlink($base . '.html');
+        @unlink($base . '.assets.html');
+    }
+
     public static function load(string $bucket, string $key): ?string
     {
         $f = self::STORE . '/' . preg_replace('/[^a-z0-9_-]/i', '', $bucket) . '/' . preg_replace('/[^a-z0-9_.-]/i', '_', $key) . '.html';

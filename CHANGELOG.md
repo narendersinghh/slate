@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4
+- WordPress Importer: the blog listing (posts page, e.g. `/blog/`) is captured with its Elementor archive template.
+- WordPress Importer: post types whose archive URL is a 404 on WordPress get their archive switched off, matching the source.
+- WordPress Importer: `start` accepts `options.only` (e.g. `["archives"]`) to re-run selected steps on an existing import.
+- Mirror theme: fallback pagination styles no longer leak into mirrored archive templates.
+
 ## 0.3.3
 - Mirror theme: pages and archives with several Elementor CSS sets (e.g. archive templates) keep all of them in the
   global / local slots, in their original order.

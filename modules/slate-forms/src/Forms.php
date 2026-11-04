@@ -189,8 +189,10 @@ final class Forms
         $h = '<form id="' . $uid . '" class="' . e(trim($c['form'] . ' slate-form--' . $style . ' slate-form--' . $form['slug'] . ' ' . ($f['css_class'] ?? '')))
             . '" method="post" action="' . e(url(ltrim(self::ENDPOINT, '/'))) . '" data-slate-form="' . (int)$form['id'] . '" aria-label="' . e($form['title']) . '"'
             . (!empty($f['redirect_url']) ? ' data-redirect="' . e((string)$f['redirect_url']) . '"' : '') . '>';
-        $h .= '<input type="hidden" name="_form" value="' . (int)$form['id'] . '"><input type="hidden" name="_page" value=""><input type="hidden" name="_title" value=""><input type="hidden" name="_js" value="">';
-        $h .= '<div class="slate-form__hp" aria-hidden="true"><label>Leave this empty <input type="text" name="_hp" tabindex="-1" autocomplete="off"></label></div>';
+        // Theme look: label + control are direct children of the form (as in the original design, whose CSS
+        // may position them with :nth-child), so no wrappers and the technical inputs go last.
+        $flat = $style === 'theme';
+        $tail = '';
         foreach (self::fields($form) as $fd) {
             $id = $uid . '-' . $fd['key'];
             $name = 'fields[' . $fd['key'] . ']';
@@ -198,10 +200,12 @@ final class Forms
             $ph = $fd['placeholder'] !== '' ? ' placeholder="' . e($fd['placeholder']) . '"' : '';
             $label = e($fd['label']) . ($fd['required'] && $style === 'slate' ? ' <span class="slate-form__req" aria-hidden="true">*</span>' : '');
             if ($fd['type'] === 'hidden') {
-                $h .= '<input type="hidden" name="' . e($name) . '" value="' . e($fd['placeholder']) . '">';
+                $tail .= '<input type="hidden" name="' . e($name) . '" value="' . e($fd['placeholder']) . '">';
                 continue;
             }
-            $h .= '<div class="' . e($c['field'] . ' slate-form__field--' . $fd['type']) . '" style="--sf-w:' . $fd['width'] . '%">';
+            if (!$flat) {
+                $h .= '<div class="' . e($c['field'] . ' slate-form__field--' . $fd['type']) . '" style="--sf-w:' . $fd['width'] . '%">';
+            }
             switch ($fd['type']) {
                 case 'html':
                     $h .= '<div class="' . e($c['html']) . '">' . \Slate\Sanitizer::html($fd['text'] !== '' ? $fd['text'] : $fd['label']) . '</div>';
@@ -236,7 +240,9 @@ final class Forms
             if ($fd['help'] !== '' && $fd['type'] !== 'html') {
                 $h .= '<small class="' . e($c['help']) . '">' . e($fd['help']) . '</small>';
             }
-            $h .= '</div>';
+            if (!$flat) {
+                $h .= '</div>';
+            }
         }
         $h .= '<button class="' . e($c['button']) . '" type="submit">' . e(trim((string)($f['submit_label'] ?? '')) ?: 'Send') . '</button>';
         if (trim((string)($f['note'] ?? '')) !== '') {
@@ -245,6 +251,8 @@ final class Forms
         $msg = static fn(string $v, string $d) => \Slate\Sanitizer::html(nl2br(trim($v) !== '' ? $v : $d, false));
         $h .= '<div class="' . e($c['success']) . '" role="status" aria-live="polite" tabindex="-1" hidden>' . $msg((string)($f['success_message'] ?? ''), 'Thanks! Your message has been sent.') . '</div>';
         $h .= '<div class="' . e($c['error']) . '" role="alert" tabindex="-1" hidden>' . $msg((string)($f['error_message'] ?? ''), 'Sorry, that didn’t go through. Please try again.') . '</div>';
+        $h .= $tail . '<input type="hidden" name="_form" value="' . (int)$form['id'] . '"><input type="hidden" name="_page" value=""><input type="hidden" name="_title" value=""><input type="hidden" name="_js" value="">'
+            . '<div class="slate-form__hp" aria-hidden="true"><label>Leave this empty <input type="text" name="_hp" tabindex="-1" autocomplete="off"></label></div>';
         $h .= '</form>';
         return $h . self::assets();
     }

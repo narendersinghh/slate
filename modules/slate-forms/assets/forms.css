@@ -20,6 +20,6 @@
 .slate-form--slate .slate-form__success { background: #ecfdf5; color: #065f46; }
 .slate-form--slate .slate-form__error { background: #fef2f2; color: #991b1b; white-space: pre-line; }
 
-/* "Use the website's own styles": no wrappers in the layout, the theme styles the controls. */
-.slate-form--theme .slate-form__field { display: contents; }
+/* "Use the website's own styles": flat markup, the theme styles the controls. */
 .slate-form--theme .slate-form__group { border: 0; padding: 0; margin: 0; }
+.slate-form__hp, .slate-form > input[type="hidden"] { grid-area: auto !important; }

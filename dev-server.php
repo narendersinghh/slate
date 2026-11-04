@@ -4,7 +4,7 @@
  *   php -S localhost:8000 dev-server.php
  */
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-if (preg_match('#^/(config\.php|core/.*\.php|modules/.*\.php|themes/.*\.php|content/.*\.(php|sqlite|log|zip|html)|admin/(views|install\.php|routes\.php|api\.php))#i', $path)) {
+if (preg_match('#^/(config\.php|core/.*\.php|modules/.*\.php|themes/.*\.php|content/.*\.(php|sqlite|log|zip|html)|bin/|admin/(views|install\.php|routes\.php|api\.php))#i', $path)) {
     http_response_code(403);
     exit('Forbidden');
 }

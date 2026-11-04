@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+- `php bin/slate import:wordpress --url=… --user=…` — run the full WordPress import from the command line (SSH), with a hidden
+  password prompt; activates the modules automatically and can be re-run to sync. Also `cache:clear` and `version`.
+- `bin/` is blocked from web access (.htaccess, nginx example, dev server).
+
 ## 0.2.0 — WordPress migration, design system, new brand
 - New brand: origami-bird-on-slate logo, Instrument Serif + Inter, #F26B2D palette; redesigned admin (light & dark).
 - **Design system** (Settings → Appearance → Design system): global colours, fonts, type scale, layout tokens and global CSS classes

@@ -5,7 +5,7 @@
  */
 declare(strict_types=1);
 
-const SLATE_VERSION = '0.2.0';
+const SLATE_VERSION = '0.2.1';
 const SLATE_DB_VERSION = 1;
 const SLATE_MIN_PHP = '8.2.0';
 

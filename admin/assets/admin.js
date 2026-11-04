@@ -358,7 +358,8 @@
     const inputFor = (f, val, ri) => {
       const v = esc(val ?? '');
       const attrs = 'data-r="' + ri + '" data-f="' + esc(f.name) + '"';
-      if (f.type === 'textarea' || f.type === 'richtext') return '<textarea class="input" rows="3" ' + attrs + '>' + v + '</textarea>';
+      if (f.type === 'richtext') return '<div class="rr-rich"><div class="rr-rich-bar"><button type="button" data-rt="bold" title="Bold"><b>B</b></button><button type="button" data-rt="italic" title="Italic"><i>I</i></button><button type="button" data-rt="insertUnorderedList" title="List">•≡</button><button type="button" data-rt="createLink" title="Link">🔗</button><button type="button" data-rt="unlink" title="Remove link">⛓︎</button></div><div class="rr-rich-area input" contenteditable="true" ' + attrs + '>' + (val ?? '') + '</div></div>';
+      if (f.type === 'textarea') return '<textarea class="input" rows="3" ' + attrs + '>' + v + '</textarea>';
       if (f.type === 'select') return '<select class="input" ' + attrs + '><option value=""></option>' + (f.options || []).map((o) => { const [k, l] = o.includes(':') ? o.split(':') : [o, o]; return '<option value="' + esc(k.trim()) + '"' + (String(val) === k.trim() ? ' selected' : '') + '>' + esc(l.trim()) + '</option>'; }).join('') + '</select>';
       if (f.type === 'toggle') return '<input type="checkbox" class="switch" ' + attrs + (val ? ' checked' : '') + '>';
       if (f.type === 'image') return '<span class="input-group"><input class="input" type="number" placeholder="Media ID" ' + attrs + ' value="' + v + '"><button type="button" class="btn btn-sm" data-pick-into>Choose</button></span>';
@@ -367,14 +368,32 @@
     };
     const render = () => {
       rowsEl.innerHTML = rows.map((row, ri) => '<div class="repeater-row"><div class="rr-actions"><button type="button" class="icon-btn" data-up="' + ri + '" title="Move up">↑</button><button type="button" class="icon-btn" data-del="' + ri + '" title="Remove">✕</button></div>' +
-        schema.map((f) => '<label class="field"><span>' + esc(f.label) + '</span>' + inputFor(f, row[f.name], ri) + '</label>').join('') + '</div>').join('');
+        schema.map((f) => '<label class="field"' + (f.show_if ? ' data-show-if="' + esc(f.show_if.field) + '" data-show-in="' + esc((f.show_if.in || []).join(',')) + '"' : '') + (f.type === 'richtext' ? ' style="grid-column:1/-1"' : '') + '><span>' + esc(f.label) + '</span>' + inputFor(f, row[f.name], ri) + '</label>').join('') + '</div>').join('');
       store.value = JSON.stringify(rows);
+      applyShowIf();
     };
+    // Sub-fields shown only for some values of another sub-field (e.g. "Choices" for dropdowns).
+    const applyShowIf = () => {
+      $$('.repeater-row', rowsEl).forEach((rowEl, ri) => {
+        $$('[data-show-if]', rowEl).forEach((lab) => { lab.hidden = !lab.dataset.showIn.split(',').includes(String(rows[ri][lab.dataset.showIf] ?? '')); });
+      });
+    };
+    rowsEl.addEventListener('mousedown', (e) => { if (e.target.closest('[data-rt]')) e.preventDefault(); });
+    rowsEl.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-rt]');
+      if (!b) return;
+      const area = b.closest('.rr-rich').querySelector('.rr-rich-area');
+      area.focus();
+      if (b.dataset.rt === 'createLink') { const u = prompt('Link URL:', 'https://'); if (u && !/^\s*javascript:/i.test(u)) document.execCommand('createLink', false, u); }
+      else document.execCommand(b.dataset.rt);
+      area.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     rowsEl.addEventListener('input', (e) => {
       const el = e.target;
       if (el.dataset.r === undefined) return;
-      rows[el.dataset.r][el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
+      rows[el.dataset.r][el.dataset.f] = el.type === 'checkbox' ? el.checked : (el.isContentEditable ? el.innerHTML.replace(/^<br>$/, '') : el.value);
       store.value = JSON.stringify(rows);
+      if (el.tagName === 'SELECT') applyShowIf();
     });
     rowsEl.addEventListener('change', (e) => rowsEl.dispatchEvent(new Event('input', { bubbles: true })) && e);
     rowsEl.addEventListener('click', async (e) => {

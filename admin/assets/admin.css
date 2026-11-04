@@ -801,3 +801,4 @@ tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
 .rr-rich-area { min-height: 90px; max-height: 320px; overflow: auto; white-space: normal; }
 .rr-rich-area p { margin: 0 0 .6em; }
 .repeater-row label.field[hidden] { display: none; }
+.ed-form-widget::before { content: "☑ Form widget · "; color: var(--accent); }

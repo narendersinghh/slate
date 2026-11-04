@@ -51,6 +51,8 @@
       this.area.contentEditable = 'true';
       this.area.dataset.placeholder = 'Start writing, or paste content…';
       this.area.innerHTML = this.store.value;
+      // Form widgets are placeholders: keep them as one locked block while editing.
+      this.area.querySelectorAll('[data-slate-form-widget]').forEach((w) => { w.contentEditable = 'false'; w.classList.add('ed-form-widget'); w.title = 'Form widget: change the form under Content → Forms'; });
       this.src = document.createElement('textarea');
       this.src.className = 'ed-source';
       this.src.hidden = true;

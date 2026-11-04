@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.5
+- WordPress Importer + mirror theme: the site's own "page not found" template is captured and used for 404s.
+
 ## 0.3.4
 - WordPress Importer: the blog listing (posts page, e.g. `/blog/`) is captured with its Elementor archive template.
 - WordPress Importer: post types whose archive URL is a 404 on WordPress get their archive switched off, matching the source.

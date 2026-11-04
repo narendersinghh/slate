@@ -80,6 +80,9 @@ final class WpClient
     /** HTTP status of each URL fetched by the last htmlMulti() call (0 = network error). */
     public array $codes = [];
 
+    /** URLs whose body is wanted even when they answer 404 (e.g. to capture the 404 template). */
+    public array $keep404 = [];
+
     public function htmlMulti(array $urls, int $concurrency = 8): array
     {
         $this->codes = [];
@@ -110,7 +113,7 @@ final class WpClient
                 [, $url] = $active[spl_object_id($ch)];
                 $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
                 $this->codes[$url] = $code;
-                $out[$url] = $code === 200 ? (string)curl_multi_getcontent($ch) : null;
+                $out[$url] = $code === 200 || ($code === 404 && isset($this->keep404[$url])) ? (string)curl_multi_getcontent($ch) : null;
                 curl_multi_remove_handle($mh, $ch);
                 // (freed automatically since PHP 8)
                 unset($active[spl_object_id($ch)]);

@@ -896,6 +896,8 @@ final class Importer
                     $q[] = ['archive', 'type-' . $slug, $this->job['origin'] . '/' . $base . '/'];
                 }
             }
+            // The theme's "page not found" template.
+            $q[] = ['archive', 'special-404', $this->job['origin'] . '/slate-import-404-check-' . substr(md5($this->job['origin']), 0, 8) . '/'];
             foreach (DB::all("SELECT new_id, old_url, extra FROM {{wpi_map}} WHERE kind = 'term' AND old_url <> ''") as $r) {
                 $x = json_decode((string)$r['extra'], true) ?: [];
                 $q[] = ['archive', 'term-' . ($x['tax'] ?? 'tax') . '-' . ($x['slug'] ?? $r['new_id']), $r['old_url']];
@@ -904,6 +906,11 @@ final class Importer
         }
         $batch = array_splice($this->job['archive_queue'], 0, 16);
         $client = new WpClient($this->job['origin']);
+        foreach ($batch as [, $key, $url]) {
+            if ($key === 'special-404') {
+                $client->keep404[$url] = true;
+            }
+        }
         $pages = $client->htmlMulti(array_column($batch, 2), 8);
         $mirror = new Mirror($this->job['origin']);
         $mirror->prefetchAssets($pages);

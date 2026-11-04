@@ -304,6 +304,13 @@ final class Posts
             ]);
         } else {
             $base = trim((string)($type['rewrite'] ?? $post['type']), '/');
+            // Taxonomy tokens, e.g. "%nationality%/profile" → "/in/profile/slug/".
+            if (str_contains($base, '%')) {
+                $base = preg_replace_callback('/%([a-z0-9_-]+)%/', static function ($m) use ($post) {
+                    $terms = $post['terms'][$m[1]] ?? (Terms::forPosts([(int)$post['id']])[(int)$post['id']][$m[1]] ?? []);
+                    return $terms[0]['slug'] ?? 'none';
+                }, $base);
+            }
             $path = '/' . ($base !== '' ? $base . '/' : '') . $post['slug'] . '/';
         }
         $path = self::trail($path);

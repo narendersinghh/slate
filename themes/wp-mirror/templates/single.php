@@ -3,7 +3,13 @@ $wrap = (string)option('wpm_single_' . $p['type'], '');
 $content = can_frontend_edit() ? editable('content', 'div', null, ['class' => 'entry-content']) : the_content();
 ?>
 <main id="content" class="site-main slate-mirror-main">
-<?php if ($wrap !== '' && str_contains($wrap, '{{SLATE_CONTENT}}')): ?>
+<?php
+// The exact imported rendering wins until the item is edited in Slate; then the live layout takes over.
+$snap = wpm_single_snapshot($p);
+?>
+<?php if ($snap !== null): ?>
+  <?= $snap ?>
+<?php elseif ($wrap !== '' && str_contains($wrap, '{{SLATE_CONTENT}}')): ?>
   <?= strtr($wrap, [
       '{{SLATE_CONTENT}}' => $content,
       '{{SLATE_TITLE}}' => e($p['title']),

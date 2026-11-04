@@ -106,41 +106,61 @@ final class Frontend
             return;
         }
 
-        // Custom post types and taxonomies by rewrite base.
-        $first = $segments[0] ?? '';
+        // Custom post types by rewrite pattern (supports multi-segment bases and %taxonomy% tokens).
+        $rel = '/' . implode('/', $segments);
         foreach (ContentModel::types() as $slug => $type) {
-            if (empty($type['public']) || $slug === 'page') {
+            if (empty($type['public']) || $slug === 'page' || $slug === 'post') {
                 continue;
             }
             $base = trim((string)($type['rewrite'] ?? $slug), '/');
-            if ($base === '' || $base !== $first) {
+            if ($base === '') {
                 continue;
             }
-            if (count($segments) === 1 && !empty($type['has_archive'])) {
+            $re = self::rewriteRegex($base);
+            if (!str_contains($base, '%') && !empty($type['has_archive']) && preg_match('#^/' . $re . '$#', $rel)) {
                 $result = Posts::query(['type' => $slug, 'page' => $page, 'with_terms' => true,
                     'orderby' => !empty($type['hierarchical']) ? 'menu_order' : 'published_at', 'order' => !empty($type['hierarchical']) ? 'ASC' : 'DESC']);
                 Seo::$ctx = ['kind' => 'archive', 'title' => $type['plural'], 'url' => site_url(Posts::trail('/' . $base)), 'page' => $page, 'type' => $slug];
                 self::output('archive', ['result' => $result, 'title' => $type['plural'], 'type' => $type], ["archive-$slug", 'archive']);
                 return;
             }
-            if (count($segments) === 2 && $slug !== 'post' && ($p = Posts::findBySlug($slug, $segments[1]))) {
+            if (preg_match('#^/' . $re . '/([^/]+)$#', $rel, $m) && ($p = Posts::findBySlug($slug, end($m)))) {
+                $canonical = (string)parse_url(Posts::permalink($p), PHP_URL_PATH);
+                if (rtrim($canonical, '/') !== rtrim(url($rel), '/') && str_contains($base, '%')) {
+                    redirect($canonical, 301); // right item, wrong term segment
+                }
                 self::single($p);
                 return;
             }
         }
-        foreach (ContentModel::taxonomies() as $slug => $tax) {
-            $base = trim((string)($tax['rewrite'] ?? $slug), '/');
-            if (empty($tax['public']) || $base !== $first || count($segments) < 2) {
-                continue;
-            }
-            $term = Terms::findBySlug($slug, end($segments));
-            if ($term) {
+        $termRoute = function (bool $root) use ($rel, $segments, $page): bool {
+            foreach (ContentModel::taxonomies() as $slug => $tax) {
+                $base = trim((string)($tax['rewrite'] ?? $slug), '/');
+                if (empty($tax['public']) || ($base === '') !== $root) {
+                    continue;
+                }
+                $termSlug = null;
+                if ($root) {
+                    if (count($segments) === 1) {
+                        $termSlug = $segments[0];
+                    }
+                } elseif (preg_match('#^/' . self::rewriteRegex($base) . '/(.+)$#', $rel, $m)) {
+                    $parts = explode('/', end($m));
+                    $termSlug = end($parts);
+                }
+                if ($termSlug === null || !($term = Terms::findBySlug($slug, $termSlug))) {
+                    continue;
+                }
                 $result = Posts::query(['type' => $tax['post_types'] ?: ['post'], 'term' => [$term['id']], 'page' => $page, 'with_terms' => true]);
                 Seo::$ctx = ['kind' => 'term', 'term' => $term, 'page' => $page];
                 self::output('taxonomy', ['result' => $result, 'term' => $term, 'taxonomy' => $tax, 'title' => $term['name']],
                     ["taxonomy-$slug-{$term['slug']}", "taxonomy-$slug", 'taxonomy', 'archive']);
-                return;
+                return true;
             }
+            return false;
+        };
+        if ($termRoute(false)) {
+            return;
         }
 
         // Pages (hierarchical path).
@@ -151,7 +171,18 @@ final class Frontend
             }
         }
 
+        // Taxonomies whose archives live at the site root (e.g. /in/ for a "nationality" term).
+        if ($termRoute(true)) {
+            return;
+        }
+
         self::notFound();
+    }
+
+    /** Regex for a rewrite base: literal segments, %taxonomy% tokens match any single segment. */
+    private static function rewriteRegex(string $base): string
+    {
+        return implode('/', array_map(static fn($seg) => preg_match('/^%[a-z0-9_-]+%$/', $seg) ? '[^/]+' : preg_quote($seg, '#'), explode('/', $base)));
     }
 
     private static function matchPostStructure(string $path): ?array
@@ -212,9 +243,14 @@ final class Frontend
     private static function output(string $kind, array $vars, array $candidates = []): void
     {
         self::$data = array_merge(self::$data, $vars, ['kind' => $kind]);
-        ob_start();
-        Theme::render($candidates ?: [$kind], $vars);
-        $html = (string)ob_get_clean();
+        $tpl = self::template($kind, $vars);
+        if ($tpl) {
+            $html = Templates::renderPage($tpl, self::templateContext($kind, $vars));
+        } else {
+            ob_start();
+            Theme::render($candidates ?: [$kind], $vars);
+            $html = (string)ob_get_clean();
+        }
         if (Options::get('html_minify', true)) {
             $html = self::minify($html);
         }
@@ -222,6 +258,37 @@ final class Frontend
         header('Content-Type: text/html; charset=utf-8');
         echo $html;
         PageCache::store($html);
+    }
+
+    /** Template from Templates (admin) for this view, if one is enabled. */
+    private static function template(string $kind, array $vars): ?array
+    {
+        if (Theme::active() === '' || ($kind === 'maintenance')) {
+            return null;
+        }
+        return match ($kind) {
+            'single' => isset($vars['post']) ? Templates::resolve('single', (string)$vars['post']['type']) : null,
+            'archive' => Templates::resolve('archive', (string)($vars['type']['slug'] ?? 'post')),
+            'home' => Templates::resolve('archive', 'post'),
+            'taxonomy' => isset($vars['term']) ? Templates::resolve('term', (string)$vars['term']['taxonomy']) : null,
+            'search' => Templates::resolve('special', 'search'),
+            '404' => Templates::resolve('special', '404'),
+            default => null,
+        };
+    }
+
+    private static function templateContext(string $kind, array $vars): array
+    {
+        $result = $vars['result'] ?? null;
+        $archive = ['title' => $vars['title'] ?? '', 'description' => '', 'count' => $result['total'] ?? 0];
+        if (isset($vars['term'])) {
+            $archive['title'] = $vars['term']['name'];
+            $archive['description'] = e((string)$vars['term']['description']);
+        }
+        if ($kind === 'search') {
+            $archive['title'] = 'Search: ' . ($vars['query'] ?? '');
+        }
+        return ['post' => $vars['post'] ?? null, 'result' => $result, 'term' => $vars['term'] ?? null, 'archive' => $archive];
     }
 
     private static function redirects(string $path): void

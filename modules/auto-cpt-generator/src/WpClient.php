@@ -73,6 +73,99 @@ final class WpClient
         return $r['status'] === 200 ? $r['body'] : null;
     }
 
+    /**
+     * Fetch many public pages in parallel (curl_multi). Returns [url => html|null].
+     * @param string[] $urls
+     */
+    public function htmlMulti(array $urls, int $concurrency = 8): array
+    {
+        $out = [];
+        $queue = array_values(array_unique(array_filter($urls)));
+        if (!$queue) {
+            return $out;
+        }
+        $mh = curl_multi_init();
+        $active = [];
+        $add = function () use (&$queue, &$active, $mh): void {
+            $url = array_shift($queue);
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 4, CURLOPT_TIMEOUT => 45,
+                CURLOPT_CONNECTTIMEOUT => 15, CURLOPT_ENCODING => '', CURLOPT_PROTOCOLS => CURLPROTO_HTTPS | CURLPROTO_HTTP,
+                CURLOPT_HTTPHEADER => ['Accept: text/html', 'User-Agent: Mozilla/5.0 (compatible; Slate-Importer/1.0)']]);
+            curl_multi_add_handle($mh, $ch);
+            $active[spl_object_id($ch)] = [$ch, $url];
+        };
+        while ($queue && count($active) < $concurrency) {
+            $add();
+        }
+        do {
+            curl_multi_exec($mh, $running);
+            curl_multi_select($mh, 1.0);
+            while ($info = curl_multi_info_read($mh)) {
+                $ch = $info['handle'];
+                [, $url] = $active[spl_object_id($ch)];
+                $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                $out[$url] = $code === 200 ? (string)curl_multi_getcontent($ch) : null;
+                curl_multi_remove_handle($mh, $ch);
+                // (freed automatically since PHP 8)
+                unset($active[spl_object_id($ch)]);
+                if ($queue) {
+                    $add();
+                }
+            }
+        } while ($active);
+        curl_multi_close($mh);
+        return $out;
+    }
+
+    /** Download many files in parallel: [url => destPath]. Returns [url => bool]. */
+    public function downloadMulti(array $map, int $concurrency = 8): array
+    {
+        $out = [];
+        $queue = $map;
+        $mh = curl_multi_init();
+        $active = [];
+        $add = function () use (&$queue, &$active, $mh): void {
+            $url = array_key_first($queue);
+            $dest = $queue[$url];
+            unset($queue[$url]);
+            $fh = @fopen($dest, 'wb');
+            if (!$fh) {
+                return;
+            }
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [CURLOPT_FILE => $fh, CURLOPT_FOLLOWLOCATION => true, CURLOPT_TIMEOUT => 60, CURLOPT_CONNECTTIMEOUT => 15,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS | CURLPROTO_HTTP, CURLOPT_HTTPHEADER => ['User-Agent: Mozilla/5.0 (compatible; Slate-Importer/1.0)']]);
+            curl_multi_add_handle($mh, $ch);
+            $active[spl_object_id($ch)] = [$ch, $url, $fh, $dest];
+        };
+        while ($queue && count($active) < $concurrency) {
+            $add();
+        }
+        while ($active) {
+            curl_multi_exec($mh, $running);
+            curl_multi_select($mh, 1.0);
+            while ($info = curl_multi_info_read($mh)) {
+                $ch = $info['handle'];
+                [, $url, $fh, $dest] = $active[spl_object_id($ch)];
+                fclose($fh);
+                $ok = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE) === 200 && filesize($dest) > 0;
+                if (!$ok) {
+                    @unlink($dest);
+                }
+                $out[$url] = $ok;
+                curl_multi_remove_handle($mh, $ch);
+                // (freed automatically since PHP 8)
+                unset($active[spl_object_id($ch)]);
+                if ($queue) {
+                    $add();
+                }
+            }
+        }
+        curl_multi_close($mh);
+        return $out;
+    }
+
     /** Download a URL to a local file. */
     public function download(string $url, string $dest): bool
     {

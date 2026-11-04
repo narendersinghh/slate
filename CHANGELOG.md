@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 — Templates, URL tokens, faithful Elementor Pro migration
+- **Templates** (sidebar → Templates): site-wide templates for every post type (single + archive), every taxonomy and the
+  404 / search pages. HTML + safe tags (`{{title}}`, `{{field:name}}`, `{{#each field:repeater}}`, `{{#query …}}`, `{{#posts}}`,
+  `{{#if}}`, filters like `|image` `|date` `|embed`), per-template CSS, starter generator that lists every custom field,
+  click-to-insert tag reference, preview before activating. Active templates override the theme (and imported snapshots).
+- Routing: post-type URLs with taxonomy tokens (`%nationality%/profile` → `/in/profile/sadhguru/`), multi-segment bases
+  (`us/role`), root-level taxonomy archives (`/in/`), flat or nested child-term URLs.
+- Importer: exact ACF field types/labels from ACF REST metadata, date conversion, relationship targets; URL token detection;
+  Rank Math SEO + rich schema (Person, Book, Event, FAQ…) from the rendered page; snapshots of Elementor Pro single templates
+  and archive pages so dynamic layouts look identical; parallel page fetching; mirrored assets reused across pages.
+
 ## 0.2.1
 - `php bin/slate import:wordpress --url=… --user=…` — run the full WordPress import from the command line (SSH), with a hidden
   password prompt; activates the modules automatically and can be re-run to sync. Also `cache:clear` and `version`.

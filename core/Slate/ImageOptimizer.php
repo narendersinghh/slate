@@ -47,14 +47,14 @@ final class ImageOptimizer
             $img = self::fixOrientation($img, $src);
         }
         $out = self::resize($img, $opts['max_edge'], $opts['transparency'] && $mime !== 'image/jpeg');
-        imagedestroy($img);
+        // (freed automatically since PHP 8)
 
         $targetMime = $opts['webp'] && function_exists('imagewebp') ? 'image/webp' : ($mime === 'image/avif' ? 'image/webp' : $mime);
         $path = $destNoExt . '.' . self::ext($targetMime);
         $ok = self::write($out, $path, $targetMime, $opts['quality']);
         $w = imagesx($out);
         $h = imagesy($out);
-        imagedestroy($out);
+        // (freed automatically since PHP 8)
         return $ok ? ['path' => $path, 'width' => $w, 'height' => $h, 'mime' => $targetMime] : null;
     }
 
@@ -69,9 +69,9 @@ final class ImageOptimizer
             return false;
         }
         $out = self::resize($img, $size, true);
-        imagedestroy($img);
+        // (freed automatically since PHP 8)
         $ok = self::write($out, $dest, function_exists('imagewebp') ? 'image/webp' : 'image/jpeg', $quality);
-        imagedestroy($out);
+        // (freed automatically since PHP 8)
         return $ok;
     }
 
@@ -119,7 +119,7 @@ final class ImageOptimizer
             default => null,
         };
         if ($rotated) {
-            imagedestroy($img);
+            // (freed automatically since PHP 8)
             return $rotated;
         }
         return $img;

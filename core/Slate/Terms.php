@@ -186,7 +186,7 @@ final class Terms
         $base = trim((string)($tax['rewrite'] ?? $term['taxonomy']), '/');
         // Hierarchical taxonomies nest parent slugs like WordPress: /category/parent/child/
         $slugs = [$term['slug']];
-        if (!empty($tax['hierarchical']) && !empty($term['parent_id'])) {
+        if (!empty($tax['hierarchical']) && ($tax['nested'] ?? true) && !empty($term['parent_id'])) {
             $byId = array_column(self::all($term['taxonomy']), null, 'id');
             $pid = (int)$term['parent_id'];
             $guard = 0;
@@ -195,7 +195,7 @@ final class Terms
                 $pid = (int)$byId[$pid]['parent_id'];
             }
         }
-        $path = Posts::trail('/' . $base . '/' . implode('/', $slugs));
+        $path = Posts::trail('/' . ($base !== '' ? $base . '/' : '') . implode('/', $slugs));
         return $absolute ? site_url($path) : url($path);
     }
 }

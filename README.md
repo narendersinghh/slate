@@ -22,6 +22,14 @@ A fast, secure, SEO-first content management system — the flexibility of WordP
 Logo files live in `admin/assets/brand/` — `logo.svg` (wordmark), `logo-white.svg`, `logo-mark.svg`, `logo-mark-light.svg`, `logo-glyph.svg`, `favicon.svg` and `brand-sheet.png`.
 Logo: a faceted origami songbird perched on a chalk line on a slate. Colours: brand orange `#F26B2D` (scale `#FFF5EF` → `#5C2008`) and ink `#0D0D0E`. Type: **Instrument Serif** for headings, **Inter** for UI text (self-hosted).
 
+## Templates
+
+**Templates** in the sidebar lets you design every page type without touching theme files: single pages for each post
+type, archives, taxonomy archives, 404 and search. Write HTML with simple tags — `{{title}}`, `{{{content}}}`,
+`{{field:tagline}}`, `{{field:photo|image}}`, `{{#each field:faqs}}{{item:question}}{{/each}}`,
+`{{#query type=leaders limit=6}}…{{/query}}`, `{{#posts}}…{{/posts}}` — plus optional CSS. “Reset to starter” builds a
+template that already shows every custom field. Preview it, then switch it **Active**.
+
 ## Migrating a WordPress site
 
 1. **Modules** → activate **Auto CPT Generator** and **WordPress Importer**.

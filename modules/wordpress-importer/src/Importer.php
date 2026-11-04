@@ -28,6 +28,8 @@ final class Importer
     private array $job;
     private ?WpClient $wp = null;
     private ?array $wxr = null;
+    /** Pre-fetched rendered pages for the current batch: [url => html|null]. */
+    private array $prefetch = [];
 
     // ------------------------------------------------------------------ setup
 
@@ -145,6 +147,9 @@ final class Importer
                 $steps[] = ['posts', $wpType];
             }
         }
+        if ($opts['design']) {
+            $steps[] = ['archives'];
+        }
         if ($opts['menus']) {
             $steps[] = ['menus'];
         }
@@ -219,6 +224,7 @@ final class Importer
                     'media' => $this->stepMedia(),
                     'posts' => $this->stepPosts((string)$arg),
                     'menus' => $this->stepMenus(),
+                    'archives' => $this->stepArchives(),
                     'finalize' => $this->stepFinalize(),
                     default => true,
                 };
@@ -248,7 +254,7 @@ final class Importer
         return match ($step[0]) {
             'cleanup' => 'Removing Slate sample content', 'settings' => 'Reading site settings', 'model' => 'Creating post types, taxonomies & fields', 'design' => 'Mirroring theme design',
             'terms' => 'Importing ' . ($step[1] ?? '') . ' terms', 'media' => 'Importing & optimizing media (page ' . $this->job['page'] . ')',
-            'posts' => 'Importing ' . ($step[1] ?? '') . ' (page ' . $this->job['page'] . ')', 'menus' => 'Importing menus',
+            'posts' => 'Importing ' . ($step[1] ?? '') . ' (page ' . $this->job['page'] . ')', 'menus' => 'Importing menus', 'archives' => 'Capturing archive pages (' . count($this->job['archive_queue'] ?? []) . ' left)',
             'finalize' => 'Linking parents, front page, permalinks & redirects', default => 'Done',
         };
     }
@@ -544,9 +550,12 @@ final class Importer
             $all = array_values(array_filter($this->wxr()['posts'], static fn($p) => $p['type'] === $wpType));
             $n = $this->batch();
             $items = array_slice($all, ($this->job['page'] - 1) * $n, $n);
+            $items = array_map(fn($p) => $this->normalizeWxrPost($p), $items);
+            $this->prefetchPages($items);
             foreach ($items as $p) {
-                $this->importPost($type, $wpType, $this->normalizeWxrPost($p));
+                $this->importPost($type, $wpType, $p);
             }
+            $this->prefetch = [];
             $this->job['page']++;
             return count($items) < $n;
         }
@@ -566,17 +575,39 @@ final class Importer
             }
             return true;
         }
-        foreach ($r['data'] as $p) {
-            $this->importPost($type, $wpType, $this->normalizeRestPost($p, $wpType));
+        $items = array_map(fn($p) => $this->normalizeRestPost($p, $wpType), $r['data']);
+        $this->prefetchPages($items);
+        foreach ($items as $p) {
+            $this->importPost($type, $wpType, $p);
         }
+        $this->prefetch = [];
         $this->job['page']++;
         return $this->job['page'] > max(1, $r['pages']);
+    }
+
+    /** Fetch the rendered pages of a batch in parallel (design mirror, SEO from HTML). */
+    private function prefetchPages(array $items): void
+    {
+        $o = $this->job['opts'];
+        if (!$o['design'] && !$o['seo']) {
+            return;
+        }
+        $urls = [];
+        foreach ($items as $p) {
+            if ($p['link'] !== '' && in_array($p['status'], ['publish', 'future'], true) && !str_contains($p['link'], '?')) {
+                $urls[] = $p['link'];
+            }
+        }
+        $this->prefetch = (new WpClient($this->job['origin']))->htmlMulti($urls, 8);
+        if ($o['design']) {
+            (new Mirror($this->job['origin']))->prefetchAssets($this->prefetch);
+        }
     }
 
     /** Smaller batches when each item also fetches its rendered page (design mirror / SEO from HTML). */
     private function batch(): int
     {
-        return $this->job['opts']['design'] ? 5 : 10;
+        return 10;
     }
 
     private function normalizeRestPost(array $p, string $wpType): array
@@ -691,7 +722,7 @@ final class Importer
         $html = null;
         $needsHtml = ($opts['design'] || ($opts['seo'] && !$p['seo']) || ($this->isWxr() && $p['elementor'])) && $p['link'] !== '' && in_array($p['status'], ['publish', 'future'], true);
         if ($needsHtml) {
-            $html = (new WpClient($this->job['origin']))->html($p['link']);
+            $html = array_key_exists($p['link'], $this->prefetch) ? $this->prefetch[$p['link']] : (new WpClient($this->job['origin']))->html($p['link']);
         }
         $content = $p['content'];
         if ($this->isWxr() && $p['elementor'] && $html) {
@@ -701,6 +732,9 @@ final class Importer
         $seo = $p['seo'];
         if ($opts['seo'] && !$seo && $html) {
             $seo = $this->seoFromHtml($html, $p['link']);
+        }
+        if ($opts['seo'] && $html && empty($seo['schema_custom']) && ($schema = Mirror::schemaNodes($html, $this->job['origin'], site_url()))) {
+            $seo['schema_custom'] = $schema; // keep rich results (Person, Book, Event, FAQPage, Article…)
         }
         if (!$opts['seo']) {
             $seo = [];
@@ -758,6 +792,9 @@ final class Importer
         // Posts::save normalises the slug; keep WordPress's exact slug for URL parity.
         if ($p['slug'] !== '' && Posts::find($id)['slug'] !== $p['slug'] && !DB::val('SELECT id FROM {{posts}} WHERE type = :t AND slug = :s AND id <> :id', ['t' => $type, 's' => $p['slug'], 'id' => $id])) {
             DB::update('posts', ['slug' => $p['slug']], ['id' => $id]);
+        }
+        if ($opts['design'] && $html && ($snap = (new Mirror($this->job['origin']))->snapshot($html))) {
+            Mirror::store('single', (string)$id, $snap); // exact rendered template (Elementor Pro single + ACF)
         }
         self::setMap('post', $key, $id, $p['link'], ['parent' => $p['parent'] ? $wpType . ':' . $p['parent'] : null, 'type' => $type]);
         self::setMap('post_id', (string)$p['old_id'], $id, $p['link']);
@@ -825,9 +862,44 @@ final class Importer
                 return (bool)$v;
             case 'number':
                 return is_numeric($v) ? $v + 0 : null;
+            case 'date':
+                $v = (string)$v;
+                return preg_match('/^(\d{4})(\d{2})(\d{2})$/', $v, $d) ? "$d[1]-$d[2]-$d[3]" : (preg_match('/^\d{4}-\d{2}-\d{2}/', $v) ? substr($v, 0, 10) : '');
             default:
                 return is_scalar($v) ? $v : (is_array($v) ? implode(', ', array_filter($v, 'is_scalar')) : '');
         }
+    }
+
+    /** Snapshot archive pages (CPT archives + every term archive) so listings look like the original. */
+    private function stepArchives(): bool
+    {
+        if (!isset($this->job['archive_queue'])) {
+            $q = [];
+            foreach (ContentModel::types() as $slug => $t) {
+                $base = trim((string)($t['rewrite'] ?? ''), '/');
+                if ($slug !== 'page' && $slug !== 'post' && !empty($t['has_archive']) && $base !== '' && !str_contains($base, '%')) {
+                    $q[] = ['archive', 'type-' . $slug, $this->job['origin'] . '/' . $base . '/'];
+                }
+            }
+            foreach (DB::all("SELECT new_id, old_url, extra FROM {{wpi_map}} WHERE kind = 'term' AND old_url <> ''") as $r) {
+                $x = json_decode((string)$r['extra'], true) ?: [];
+                $q[] = ['archive', 'term-' . ($x['tax'] ?? 'tax') . '-' . ($x['slug'] ?? $r['new_id']), $r['old_url']];
+            }
+            $this->job['archive_queue'] = $q;
+        }
+        $batch = array_splice($this->job['archive_queue'], 0, 16);
+        $pages = (new WpClient($this->job['origin']))->htmlMulti(array_column($batch, 2), 8);
+        $mirror = new Mirror($this->job['origin']);
+        $mirror->prefetchAssets($pages);
+        foreach ($batch as [$bucket, $key, $url]) {
+            if (!empty($pages[$url]) && ($snap = $mirror->snapshot($pages[$url]))) {
+                Mirror::store($bucket, $key, $snap);
+                // Page-specific CSS / JS / body classes of the archive template.
+                Mirror::store($bucket, $key . '.assets', (string)json_encode(Mirror::pageFields($pages[$url], $this->job['origin'], $mirror), JSON_UNESCAPED_SLASHES));
+                $this->stat('archives');
+            }
+        }
+        return !$this->job['archive_queue'];
     }
 
     private function stepMenus(): bool
@@ -1007,10 +1079,16 @@ final class Importer
         // Redirect any URL that changed, so rankings and backlinks are preserved.
         $added = 0;
         if ($this->job['opts']['redirects']) {
-            $rules = Options::get('redirects') ?: [];
+            $rules = array_values(array_filter(Options::get('redirects') ?: [], static fn($r) => trim((string)$r['from'], '/') !== ''));
             $existing = array_column($rules, 'from');
             foreach (DB::all("SELECT kind, new_id, old_url FROM {{wpi_map}} WHERE kind IN ('post','term') AND old_url <> ''") as $r) {
+                if (str_contains($r['old_url'], '?')) {
+                    continue; // drafts / ?p= links are handled by the compatibility layer, never redirect "/"
+                }
                 $old = (string)parse_url($r['old_url'], PHP_URL_PATH);
+                if ($old === '' || $old === '/') {
+                    continue;
+                }
                 if ($r['kind'] === 'post') {
                     $p = Posts::find((int)$r['new_id']);
                     $new = $p ? (string)parse_url(Posts::permalink($p), PHP_URL_PATH) : '';

@@ -46,7 +46,8 @@ function wpm_page_fields(): array
     $p = post();
     if ($p) {
         $f = (array)($p['fields'] ?? []);
-        if (!empty($f['_wpm_css'])) {
+        // Imported items carry their own captured assets (pages may rely on the captured site head alone).
+        if (!empty($f['_wpm_css']) || array_key_exists('_wpm_style', $f) || $p['type'] === 'page') {
             return $f;
         }
         // Created in Slate: use the design assets of another item of the same type.

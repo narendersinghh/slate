@@ -77,8 +77,12 @@ final class WpClient
      * Fetch many public pages in parallel (curl_multi). Returns [url => html|null].
      * @param string[] $urls
      */
+    /** HTTP status of each URL fetched by the last htmlMulti() call (0 = network error). */
+    public array $codes = [];
+
     public function htmlMulti(array $urls, int $concurrency = 8): array
     {
+        $this->codes = [];
         $out = [];
         $queue = array_values(array_unique(array_filter($urls)));
         if (!$queue) {
@@ -105,6 +109,7 @@ final class WpClient
                 $ch = $info['handle'];
                 [, $url] = $active[spl_object_id($ch)];
                 $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                $this->codes[$url] = $code;
                 $out[$url] = $code === 200 ? (string)curl_multi_getcontent($ch) : null;
                 curl_multi_remove_handle($mh, $ch);
                 // (freed automatically since PHP 8)

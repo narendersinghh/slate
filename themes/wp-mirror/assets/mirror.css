@@ -17,5 +17,5 @@
 .slate-mirror-header,.slate-mirror-footer{padding:18px 0}
 .slate-mirror-header .smx-wrap,.slate-mirror-footer .smx-wrap{display:flex;justify-content:space-between;align-items:center;gap:20px}
 .smx-menu{display:flex;gap:18px;list-style:none;margin:0;padding:0}
-.pagination{display:flex;gap:6px;justify-content:center;padding:30px 0}
-.pagination a,.pagination span{padding:8px 14px;border-radius:8px;border:1px solid rgba(0,0,0,.12);text-decoration:none}
+.smx-wrap .pagination{display:flex;gap:6px;justify-content:center;padding:30px 0}
+.smx-wrap .pagination a,.smx-wrap .pagination span{padding:8px 14px;border-radius:8px;border:1px solid rgba(0,0,0,.12);text-decoration:none}

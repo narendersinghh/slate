@@ -124,6 +124,15 @@ final class Importer
         self::install();
         $opts += ['types' => [], 'model' => true, 'media' => true, 'seo' => true, 'menus' => true, 'settings' => true,
             'redirects' => true, 'design' => true, 'activate_theme' => true, 'drafts' => true];
+        if (!empty($opts['only'])) {
+            // Re-run just these steps (e.g. ['archives'] to refresh archive snapshots) on an existing import.
+            $steps = array_map(static fn($s) => [(string)$s], array_values(array_intersect((array)$opts['only'], ['design', 'archives', 'menus', 'finalize'])));
+            $job = ['conn' => $conn, 'spec' => $scan['spec'], 'opts' => $opts, 'steps' => $steps ?: [['finalize']], 'i' => 0, 'page' => 1,
+                'total' => 1, 'done' => 0, 'stats' => [], 'log' => [], 'wp_settings' => [], 'started_at' => now(), 'finished_at' => null,
+                'origin' => rtrim((string)($scan['summary']['url'] ?? $conn['url'] ?? ''), '/')];
+            self::store($job);
+            return $job;
+        }
         $steps = [['cleanup']];
         if ($opts['settings']) {
             $steps[] = ['settings'];
@@ -242,6 +251,7 @@ final class Importer
         if ($complete && !$this->job['finished_at']) {
             $this->job['finished_at'] = now();
             self::store($this->job);
+            PageCache::clear();
             log_activity('wp_import_finished', $this->job['origin']);
         }
         $cur = $this->job['steps'][$this->job['i']] ?? ['done'];
@@ -875,6 +885,11 @@ final class Importer
     {
         if (!isset($this->job['archive_queue'])) {
             $q = [];
+            // The blog listing (WordPress "posts page", e.g. /blog/) usually has its own archive template.
+            if (Options::get('front_page') === 'page' && ($pp = (int)Options::get('posts_page_id')) && ($postsPage = Posts::find($pp))) {
+                $path = (string)parse_url(Posts::permalink($postsPage), PHP_URL_PATH);
+                $q[] = ['archive', 'type-post', $this->job['origin'] . '/' . trim(substr($path, strlen(rtrim((string)parse_url(url('/'), PHP_URL_PATH), '/'))), '/') . '/'];
+            }
             foreach (ContentModel::types() as $slug => $t) {
                 $base = trim((string)($t['rewrite'] ?? ''), '/');
                 if ($slug !== 'page' && $slug !== 'post' && !empty($t['has_archive']) && $base !== '' && !str_contains($base, '%')) {
@@ -888,10 +903,22 @@ final class Importer
             $this->job['archive_queue'] = $q;
         }
         $batch = array_splice($this->job['archive_queue'], 0, 16);
-        $pages = (new WpClient($this->job['origin']))->htmlMulti(array_column($batch, 2), 8);
+        $client = new WpClient($this->job['origin']);
+        $pages = $client->htmlMulti(array_column($batch, 2), 8);
         $mirror = new Mirror($this->job['origin']);
         $mirror->prefetchAssets($pages);
         foreach ($batch as [$bucket, $key, $url]) {
+            // A post type whose archive URL is a 404 on WordPress has no archive there: match that.
+            if (str_starts_with($key, 'type-') && $key !== 'type-post' && ($client->codes[$url] ?? 0) === 404
+                && ($type = ContentModel::type(substr($key, 5))) && !empty($type['has_archive'])) {
+                unset($type['builtin']);
+                $type['slug'] = substr($key, 5);
+                $type['has_archive'] = false;
+                ContentModel::saveType($type);
+                Mirror::forget($bucket, $key);
+                $this->log("“{$type['plural']}” has no archive page on WordPress, so it was switched off here too.");
+                continue;
+            }
             if (!empty($pages[$url]) && ($snap = $mirror->snapshot($pages[$url]))) {
                 Mirror::store($bucket, $key, $snap);
                 // Page-specific CSS / JS / body classes of the archive template.

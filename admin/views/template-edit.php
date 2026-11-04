@@ -38,6 +38,7 @@ $tag = static fn(string $code, string $label = '') => '<button type="button" cla
             <label class="field"><span>Applies to</span><select class="input" name="target">
               <optgroup label="Post types"><?php foreach (ContentModel::types() as $slug => $ty): ?><option value="<?= e($slug) ?>"<?= $t['target'] === $slug ? ' selected' : '' ?>><?= e($ty['plural']) ?></option><?php endforeach; ?></optgroup>
               <optgroup label="Taxonomies"><?php foreach (ContentModel::taxonomies() as $slug => $tx): ?><option value="<?= e($slug) ?>"<?= $t['target'] === $slug ? ' selected' : '' ?>><?= e($tx['plural']) ?></option><?php endforeach; ?></optgroup>
+              <?php if (str_contains((string)$t['target'], '__')): ?><optgroup label="One item"><option value="<?= e($t['target']) ?>" selected><?= e(Templates::label('single', (string)$t['target'])) ?></option></optgroup><?php endif; ?>
               <optgroup label="Special"><?php foreach (Templates::SPECIAL as $k => $l): ?><option value="<?= e($k) ?>"<?= $t['target'] === $k ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></optgroup>
             </select></label>
           </div>

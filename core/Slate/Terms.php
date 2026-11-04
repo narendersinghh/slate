@@ -196,6 +196,7 @@ final class Terms
             }
         }
         $path = Posts::trail('/' . ($base !== '' ? $base . '/' : '') . implode('/', $slugs));
+        $path = (string)Hooks::filter('term_link', $path, $term);
         return $absolute ? site_url($path) : url($path);
     }
 }

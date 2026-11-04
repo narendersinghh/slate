@@ -11,7 +11,8 @@ final class Frontend
 
     public static function handle(string $path): void
     {
-        $path = '/' . trim($path, '/');
+        // Modules may map their URL schemes onto Slate's (e.g. "/x/2" → "/x/page/2").
+        $path = (string)Hooks::filter('route_path', '/' . trim($path, '/'));
         $page = 1;
         if (preg_match('#^(.*?)/page/(\d+)$#', $path, $m)) {
             $path = $m[1] ?: '/';
@@ -267,7 +268,7 @@ final class Frontend
             return null;
         }
         return match ($kind) {
-            'single' => isset($vars['post']) ? Templates::resolve('single', (string)$vars['post']['type']) : null,
+            'single' => isset($vars['post']) ? Templates::resolve('single', $vars['post']['type'] . '__' . $vars['post']['slug']) : null,
             'archive' => Templates::resolve('archive', (string)($vars['type']['slug'] ?? 'post')),
             'home' => Templates::resolve('archive', 'post'),
             'taxonomy' => isset($vars['term']) ? Templates::resolve('term', (string)$vars['term']['taxonomy']) : null,
@@ -288,7 +289,8 @@ final class Frontend
         if ($kind === 'search') {
             $archive['title'] = 'Search: ' . ($vars['query'] ?? '');
         }
-        return ['post' => $vars['post'] ?? null, 'result' => $result, 'term' => $vars['term'] ?? null, 'archive' => $archive];
+        return ['post' => $vars['post'] ?? null, 'result' => $result, 'term' => $vars['term'] ?? null, 'archive' => $archive, 'kind' => $kind,
+            'page' => (int)($result['page'] ?? 1)];
     }
 
     private static function redirects(string $path): void

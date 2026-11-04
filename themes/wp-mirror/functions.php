@@ -42,7 +42,34 @@ function wpm_page_fields(): array
     if (isset($GLOBALS['wpm_page_fields'])) {
         return (array)$GLOBALS['wpm_page_fields'];
     }
-    return (array)(post()['fields'] ?? []);
+    $keys = ['_wpm_css' => 1, '_wpm_js' => 1, '_wpm_style' => 1, '_wpm_body_class' => 1];
+    $p = post();
+    if ($p) {
+        $f = (array)($p['fields'] ?? []);
+        if (!empty($f['_wpm_css'])) {
+            return $f;
+        }
+        // Created in Slate: use the design assets of another item of the same type.
+        $row = \Slate\DB::row("SELECT fields FROM {{posts}} WHERE type = :t AND fields LIKE :q ORDER BY id LIMIT 1", ['t' => $p['type'], 'q' => '%"_wpm_css"%']);
+        $sib = $row ? (json_decode((string)$row['fields'], true) ?: []) : [];
+        return $GLOBALS['wpm_page_fields'] = $f + array_intersect_key($sib, $keys);
+    }
+    // Listings rendered by a Template: the captured assets of that kind of listing.
+    $term = page_data('term');
+    $kind = page_data('kind');
+    $file = null;
+    if ($term) {
+        $file = SLATE_CONTENT . '/wpm/archive/term-' . $term['taxonomy'] . '-' . $term['slug'] . '.assets.html';
+        if (!is_file($file)) {
+            $file = (glob(SLATE_CONTENT . '/wpm/archive/term-' . preg_replace('/[^a-z0-9_-]/', '', $term['taxonomy']) . '-*.assets.html') ?: [null])[0];
+        }
+    } elseif ($kind === 'archive' || $kind === 'home') {
+        $file = SLATE_CONTENT . '/wpm/archive/type-' . preg_replace('/[^a-z0-9_-]/', '', (string)(page_data('type')['slug'] ?? 'post')) . '.assets.html';
+    } elseif ($kind === '404') {
+        $file = SLATE_CONTENT . '/wpm/archive/special-404.assets.html';
+    }
+    $data = $file && is_file($file) ? (json_decode((string)file_get_contents($file), true) ?: []) : [];
+    return $GLOBALS['wpm_page_fields'] = $data;
 }
 
 /**

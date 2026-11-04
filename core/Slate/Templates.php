@@ -17,6 +17,9 @@ namespace Slate;
  *   {{field:name}}  {{{field:name}}}  {{field:name|image}}  {{field:name|date:F j, Y}}  {{field:name|url}}  {{field:name|nl2br}}
  *   {{terms:taxonomy}} (linked list)   {{terms:taxonomy|plain}}
  *   {{form:contact}}  (a form from Content → Forms, by slug or id)
+ *   {{term.name}} {{term.url}} {{{term.description}}} {{term.field:name|image}} {{#each term.field:repeater}}  (on taxonomy archives)
+ *   {{item.fields.color}} (dotted paths into loop items)   filters: |slug |pad2 |host |strip |upper |number |texturize (curly quotes)
+ *   Modules add their own tags and blocks (hooks "template_tag", "template_lookup", "template_block").
  *   {{field:name|terms}} (taxonomy field: linked term names)
  *   {{site.name}} {{site.tagline}} {{site.url}} {{year}}  {{menu:primary}}  {{{breadcrumbs}}}  {{{pagination}}}
  *   {{archive.title}} {{{archive.description}}} {{archive.count}}
@@ -58,6 +61,10 @@ final class Templates
             if (!empty($t['enabled']) && $t['kind'] === $kind && $t['target'] === $target) {
                 return $t;
             }
+        }
+        // "page__about-us" falls back to "page".
+        if (str_contains($target, '__')) {
+            return self::resolve($kind, explode('__', $target, 2)[0]);
         }
         return null;
     }
@@ -101,6 +108,11 @@ final class Templates
 
     public static function label(string $kind, string $target): string
     {
+        if ($kind === 'single' && str_contains($target, '__')) {
+            [$ty, $slug] = explode('__', $target, 2);
+            $p = Posts::findBySlug($ty, $slug, false);
+            return (ContentModel::type($ty)['singular'] ?? ucfirst($ty)) . ' “' . ($p['title'] ?? $slug) . '” — single';
+        }
         return match ($kind) {
             'single' => (ContentModel::type($target)['singular'] ?? ucfirst($target)) . ' — single',
             'archive' => (ContentModel::type($target)['plural'] ?? ucfirst($target)) . ' — archive',
@@ -271,15 +283,16 @@ final class Templates
                 if (str_starts_with($arg, 'terms:')) {
                     $terms = self::postTerms($ctx['post'] ?? null, substr($arg, 6));
                     foreach ($terms as $i => $t) {
-                        $out .= self::renderNodes($n['children'], ['item' => ['name' => $t['name'], 'url' => Terms::link($t), 'slug' => $t['slug'],
-                            'count' => $t['count'], 'description' => $t['description']], 'index' => $i + 1] + $ctx);
+                        $out .= self::renderNodes($n['children'], ['item' => ['id' => $t['id'], 'name' => $t['name'], 'url' => Terms::link($t), 'slug' => $t['slug'],
+                            'count' => $t['count'], 'description' => $t['description'], 'taxonomy' => $t['taxonomy'],
+                            'fields' => is_array($t['fields'] ?? null) ? $t['fields'] : (Terms::find((int)$t['id'])['fields'] ?? [])], 'index' => $i + 1, 'count' => count($terms)] + $ctx);
                     }
                     return $out !== '' ? $out : self::renderNodes($n['else'] ?? [], $ctx);
                 }
                 $list = self::lookup($arg, $ctx);
                 if (is_array($list) && $list && array_is_list($list)) {
                     foreach ($list as $i => $item) {
-                        $out .= self::renderNodes($n['children'], ['item' => $item, 'index' => $i + 1] + $ctx);
+                        $out .= self::renderNodes($n['children'], ['item' => $item, 'index' => $i + 1, 'count' => count($list)] + $ctx);
                     }
                     return $out;
                 }
@@ -313,7 +326,37 @@ final class Templates
                 }
                 return $items ? $out : self::renderNodes($n['else'] ?? [], $ctx);
         }
-        return '';
+        // Blocks provided by modules: {{#my_block a=b}} … {{else}} … {{/my_block}}
+        $html = Hooks::filter('template_block', null, $n['name'], self::args($n['args']), $ctx,
+            static fn(array $c) => self::renderNodes($n['children'], $c), static fn(array $c) => self::renderNodes($n['else'] ?? [], $c));
+        return is_string($html) ? $html : '';
+    }
+
+    /** Dotted path into nested arrays: "fields.color". */
+    public static function path(mixed $v, string $path): mixed
+    {
+        foreach (explode('.', $path) as $seg) {
+            if (!is_array($v) || !array_key_exists($seg, $v)) {
+                return null;
+            }
+            $v = $v[$seg];
+        }
+        return $v;
+    }
+
+    /** Values of the archive term: name, slug, url, description, count, field:x */
+    private static function termValue(?array $term, string $key): mixed
+    {
+        if (!$term) {
+            return null;
+        }
+        if (str_starts_with($key, 'field:')) {
+            return $term['fields'][substr($key, 6)] ?? null;
+        }
+        return match ($key) {
+            'url' => Terms::link($term), 'name' => $term['name'], 'slug' => $term['slug'], 'description' => $term['description'],
+            'count' => $term['count'], 'id' => $term['id'], 'taxonomy' => $term['taxonomy'], default => null,
+        };
     }
 
     private static function args(string $s): array
@@ -354,7 +397,10 @@ final class Templates
             return is_array($ctx['item'] ?? null) ? ($ctx['item'][substr($expr, 5)] ?? null) : null;
         }
         if (str_starts_with($expr, 'item.')) {
-            return is_array($ctx['item'] ?? null) ? ($ctx['item'][substr($expr, 5)] ?? null) : null;
+            return self::path($ctx['item'] ?? null, substr($expr, 5));
+        }
+        if (str_starts_with($expr, 'term.')) {
+            return self::termValue($ctx['term'] ?? null, substr($expr, 5));
         }
         if (str_starts_with($expr, 'terms:')) {
             return self::postTerms($post, substr($expr, 6));
@@ -368,7 +414,8 @@ final class Templates
         return match ($expr) {
             'title' => $post['title'] ?? null, 'content' => $post['content'] ?? null, 'excerpt' => $post ? Posts::excerpt($post) : null,
             'image' => $post['featured_media_id'] ?? null, 'posts' => $ctx['result']['items'] ?? [], 'item' => $ctx['item'] ?? null,
-            default => null,
+            'first' => ($ctx['index'] ?? 0) === 1, 'last' => ($ctx['index'] ?? 0) === ($ctx['count'] ?? -1),
+            default => Hooks::filter('template_lookup', null, $expr, $ctx),
         };
     }
 
@@ -387,7 +434,7 @@ final class Templates
             case 'form':
                 return '[form slug="' . preg_replace('/[^\w-]/', '', (string)$arg) . '"]';
             case 'title':
-                return $esc($post['title'] ?? '');
+                return $filter === 'texturize' ? texturize(e($post['title'] ?? '')) : $esc($post['title'] ?? '');
             case 'content':
                 return $post ? ($raw ? the_content($post) : e(strip_tags(the_content($post)))) : '';
             case 'excerpt':
@@ -435,7 +482,12 @@ final class Templates
                 return self::format($v, $filter, $raw);
         }
         if (str_starts_with($key, 'item.')) {
-            return self::format(is_array($ctx['item'] ?? null) ? ($ctx['item'][substr($key, 5)] ?? null) : null, $filter, $raw);
+            return self::format(self::path($ctx['item'] ?? null, substr($key, 5)), $filter, $raw);
+        }
+        if (str_starts_with($key, 'term.')) {
+            $tk = substr($key, 5);
+            $v = self::termValue($ctx['term'] ?? null, $tk);
+            return $tk === 'url' ? e((string)$v) : self::format($v, $filter, $raw);
         }
         if (str_starts_with($key, 'site.')) {
             return e(match (substr($key, 5)) {
@@ -446,7 +498,9 @@ final class Templates
             $v = $ctx['archive'][substr($key, 8)] ?? '';
             return $raw ? (string)$v : e($v);
         }
-        return '';
+        // Tags provided by modules, e.g. {{ll:flag}}; they return ready HTML.
+        $v = Hooks::filter('template_tag', null, (string)$name, (string)$arg, $ctx, $raw, $filter);
+        return $v === null ? '' : (string)$v;
     }
 
     private static function format(mixed $v, string $filter, bool $raw): string
@@ -469,6 +523,27 @@ final class Templates
         }
         if ($f === 'url') {
             return e(ContentModel::cleanUrl((string)$v));
+        }
+        if ($f === 'texturize') {
+            return texturize($raw ? (is_scalar($v) ? (string)$v : '') : e(is_scalar($v) ? (string)$v : ''));
+        }
+        if ($f === 'slug') {
+            return e(slugify(is_scalar($v) ? (string)$v : ''));
+        }
+        if ($f === 'pad2') {
+            return e(sprintf('%02d', (int)$v));
+        }
+        if ($f === 'host') {
+            return e(preg_replace('/^www\./', '', (string)parse_url(is_scalar($v) ? (string)$v : '', PHP_URL_HOST)));
+        }
+        if ($f === 'strip') {
+            return e(trim(html_entity_decode(strip_tags(is_scalar($v) ? (string)$v : ''), ENT_QUOTES)));
+        }
+        if ($f === 'upper') {
+            return e(mb_strtoupper(is_scalar($v) ? (string)$v : ''));
+        }
+        if ($f === 'number') {
+            return e(number_format((float)(is_scalar($v) ? $v : 0)));
         }
         if ($f === 'nl2br') {
             return nl2br(e(is_scalar($v) ? $v : ''));

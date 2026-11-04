@@ -229,3 +229,39 @@ function icon_logo(int $size = 32, string $variant = 'dark'): string
 {
     return \Slate\Icons::wordmark($size, $variant);
 }
+
+/**
+ * Typographic quotes and dashes in text (outside tags, scripts, code), like WordPress's wptexturize():
+ * "x" → “x”, it's → it’s, ' - ' → ' – ', '--' → '–', '---' → '—', '...' → '…'.
+ */
+function texturize(string $html): string
+{
+    if ($html === '' || !preg_match('/[\'"\-.]|&#0?39;|&quot;/', $html)) {
+        return $html;
+    }
+    $parts = preg_split('/(<!--.*?-->|<(?:script|style|pre|code|kbd|textarea)\b.*?<\/(?:script|style|pre|code|kbd|textarea)>|<[^>]*>)/is', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+    $out = '';
+    $prevEnd = ' ';
+    foreach ($parts as $i => $p) {
+        if ($i % 2 === 1) {
+            $out .= $p;
+            continue;
+        }
+        if ($p === '') {
+            continue;
+        }
+        $t = html_entity_decode($p, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $t = str_replace(['---', ' -- ', '--', '...'], ['—', ' — ', '–', '…'], $t);
+        $t = preg_replace('/(?<=\s)-(?=\s)/u', '–', $t);
+        $t = preg_replace("/'(?=\d\d(?!\d))/u", '’', $t);                    // '90, '90s
+        $t = preg_replace("/(?<=[\p{L}\p{N}])'(?=[\p{L}\p{N}])/u", '’', $t); // it's, don't
+        $t = ($prevEnd . $t);
+        $t = preg_replace('/(?<=[\s(\[{"\x{201C}\-—–])\'/u', '‘', $t);       // opening single
+        $t = preg_replace('/(?<=[\s(\[{\x{2018}\-—–])"/u', '“', $t);          // opening double
+        $t = str_replace(["'", '"'], ['’', '”'], $t);                          // the rest close
+        $t = mb_substr($t, mb_strlen($prevEnd));
+        $prevEnd = mb_substr($t, -1) ?: ' ';
+        $out .= htmlspecialchars($t, ENT_NOQUOTES, 'UTF-8', false);
+    }
+    return $out;
+}

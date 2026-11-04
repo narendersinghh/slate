@@ -433,6 +433,10 @@ function admin_dispatch(string $path): void
             $seen = [];
             foreach ($fields as $f) {
                 $name = preg_replace('/[^a-z0-9_]/', '', strtolower((string)($f['name'] ?? '')));
+                if (($f['type'] ?? '') === 'tab' && $name === '') {
+                    $name = 'tab_' . (slugify((string)($f['label'] ?? '')) ?: count($out));
+                    $name = str_replace('-', '_', $name);
+                }
                 if ($name === '' || isset($seen[$name]) || !isset(ContentModel::FIELD_TYPES[$f['type'] ?? ''])) {
                     continue;
                 }
@@ -447,8 +451,12 @@ function admin_dispatch(string $path): void
                     'default' => is_scalar($f['default'] ?? '') ? (string)($f['default'] ?? '') : '',
                     'width' => in_array($f['width'] ?? '100', ['25', '33', '50', '66', '75', '100'], true) ? $f['width'] : '100',
                     'options' => array_values(array_filter(array_map('trim', is_array($f['options'] ?? null) ? $f['options'] : explode("\n", (string)($f['options'] ?? ''))))),
-                    'post_type' => preg_replace('/[^a-z0-9_-]/', '', (string)($f['post_type'] ?? '')),
+                    'post_type' => implode(',', array_filter(array_map(static fn($t) => preg_replace('/[^a-z0-9_-]/', '', (string)$t),
+                        is_array($f['post_type'] ?? null) ? $f['post_type'] : explode(',', (string)($f['post_type'] ?? ''))))),
                 ];
+                if ($f['type'] === 'taxonomy') {
+                    $field['taxonomy'] = ContentModel::taxonomy((string)($f['taxonomy'] ?? '')) ? (string)$f['taxonomy'] : '';
+                }
                 if ($f['type'] === 'repeater' && $depth < 1) {
                     $field['sub_fields'] = $cleanFields((array)($f['sub_fields'] ?? []), $depth + 1);
                 }

@@ -390,4 +390,43 @@
     render();
   }
   $$('[data-repeater]').forEach(initRepeater);
+
+  // ---------- Field tabs (a "Tab" field groups every field after it) ----------
+  $$('.field-grid').forEach((grid) => {
+    const markers = $$(':scope > .cf-tab-marker', grid);
+    if (!markers.length) return;
+    const bar = document.createElement('div');
+    bar.className = 'cf-tabs';
+    bar.setAttribute('role', 'tablist');
+    const panes = [];
+    let pane = null;
+    Array.from(grid.children).forEach((el) => {
+      if (el.classList.contains('cf-tab-marker')) {
+        pane = document.createElement('div');
+        pane.className = 'field-grid cf-pane';
+        panes.push({ label: el.dataset.tabLabel || 'Tab', pane });
+        el.replaceWith(pane);
+        return;
+      }
+      if (pane) pane.append(el);
+    });
+    const show = (i) => {
+      panes.forEach((p, j) => { p.pane.hidden = i !== j; });
+      $$('button', bar).forEach((b, j) => { b.classList.toggle('active', i === j); b.setAttribute('aria-selected', String(i === j)); });
+    };
+    bar.innerHTML = panes.map((p, i) => '<button type="button" role="tab" data-tab="' + i + '">' + esc(p.label) + '</button>').join('');
+    bar.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) show(+b.dataset.tab); });
+    grid.classList.add('has-tabs');
+    grid.prepend(bar);
+    show(0);
+  });
+
+  // ---------- Filter long term lists ----------
+  $$('[data-term-filter]').forEach((box) => {
+    const inp = $('[data-term-filter-input]', box);
+    inp.addEventListener('input', () => {
+      const q = inp.value.trim().toLowerCase();
+      $$('.choice', box).forEach((c) => { c.hidden = q !== '' && !c.textContent.toLowerCase().includes(q); });
+    });
+  });
 })();

@@ -15,6 +15,9 @@ $opts = $f['options'] ?? [];
 $optPair = static function (string $o): array {
     return str_contains($o, ':') ? array_map('trim', explode(':', $o, 2)) : [$o, $o];
 };
+if ($f['type'] === 'tab'): ?>
+<div class="cf-tab-marker" data-tab-label="<?= e($f['label']) ?>"></div>
+<?php return; endif;
 ?>
 <div class="field cf cf-<?= e($f['type']) ?>" style="--w:<?= (int)($f['width'] ?? 100) ?>%">
   <?php if ($f['type'] !== 'toggle'): ?>
@@ -98,7 +101,7 @@ $optPair = static function (string $o): array {
       </div>
       <?php break;
     case 'relation': $ids = array_filter(array_map('intval', (array)$value)); ?>
-      <div class="relation-field" data-relation data-type="<?= e($f['post_type'] ?? '') ?>">
+      <div class="relation-field" data-relation data-type="<?= e(implode(',', \Slate\ContentModel::relationTypes($f))) ?>">
         <input type="hidden" name="<?= e($name) ?>" value="<?= e(implode(',', $ids)) ?>">
         <div class="chips" data-chips>
           <?php if ($ids) { \Slate\Posts::prime($ids); foreach ($ids as $rid) { $rp = \Slate\Posts::find($rid); if ($rp) echo '<span class="chip" data-id="' . (int)$rid . '">' . e($rp['title']) . '<button type="button" aria-label="Remove">×</button></span>'; } } ?>
@@ -106,6 +109,23 @@ $optPair = static function (string $o): array {
         <input class="input" type="search" placeholder="Search to add…" data-relation-search autocomplete="off">
         <div class="suggest" data-suggest hidden></div>
       </div>
+      <?php break;
+    case 'taxonomy': $sel = array_map('intval', (array)$value); $taxDef = \Slate\ContentModel::taxonomy((string)($f['taxonomy'] ?? '')); ?>
+      <?php if (!$taxDef): ?><p class="muted small">Choose a taxonomy for this field in Content model → Custom fields.</p><?php else: ?>
+      <div class="choice-list choice-scroll" data-term-filter>
+        <input type="hidden" name="<?= e($name) ?>[]" value="">
+        <input class="input input-sm" type="search" placeholder="Filter <?= e(strtolower($taxDef['plural'])) ?>…" data-term-filter-input>
+        <?php foreach (\Slate\Terms::all((string)$f['taxonomy']) as $term): ?>
+          <label class="choice"><input type="checkbox" name="<?= e($name) ?>[]" value="<?= (int)$term['id'] ?>"<?= in_array((int)$term['id'], $sel, true) ? ' checked' : '' ?>> <?= e($term['name']) ?></label>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+      <?php break;
+    case 'form': $forms = \Slate\ContentModel::type('form') ? \Slate\Posts::query(['type' => 'form', 'status' => 'publish', 'limit' => 200, 'count' => false, 'orderby' => 'title', 'order' => 'ASC'])['items'] : []; ?>
+      <select class="input" id="<?= e($id) ?>" name="<?= e($name) ?>"<?= $req ?>>
+        <option value="">— No form —</option>
+        <?php foreach ($forms as $fm): ?><option value="<?= (int)$fm['id'] ?>"<?= (int)$value === (int)$fm['id'] ? ' selected' : '' ?>><?= e($fm['title']) ?></option><?php endforeach; ?>
+      </select>
       <?php break;
     case 'repeater': $rows = is_array($value) ? $value : []; ?>
       <div class="repeater" data-repeater data-name="<?= e($name) ?>">

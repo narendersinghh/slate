@@ -35,6 +35,7 @@ window.SLATE = <?= json_encode([
     'admin' => admin_url(), 'api' => admin_url('api'), 'csrf' => Csrf::token(), 'site' => url(),
     'ai' => Ai::enabled() && Auth::can('use_ai'), 'aiActions' => array_map(static fn($a) => $a['label'], Ai::ACTIONS),
     'user' => ['id' => $user['id'], 'name' => $user['display_name']],
+    'forms' => ContentModel::type('form') !== null,
 ], JSON_UNESCAPED_SLASHES) ?>;
 </script>
 </head>

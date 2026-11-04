@@ -2,7 +2,7 @@
 <main id="content" class="site-main slate-mirror-main">
 <?php if (($snap = wpm_single_snapshot($p)) !== null): ?>
   <?= $snap ?>
-<?php elseif (wpm_is_elementor($p)): ?>
+<?php elseif (wpm_is_layout($p)): ?>
   <?= can_frontend_edit() ? editable('content', 'div') : the_content() ?>
 <?php else: ?>
   <article class="smx-wrap smx-article page type-page">

@@ -1,10 +1,12 @@
 <?php
 /**
- * WordPress mirror theme helpers. Data comes from the WordPress Importer (option "wpm_site").
+ * Site Mirror theme helpers. Data comes from the site migration (option "wpm_site").
  */
 declare(strict_types=1);
 
 use Slate\Options;
+
+require_once __DIR__ . '/rebrand.php';
 
 function wpm_site(): array
 {
@@ -34,7 +36,6 @@ function wpm_assets(array $items): void
     }
 }
 
-/** Page-specific CSS captured from the original page (e.g. Elementor post-123.css). */
 /** Page-level asset bundle: the current post's captured fields, or an archive snapshot's sidecar. */
 function wpm_page_fields(): array
 {
@@ -45,7 +46,7 @@ function wpm_page_fields(): array
 }
 
 /**
- * The captured site <head> plus this page's Elementor CSS in WordPress's cascade order.
+ * The captured site <head> plus this page's layout CSS in the original cascade order.
  * The head was captured from one page (e.g. the home page, post 1279), so it carries that page's
  * global-1279 / local-1279 files. On another page those slots must hold the page's own
  * global-N / local-N files; appending them at the end lets generic rules beat per-element ones.
@@ -53,7 +54,7 @@ function wpm_page_fields(): array
 function wpm_head_items(): array
 {
     $head = wpm_site()['head'] ?? [];
-    $re = '#/elementor/css/(global|local)-(\d+)-frontend-(desktop|tablet|mobile)\.css#';
+    $re = '#/(?:elementor|generated)/css/(global|local)-(\d+)-frontend-(desktop|tablet|mobile)\.css#';
     $captured = null;
     foreach ($head as $a) {
         if (($a['t'] ?? '') === 'css' && preg_match($re, (string)$a['href'], $m) && $m[1] === 'global') {
@@ -117,14 +118,14 @@ function wpm_body_class(): string
     return trim(preg_replace('/\s+/', ' ', $classes));
 }
 
-/** True when the content is a full Elementor layout (renders without theme chrome around it). */
-function wpm_is_elementor(?array $p = null): bool
+/** True when the content is a full-page layout (renders without theme chrome around it). */
+function wpm_is_layout(?array $p = null): bool
 {
     $p ??= post();
-    return $p && str_contains((string)$p['content'], 'data-elementor-type');
+    return $p && (str_contains((string)$p['content'], 'data-slatekit-type') || str_contains((string)$p['content'], 'data-elementor-type'));
 }
 
-/** Stored snapshot of the original rendered page (Elementor Pro templates, loops, ACF output). */
+/** Stored snapshot of the original rendered page (dynamic templates, loops, custom field output). */
 function wpm_snapshot(string $bucket, string $key): ?string
 {
     $f = SLATE_CONTENT . '/wpm/' . preg_replace('/[^a-z0-9_-]/i', '', $bucket) . '/' . preg_replace('/[^a-z0-9_.-]/i', '_', $key) . '.html';

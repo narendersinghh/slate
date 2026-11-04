@@ -45,7 +45,7 @@ $conn = Options::get('wpi_conn') ?: [];
           <?php foreach ([
               'model' => ['Create post types, taxonomies & custom fields', true], 'media' => ['Import media (auto-optimized to WebP)', true],
               'seo' => ['SEO titles, descriptions, robots, canonical, OG', true], 'menus' => ['Menus', true], 'settings' => ['Site title, tagline, timezone, homepage', true],
-              'redirects' => ['301 redirects for any URL that changes', true], 'design' => ['Mirror the design (theme + Elementor CSS/JS, header, footer)', true],
+              'redirects' => ['301 redirects for any URL that changes', true], 'design' => ['Mirror the design (theme + page-builder CSS/JS, header, footer)', true],
               'activate_theme' => ['Activate the mirrored theme when done', true], 'drafts' => ['Include drafts & private content', true],
           ] as $k => [$label, $on]): ?>
             <label class="choice-card"><input type="checkbox" data-opt="<?= e($k) ?>"<?= $on ? ' checked' : '' ?>><span><?= e($label) ?></span></label>
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let html = '';
     Object.entries(c.types || {}).forEach(([wp, t]) => { html += stat(wp, t.total, '→ ' + t.slug); });
     html += stat('Media', s.media ?? '—', 'files');
-    html += stat('Detected', [s.elementor ? 'Elementor' : null, s.seo || null, s.acf ? 'ACF' : null].filter(Boolean).join(' · ') || '—', s.auth ? 'Signed in as ' + (s.user || 'admin') : 'Public access only');
+    html += stat('Detected', [s.elementor ? 'Page builder' : null, s.seo || null, s.acf ? 'ACF' : null].filter(Boolean).join(' · ') || '—', s.auth ? 'Signed in as ' + (s.user || 'admin') : 'Public access only');
     $('[data-overview]').innerHTML = html;
     $('[data-types]').innerHTML = Object.entries(c.types || {}).map(([wp, t]) => '<label class="choice-card"><input type="checkbox" data-type="' + esc(wp) + '" checked><span>' + esc(wp) + ' <small class="muted">(' + t.total + ')</small></span></label>').join('');
     $('[data-step="review"]').hidden = false;

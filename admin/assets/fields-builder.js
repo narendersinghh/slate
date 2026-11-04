@@ -7,6 +7,7 @@
   const group = JSON.parse($('[data-group]', form).textContent);
   const types = JSON.parse($('[data-field-types]', form).textContent);
   const postTypes = JSON.parse($('[data-post-types]', form).textContent);
+  const taxonomies = JSON.parse(($('[data-taxonomies]', form) || { textContent: '{}' }).textContent);
   group.fields = group.fields || [];
   group.location = group.location || { post_types: [], taxonomies: [] };
 
@@ -33,13 +34,18 @@
       h += '<label class="field span-2"><span>Choices <small class="muted">one per line, optionally value : Label</small></span><textarea class="input" rows="4" data-p="' + path + '" data-k="options">' + esc((f.options || []).join('\n')) + '</textarea></label>';
     }
     if (f.type === 'relation') {
-      h += opt('post_type', 'Limit to post type', '<select class="input" data-p="' + path + '" data-k="post_type"><option value="">Any</option>' + Object.entries(postTypes).map(([k, l]) => '<option value="' + k + '"' + (f.post_type === k ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>');
+      const chosen = String(f.post_type || '').split(',').filter(Boolean);
+      h += '<div class="field span-2"><span>Limit to post types <small class="muted">none ticked = any type</small></span><div class="choice-inline">' +
+        Object.entries(postTypes).map(([k, l]) => '<label class="choice"><input type="checkbox" data-p="' + path + '" data-k="post_type" value="' + k + '"' + (chosen.includes(k) ? ' checked' : '') + '> ' + esc(l) + '</label>').join('') + '</div></div>';
+    }
+    if (f.type === 'taxonomy') {
+      h += opt('taxonomy', 'Taxonomy', '<select class="input" data-p="' + path + '" data-k="taxonomy"><option value="">— Choose —</option>' + Object.entries(taxonomies).map(([k, l]) => '<option value="' + k + '"' + (f.taxonomy === k ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>');
     }
     if (f.type === 'repeater' && !path.includes('.')) {
       f.sub_fields = f.sub_fields || [];
       h += '<div class="fb-sub"><strong class="small-label">Sub fields</strong>' + f.sub_fields.map((sf, si) =>
         '<div class="grid-form" style="margin:8px 0"><input class="input input-sm" placeholder="Label" data-p="' + path + '.' + si + '" data-k="label" value="' + esc(sf.label) + '">' +
-        '<span class="input-group"><select class="input input-sm" data-p="' + path + '.' + si + '" data-k="type">' + typeOptions(sf.type).replace(/<option value="(repeater|gallery|relation|richtext)"[^<]*<\/option>/g, '') + '</select>' +
+        '<span class="input-group"><select class="input input-sm" data-p="' + path + '.' + si + '" data-k="type">' + typeOptions(sf.type).replace(/<option value="(repeater|gallery|relation|taxonomy|tab|form)"[^<]*<\/option>/g, '') + '</select>' +
         '<button type="button" class="icon-btn" data-del-sub="' + path + '.' + si + '">✕</button></span></div>').join('') +
         '<button type="button" class="btn btn-sm" data-add-sub="' + path + '">+ Add sub field</button></div>';
     }
@@ -65,6 +71,7 @@
     const f = resolve(el.dataset.p);
     const k = el.dataset.k;
     if (k === 'required') f.required = el.checked;
+    else if (k === 'post_type' && el.type === 'checkbox') f.post_type = $$('[data-k="post_type"][data-p="' + el.dataset.p + '"]:checked', list).map((c) => c.value).join(',');
     else if (k === 'options') f.options = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
     else f[k] = el.value;
     if (k === 'label' && (!f._nameTouched)) {

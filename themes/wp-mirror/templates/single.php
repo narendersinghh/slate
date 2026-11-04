@@ -16,7 +16,7 @@ $snap = wpm_single_snapshot($p);
       '{{SLATE_DATE}}' => e(post_date()),
       '{{SLATE_IMAGE}}' => e($p['featured_media_id'] ? media_url((int)$p['featured_media_id']) : ''),
   ]) ?>
-<?php elseif (wpm_is_elementor($p)): ?>
+<?php elseif (wpm_is_layout($p)): ?>
   <?= $content ?>
 <?php else: ?>
   <article class="smx-wrap smx-article post type-<?= e($p['type']) ?>">

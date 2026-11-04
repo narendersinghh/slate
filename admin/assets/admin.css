@@ -778,3 +778,19 @@ tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 .palette-input input:focus-visible { box-shadow: none; }
+
+/* Field tabs, term pickers, forms */
+.field-grid.has-tabs { display: block; }
+.cf-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); margin: 0 0 16px; }
+.cf-tabs button { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font: inherit; font-weight: 500; color: var(--muted); cursor: pointer; margin-bottom: -1px; }
+.cf-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.cf-pane[hidden] { display: none !important; }
+.choice-scroll { max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px; gap: 2px; }
+.choice-scroll .input { margin-bottom: 6px; }
+.choice-inline { display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 4px; }
+.sub-table td { vertical-align: top; }
+.sub-detail dt { font-weight: 600; margin-top: 12px; }
+.sub-detail dd { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; }
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.filter-bar .input { width: auto; }
+.ed-form-widget { display: block; margin: 12px 0; padding: 14px 16px; border: 1px dashed var(--accent); border-radius: 10px; background: var(--accent-soft, rgba(242,107,45,.08)); font-weight: 500; user-select: none; }

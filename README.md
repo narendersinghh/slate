@@ -22,6 +22,12 @@ A fast, secure, SEO-first content management system — the flexibility of WordP
 Logo files live in `admin/assets/brand/` — `logo.svg` (wordmark), `logo-white.svg`, `logo-mark.svg`, `logo-mark-light.svg`, `logo-glyph.svg`, `favicon.svg` and `brand-sheet.png`.
 Logo: a faceted origami songbird perched on a chalk line on a slate. Colours: brand orange `#F26B2D` (scale `#FFF5EF` → `#5C2008`) and ink `#0D0D0E`. Type: **Instrument Serif** for headings, **Inter** for UI text (self-hosted).
 
+## Forms
+
+Activate the **Forms** module, then **Content → Forms → Add new**: add one row per field, set the button text, messages and who gets
+the email. Place it with the **☑ Form** button in any rich-text editor, a *Form* custom field, `{{form:contact}}` in Templates or
+`[form slug="contact"]` anywhere in content. Entries land in **Submissions** (filter, mark read/spam, reply, export CSV).
+
 ## Templates
 
 **Templates** in the sidebar lets you design every page type without touching theme files: single pages for each post
@@ -44,7 +50,7 @@ Or over SSH, from the Slate folder (prompts for the application password, never 
 php bin/slate import:wordpress --url=https://example.com --user=your-wp-admin
 ```
 
-Elementor forms keep working: submissions appear under **Form submissions** and are emailed to the admin address.
+Forms of the old site keep working: submissions appear under **Submissions**. Rebuild them under Content → Forms when convenient.
 After the domain switch, theme assets that were never requested during testing can no longer be fetched from the old server —
 browse the main pages on the Slate URL before switching DNS so everything is cached locally.
 
@@ -141,5 +147,5 @@ Sites then see “Update available”. Updating backs up the current core to `co
 ## Roadmap
 
 - AI site assistant that can search and edit any content via tool calls, with approval
-- Form builder & submissions inbox; loop/query blocks for frontend editing
+- Loop/query blocks for frontend editing
 - Revisions & autosave history, QR code for 2FA setup, multilingual content

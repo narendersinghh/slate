@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — Forms, richer custom fields, brand-neutral mirror
+- **Forms module**: build forms under Content → Forms (text, email, phone, URL, number, paragraph, dropdown, radio, checkboxes,
+  date, consent, hidden and text blocks; required, width, placeholder, help). Place a saved form anywhere with the **Form** button
+  in any editor, a **Form** custom field, `{{form:slug}}` in Templates, `[form slug="…"]` or `slate_form('slug')` in themes.
+  AJAX submit with no-JS fallback, honeypot + rate limiting, email notifications with Reply-To, optional redirect.
+- **Submissions inbox** (sidebar → Submissions): filter by form / status / text, New · Read · Spam, bulk actions, detail view with
+  reply-by-email, CSV export. Form posts to the previous site's endpoints are stored here too.
+- Custom fields: new **Taxonomy terms**, **Form** and **Tab** field types; relationship fields can target several post types.
+- Site Mirror theme (was "WordPress mirror"): page-builder class names, script globals and asset paths are renamed to neutral
+  `slatekit` names and served from `/content/assets/`; missing assets are fetched once and renamed automatically.
+- Dashboard: migration tools renamed ("Migration"), no third-party product names in the admin.
+
 ## 0.3.5
 - WordPress Importer + mirror theme: the site's own "page not found" template is captured and used for 404s.
 

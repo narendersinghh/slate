@@ -131,8 +131,8 @@ function admin_api_routes(Router $r): void
 
     $r->get('/api/posts', static function () {
         Auth::require('edit_posts');
-        $type = (string)($_GET['type'] ?? '');
-        $types = $type !== '' && ContentModel::type($type) ? [$type] : array_keys(ContentModel::types());
+        $wanted = array_filter(array_map('trim', explode(',', (string)($_GET['type'] ?? ''))), static fn($t) => ContentModel::type($t) !== null);
+        $types = $wanted ? array_values($wanted) : array_keys(ContentModel::types());
         $res = Posts::query(['type' => $types, 'status' => 'any', 'search' => (string)($_GET['q'] ?? ''), 'limit' => 20, 'count' => false,
             'ids' => !empty($_GET['ids']) ? explode(',', (string)$_GET['ids']) : [], 'orderby' => 'title', 'order' => 'ASC']);
         json_response(['ok' => true, 'items' => array_map(static fn($p) => ['id' => $p['id'], 'title' => $p['title'] ?: '(no title)', 'type' => $p['type'],

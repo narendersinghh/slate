@@ -21,8 +21,12 @@ final class ContentModel
         'text' => 'Text', 'textarea' => 'Text area', 'richtext' => 'Rich text', 'number' => 'Number', 'email' => 'Email',
         'url' => 'URL', 'tel' => 'Phone', 'select' => 'Select', 'radio' => 'Radio buttons', 'checkbox' => 'Checkboxes',
         'toggle' => 'True / false', 'date' => 'Date', 'datetime' => 'Date & time', 'color' => 'Colour', 'image' => 'Image',
-        'gallery' => 'Gallery', 'file' => 'File', 'relation' => 'Relationship (posts)', 'repeater' => 'Repeater', 'code' => 'Code / HTML',
+        'gallery' => 'Gallery', 'file' => 'File', 'relation' => 'Relationship (posts)', 'taxonomy' => 'Taxonomy terms', 'repeater' => 'Repeater',
+        'code' => 'Code / HTML', 'form' => 'Form', 'tab' => 'Tab (groups the fields below it)',
     ];
+
+    /** Field types that only structure the edit screen and store no value. */
+    public const LAYOUT_TYPES = ['tab'];
 
     private static ?array $types = null;
     private static ?array $taxes = null;
@@ -138,7 +142,13 @@ final class ContentModel
 
     public static function fieldGroups(): array
     {
-        return Options::get('field_groups') ?: [];
+        return Hooks::filter('field_groups', Options::get('field_groups') ?: []);
+    }
+
+    /** Post types a relationship field may point to (stored as "books,events"; empty = any). */
+    public static function relationTypes(array $f): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', (string)($f['post_type'] ?? '')))));
     }
 
     /** Fields that apply to a post type ('post') or taxonomy ('term'), grouped. */
@@ -193,6 +203,9 @@ final class ContentModel
     {
         $out = [];
         foreach ($defs as $name => $f) {
+            if (in_array($f['type'] ?? '', self::LAYOUT_TYPES, true)) {
+                continue;
+            }
             $out[$name] = self::sanitizeValue($f, $input[$name] ?? null, $unfiltered);
         }
         return $out;
@@ -203,8 +216,8 @@ final class ContentModel
         return match ($f['type']) {
             'number' => $v === '' || $v === null ? null : (is_numeric($v) ? $v + 0 : null),
             'toggle' => !empty($v),
-            'image', 'file' => $v ? (int)$v : null,
-            'gallery', 'relation' => array_values(array_filter(array_map('intval', is_array($v) ? $v : explode(',', (string)$v)))),
+            'image', 'file', 'form' => $v ? (int)$v : null,
+            'gallery', 'relation', 'taxonomy' => array_values(array_filter(array_map('intval', is_array($v) ? $v : explode(',', (string)$v)))),
             'checkbox' => array_values(array_filter(array_map('strval', (array)($v ?? [])), 'strlen')),
             'email' => filter_var(trim((string)$v), FILTER_VALIDATE_EMAIL) ?: '',
             'url' => self::cleanUrl((string)$v),

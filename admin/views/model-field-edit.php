@@ -13,6 +13,7 @@ $g = $group ?? ['id' => '', 'title' => '', 'position' => 'main', 'location' => [
   <input type="hidden" name="group_json" data-group-json>
   <script type="application/json" data-group><?= json_encode($g, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
   <script type="application/json" data-field-types><?= json_encode(ContentModel::FIELD_TYPES, JSON_HEX_TAG) ?></script>
+  <script type="application/json" data-taxonomies><?= json_encode(array_map(static fn($t) => $t['plural'], ContentModel::taxonomies()), JSON_HEX_TAG) ?></script>
   <script type="application/json" data-post-types><?= json_encode(array_map(static fn($t) => $t['plural'], ContentModel::types()), JSON_HEX_TAG) ?></script>
   <div class="split split-wide">
     <div class="stack">

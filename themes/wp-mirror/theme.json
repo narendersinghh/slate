@@ -1,7 +1,13 @@
 {
-  "name": "WordPress mirror",
-  "version": "1.0.0",
-  "description": "Renders a WordPress / Elementor site's captured design (header, footer, CSS, JS, layouts) around Slate content. Set up by the WordPress Importer module.",
-  "menus": { "primary": "Primary navigation", "footer": "Footer navigation" },
-  "templates": { "full-width": "Full width (Elementor header & footer)", "landing": "Canvas (no header/footer)" }
+  "name": "Site Mirror",
+  "version": "1.1.0",
+  "description": "Renders your imported website design (header, footer, styles, scripts and layouts) around Slate content, pixel for pixel.",
+  "menus": {
+    "primary": "Primary navigation",
+    "footer": "Footer navigation"
+  },
+  "templates": {
+    "full-width": "Full width (site header & footer)",
+    "landing": "Canvas (no header/footer)"
+  }
 }

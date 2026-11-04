@@ -16,6 +16,8 @@ namespace Slate;
  *   {{title}} {{{content}}} {{excerpt}} {{url}} {{date}} {{date:Y-m-d}} {{modified}} {{author}} {{image}} {{image:thumb}} {{image_url}} {{id}} {{slug}} {{type}}
  *   {{field:name}}  {{{field:name}}}  {{field:name|image}}  {{field:name|date:F j, Y}}  {{field:name|url}}  {{field:name|nl2br}}
  *   {{terms:taxonomy}} (linked list)   {{terms:taxonomy|plain}}
+ *   {{form:contact}}  (a form from Content → Forms, by slug or id)
+ *   {{field:name|terms}} (taxonomy field: linked term names)
  *   {{site.name}} {{site.tagline}} {{site.url}} {{year}}  {{menu:primary}}  {{{breadcrumbs}}}  {{{pagination}}}
  *   {{archive.title}} {{{archive.description}}} {{archive.count}}
  *   {{edit:title}} {{edit:content}} {{edit:field:name}}   (editable on the live site for team members)
@@ -382,6 +384,8 @@ final class Templates
         // Simple keys with optional ":arg"
         [$name, $arg] = array_pad(explode(':', $key, 2), 2, null);
         switch ($name) {
+            case 'form':
+                return '[form slug="' . preg_replace('/[^\w-]/', '', (string)$arg) . '"]';
             case 'title':
                 return $esc($post['title'] ?? '');
             case 'content':
@@ -450,6 +454,11 @@ final class Templates
         [$f, $farg] = array_pad(explode(':', $filter, 2), 2, null);
         if ($f === 'image') {
             return is_numeric($v) ? image((int)$v, ['size' => $farg ?: 'full']) : '';
+        }
+        if ($f === 'terms' || $f === 'terms_plain') {
+            $terms = array_filter(array_map(static fn($id) => Terms::find((int)$id), is_array($v) ? $v : []));
+            return $f === 'terms_plain' ? e(implode(', ', array_column($terms, 'name')))
+                : implode(', ', array_map(static fn($t) => '<a href="' . e(Terms::link($t)) . '">' . e($t['name']) . '</a>', $terms));
         }
         if ($f === 'image_url') {
             return is_numeric($v) ? e(media_url((int)$v, $farg ?: 'full')) : '';

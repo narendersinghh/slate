@@ -20,7 +20,7 @@ $fontOptions = static function (string $current): string {
 ?>
 <?php if ($u = DesignSystem::fontsUrl($ds)): ?><link rel="stylesheet" href="<?= e($u) ?>"><?php endif; ?>
 <div class="card-pad stack ds">
-  <p class="muted" style="margin:0">Global styles for your website. Themes use these as CSS variables (<code>var(--color-primary)</code>, <code>var(--font-heading)</code>, <code>var(--type-h1)</code>…) and Elementor’s <code>--e-global-*</code> variables are mapped too, so imported Elementor designs follow these settings.</p>
+  <p class="muted" style="margin:0">Global styles for your website. Themes use these as CSS variables (<code>var(--color-primary)</code>, <code>var(--font-heading)</code>, <code>var(--type-h1)</code>…) and imported designs’ <code>--e-global-*</code> variables are mapped too, so imported Elementor designs follow these settings.</p>
 
   <div class="ds-preview" style="--p:<?= e($ds['colors'][0]['value'] ?? '#F26B2D') ?>">
     <span class="eyebrow">Live preview</span>
@@ -68,7 +68,7 @@ $fontOptions = static function (string $current): string {
   </table></div>
   <div class="stack-sm">
     <label class="switch-row"><input type="checkbox" class="switch" name="ds[responsive]" value="1"<?= $ds['responsive'] ? ' checked' : '' ?>><span>Fluid sizes — large headings scale down on mobile</span></label>
-    <label class="switch-row"><input type="checkbox" class="switch" name="ds[apply_elements]" value="1"<?= $ds['apply_elements'] ? ' checked' : '' ?>><span>Apply typography to body &amp; h1–h6 automatically <small class="muted">(turn off for mirrored Elementor sites)</small></span></label>
+    <label class="switch-row"><input type="checkbox" class="switch" name="ds[apply_elements]" value="1"<?= $ds['apply_elements'] ? ' checked' : '' ?>><span>Apply typography to body &amp; h1–h6 automatically <small class="muted">(turn off for mirrored designs, which style their own elements)</small></span></label>
   </div>
 
   <h3 class="section-title">Layout</h3>

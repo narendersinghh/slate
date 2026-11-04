@@ -1,6 +1,6 @@
 <?php partial("header", ["bare" => true]); $p = post(); ?>
 <main id="content" class="site-main slate-mirror-main">
-<?php if (wpm_is_elementor($p)): ?>
+<?php if (wpm_is_layout($p)): ?>
   <?= can_frontend_edit() ? editable('content', 'div') : the_content() ?>
 <?php else: ?>
   <article class="smx-wrap smx-article page type-page">

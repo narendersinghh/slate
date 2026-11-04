@@ -25,15 +25,12 @@ require_once __DIR__ . '/src/Mirror.php';
 Options::lazy('wpi_job', 'wpi_conn', 'wpi_scan');
 Hooks::add('module_activated_wordpress-importer', [Importer::class, 'install']);
 
-Modules::adminPage('WordPress import', 'wp-import', static function (): void {
+Modules::adminPage('Migration', 'wp-import', static function (): void {
     Importer::install();
     require __DIR__ . '/view.php';
 }, 'manage_settings', 'download');
 
-Modules::adminPage('Form submissions', 'forms', static function (): void {
-    Importer::install();
-    require __DIR__ . '/forms.php';
-}, 'edit_others_posts', 'message');
+// Form entries of the previous site now live in the Forms module's Submissions inbox.
 
 // ---------------------------------------------------------------- admin endpoints
 Hooks::add('admin_routes', static function (Router $r): void {
@@ -97,11 +94,6 @@ Hooks::add('admin_routes', static function (Router $r): void {
         Importer::reset(!empty(json_input()['delete']));
         return [];
     }));
-    $r->post('/m/forms/{id:\d+}/delete', static function (string $id): void {
-        Auth::require('edit_others_posts');
-        DB::delete('wpi_forms', ['id' => (int)$id]);
-        back();
-    });
 });
 
 // ---------------------------------------------------------------- frontend compatibility layer
@@ -109,7 +101,7 @@ Hooks::add('init', static function (): void {
     $path = App::path();
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-    // Elementor (Pro) form submissions → stored in Slate + emailed to the admin.
+    // Form posts from the previous site's markup → Submissions inbox (+ email).
     if ($path === '/wp-admin/admin-ajax.php') {
         wpi_handle_ajax();
     }
@@ -132,44 +124,42 @@ function wpi_handle_ajax(): never
 {
     $action = (string)($_POST['action'] ?? $_GET['action'] ?? '');
     header('Content-Type: application/json; charset=utf-8');
-    if ($action !== 'elementor_pro_forms_send_form') {
+    // Form actions of the previous site's page builder (original and renamed identifiers).
+    if (!preg_match('/^(elementor|slatekit)_pro_(atomic_)?forms_send_form$/', $action)) {
         echo json_encode(['success' => false, 'data' => ['message' => 'Unsupported action.']]);
         exit;
     }
-    Importer::install();
-    $ip = Auth::ip();
-    $recent = (int)DB::val('SELECT COUNT(*) FROM {{wpi_forms}} WHERE ip = :ip AND created_at > :t', ['ip' => $ip, 't' => gmdate('Y-m-d H:i:s', time() - 3600)]);
+    $ok = ['success' => true, 'data' => ['message' => 'Your submission was successful.', 'data' => []]];
     $fields = (array)($_POST['form_fields'] ?? []);
-    // Honeypot fields (Elementor "honeypot" field or a generic one) must stay empty.
-    $spam = !empty($_POST['form_fields']['honeypot']) || !empty($_POST['website_url_hp']);
-    if ($recent >= 20 || $spam) {
-        echo json_encode(['success' => true, 'data' => ['message' => 'Thank you!', 'data' => []]]);
+    if (!empty($fields['honeypot']) || !empty($_POST['website_url_hp'])) {
+        echo json_encode($ok);
         exit;
     }
-    $clean = [];
+    $data = [];
     foreach ($fields as $k => $v) {
-        $clean[mb_substr(preg_replace('/[^\w-]/', '', (string)$k), 0, 60)] = is_array($v) ? array_map(static fn($x) => mb_substr(strip_tags((string)$x), 0, 5000), $v) : mb_substr(strip_tags((string)$v), 0, 5000);
+        $key = mb_substr(preg_replace('/[^\w-]/', '', (string)$k), 0, 60);
+        $val = is_array($v) ? array_map(static fn($x) => mb_substr(strip_tags((string)$x), 0, 5000), $v) : mb_substr(strip_tags((string)$v), 0, 5000);
+        $data[$key] = ['label' => ucfirst(str_replace(['_', '-'], ' ', $key)), 'value' => $val, 'type' => filter_var(is_string($val) ? $val : '', FILTER_VALIDATE_EMAIL) ? 'email' : 'text'];
     }
-    $form = mb_substr(strip_tags((string)($_POST['form_name'] ?? $_POST['form_id'] ?? 'Form')), 0, 191);
-    $page = mb_substr(strip_tags((string)($_POST['referer_title'] ?? $_SERVER['HTTP_REFERER'] ?? '')), 0, 255);
-    DB::insert('wpi_forms', ['form' => $form, 'page' => $page, 'data' => json_encode($clean, JSON_UNESCAPED_UNICODE), 'ip' => $ip, 'created_at' => now()]);
-    $to = (string)Options::get('admin_email');
-    if ($to && filter_var($to, FILTER_VALIDATE_EMAIL)) {
-        $body = "New submission from “{$form}” on " . site_url() . "\n\n";
-        foreach ($clean as $k => $v) {
-            $body .= ucfirst($k) . ': ' . (is_array($v) ? implode(', ', $v) : $v) . "\n";
-        }
-        $replyTo = '';
-        foreach ($clean as $v) {
-            if (is_string($v) && filter_var($v, FILTER_VALIDATE_EMAIL)) {
-                $replyTo = "\r\nReply-To: " . $v;
-                break;
-            }
-        }
-        $host = (string)parse_url(site_url(), PHP_URL_HOST);
-        @mail($to, '[' . Options::get('site_title') . '] New form submission: ' . $form, $body, 'From: Slate <noreply@' . $host . '>' . $replyTo);
+    $formName = mb_substr(strip_tags((string)($_POST['form_name'] ?? $_POST['form_id'] ?? 'Form')), 0, 191);
+    if (!class_exists(\SlateModules\Forms\Forms::class)) {
+        echo json_encode(['success' => false, 'data' => ['message' => 'Forms are not enabled on this site.']]);
+        exit;
     }
-    echo json_encode(['success' => true, 'data' => ['message' => 'Your submission was successful.', 'data' => []]]);
+    $Forms = \SlateModules\Forms\Forms::class;
+    $Forms::install();
+    $recent = (int)DB::val('SELECT COUNT(*) FROM {{form_submissions}} WHERE ip = :ip AND created_at > :t', ['ip' => Auth::ip(), 't' => gmdate('Y-m-d H:i:s', time() - 3600)]);
+    if ($recent >= 15) {
+        echo json_encode($ok);
+        exit;
+    }
+    $form = $Forms::find(slugify($formName)) ?? null;
+    $page = \Slate\ContentModel::cleanUrl((string)($_POST['referrer'] ?? $_SERVER['HTTP_REFERER'] ?? ''));
+    $id = $Forms::store($form, $data, $page, mb_substr(strip_tags((string)($_POST['referer_title'] ?? '')), 0, 255), 'new', 'legacy', null, null, null, $form['title'] ?? $formName);
+    if ($form) {
+        $Forms::notify($form, $data, $page, $id);
+    }
+    echo json_encode($ok);
     exit;
 }
 

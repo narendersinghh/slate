@@ -41,7 +41,7 @@
         this.btn('insertUnorderedList', '•≡', 'Bulleted list') + this.btn('insertOrderedList', '1≡', 'Numbered list') + this.btn('quote', '❝', 'Quote') +
         '<span class="ed-sep"></span>' +
         this.btn('link', '🔗', 'Link (⌘K)') + this.btn('unlink', '⛓︎', 'Remove link') + this.btn('image', '🖼', 'Insert image') + this.btn('embed', '▶', 'Embed video (YouTube/Vimeo)') +
-        this.btn('table', '▦', 'Insert table') + this.btn('hr', '―', 'Divider') +
+        this.btn('table', '▦', 'Insert table') + this.btn('hr', '―', 'Divider') + (S.forms ? this.btn('form', '☑', 'Insert a form') : '') +
         '<span class="ed-sep"></span>' +
         this.btn('removeFormat', 'Tx', 'Clear formatting') + this.btn('undo', '↶', 'Undo') + this.btn('redo', '↷', 'Redo') +
         '<span class="ed-right"></span>' + this.btn('source', '&lt;/&gt;', 'Edit HTML') +
@@ -128,6 +128,25 @@
         if (m) src = 'https://player.vimeo.com/video/' + m[1];
         if (!src) return toast('Unsupported video URL', 'error');
         document.execCommand('insertHTML', false, '<figure class="embed"><iframe src="' + src + '" width="560" height="315" title="Video" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></figure><p></p>');
+      } else if (cmd === 'form') {
+        const range = this.saveRange();
+        const r = await api('/posts?type=form');
+        const forms = (r.items || []).filter((f) => f.status === 'publish');
+        if (!forms.length) { toast('Create and publish a form first (Content → Forms).', 'error', 6000); return; }
+        const m = modal({ title: 'Insert a form', body: '<label class="field"><span>Form</span><select class="input" data-pick-form>' + forms.map((f) => '<option value="' + f.id + '">' + esc(f.title) + '</option>').join('') + '</select></label><p class="muted small">The form shows here on the live page. Edit its fields under Content → Forms; entries arrive in Submissions.</p>',
+          foot: '<button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-primary" data-insert-form>Insert form</button>' });
+        await new Promise((resolve) => {
+          m.addEventListener('click', (e) => {
+            if (e.target.closest('[data-insert-form]')) {
+              const sel = $('[data-pick-form]', m);
+              const title = sel.options[sel.selectedIndex].textContent;
+              this.restoreRange(range);
+              document.execCommand('insertHTML', false, '<div class="slate-form-widget ed-form-widget" data-slate-form-widget="' + sel.value + '" contenteditable="false">☑ Form: ' + esc(title) + ' [form id="' + sel.value + '"]</div><p></p>');
+              m.close(); this.sync(); resolve();
+            } else if (e.target.closest('[data-close]')) { m.close(); resolve(); }
+          });
+        });
+        return;
       } else if (cmd === 'table') {
         const rows = Math.min(20, +prompt('Rows?', '3') || 3), cols = Math.min(10, +prompt('Columns?', '3') || 3);
         let h = '<table><thead><tr>' + '<th>Heading</th>'.repeat(cols) + '</tr></thead><tbody>';

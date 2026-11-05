@@ -1,0 +1,7 @@
+{
+  "name": "Leader Network",
+  "description": "Turns leader profiles into a living network: visitor accounts, verified profile claims (admin-approved), owner editing with moderation, booking requests, paid featured placement per category (Stripe, Razorpay or manual), and an “On this day” page built from birthdays, anniversaries and key dates.",
+  "version": "1.0.0",
+  "author": "Slate",
+  "requires": "0.3.0"
+}

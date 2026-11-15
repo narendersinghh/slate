@@ -98,12 +98,17 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `template_tag`, `template_lookup`, `template_block` | filter | add `{{tags}}`, conditions and `{{#blocks}}` to Templates |
 | `design_system_css` | filter | CSS variables of the design system |
 | `modules_loaded` | action | every active module is loaded |
+| `cron_jobs` | filter | `['name' => ['every' => 3600, 'label' => '…', 'run' => fn() => …]]`: scheduled tasks |
+| `api_routes` | action | `Router $r`: extra REST endpoints under `/api/v1/…` |
+| `api_post`, `api_types` | filter | shape API output / choose exposed content types |
+| `mail_send` | filter | `(null, $message)` → return `true`/`false` to deliver mail yourself (e.g. an email API) |
+| `backup_paths` | filter | extra paths to include in files backups |
 | `cli_commands` | filter | `['name' => ['Help text', fn(array $opts, string $arg, callable $out, callable $fail)]]`: add `php bin/slate <name>` commands |
 
 ### Core APIs
 
 ```php
-use Slate\{DB, Options, Posts, Terms, Media, ContentModel, Auth, Http, Ai, Csrf, Session, PageCache};
+use Slate\{DB, Options, Posts, Terms, Media, ContentModel, Auth, Http, Ai, Csrf, Session, PageCache, Mailer, Revisions};
 
 DB::exec("CREATE TABLE IF NOT EXISTS {{shop_orders}} (…)");   // {{name}} adds the table prefix
 DB::all('SELECT * FROM {{posts}} WHERE type = :t', ['t' => 'product']);
@@ -114,6 +119,8 @@ Posts::query(['type' => 'product', 'status' => 'publish', 'limit' => 12, 'page' 
 Posts::find($id); Posts::findBySlug('product', 'blue-shirt'); Posts::save($data, $id);
 Terms::all('category'); Media::url($mediaId, 'medium');
 Auth::user(); Auth::can('edit_posts'); Http::json('POST', $url, $headers, $payload); Ai::complete($prompt);
+Mailer::send('a@b.com', 'Subject', '<p>HTML</p>', ['reply_to' => 'c@d.com']);   // SMTP when configured
+Revisions::snapshot($post, $newData);   // before Posts::save(), to make a change undoable
 ```
 
 Helpers: `e()` (escape), `site_url()`, `admin_url()`, `url()`, `json_response()`, `redirect()`, `input()`, `csrf_field()`,

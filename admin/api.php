@@ -124,6 +124,7 @@ function admin_api_routes(Router $r): void
         }
         // Keep the slug stable when only the title changes inline.
         $data['slug'] = $post['slug'];
+        \Slate\Revisions::snapshot($post, $data);
         Posts::save($data, $post['id']);
         log_activity('content_inline_edit', $post['type'] . ':' . $post['title']);
         json_response(['ok' => true, 'message' => 'Saved']);

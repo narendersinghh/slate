@@ -8,6 +8,8 @@
  *        module:activate <slug> | module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>
  *        module:export <slug> [--to=file.zip]
  *   php bin/slate safe-mode:on | safe-mode:off       start without modules (rescue a broken site)
+ *   php bin/slate cron [--force] [--job=name] [--verbose]   run scheduled tasks (add to the server's crontab)
+ *   php bin/slate backup:create [--files] | backup:list | backup:restore <file> [--yes]
  *   php bin/slate version
  *
  * Modules add their own commands with the "cli_commands" filter:
@@ -149,6 +151,47 @@ switch ($cmd) {
         }
         exit($scan['errors'] ? 1 : 0);
 
+    case 'cron':
+        $res = \Slate\Cron::run(!empty($opts['force']), 'server', isset($opts['job']) ? (string)$opts['job'] : null);
+        if (!empty($opts['verbose'])) {
+            foreach ($res as $job => $r) {
+                $out(sprintf('  %-22s %s', $job, $r));
+            }
+        }
+        $failed = array_filter($res, static fn($r) => $r !== 'ok' && $r !== 'skipped');
+        exit($failed ? 1 : 0);
+
+    case 'backup:create':
+        $r = \Slate\Backup::create(!empty($opts['files']));
+        if (!$r['ok']) {
+            $fail($r['error']);
+        }
+        \Slate\Backup::prune();
+        foreach ($r['files'] as $f) {
+            $out('✓ ' . $f . ' (' . format_bytes((int)filesize($f)) . ')');
+        }
+        break;
+
+    case 'backup:list':
+        foreach (\Slate\Backup::list() as $b) {
+            $out(sprintf('%-40s %-9s %10s  %s', $b['name'], $b['kind'], format_bytes($b['size']), gmdate('Y-m-d H:i', $b['time'])));
+        }
+        break;
+
+    case 'backup:restore':
+        if ($arg === '') {
+            $fail('Usage: php bin/slate backup:restore site-YYYYmmdd-His-db.sql.gz [--yes]');
+        }
+        if (empty($opts['yes'])) {
+            fwrite(STDOUT, "This replaces the whole database with $arg (a safety backup is made first). Type RESTORE to continue: ");
+            if (trim((string)fgets(STDIN)) !== 'RESTORE') {
+                $fail('Cancelled.');
+            }
+        }
+        $r = \Slate\Backup::restoreDatabase(basename($arg));
+        $r['ok'] ? $out("✓ Restored {$r['statements']} statements. Safety backup: {$r['safety']}") : $fail($r['error']);
+        break;
+
     case 'safe-mode:on':
         file_put_contents(SLATE_CONTENT . '/safe-mode', 'Created ' . gmdate('c') . "\n");
         PageCache::clear();
@@ -174,5 +217,5 @@ switch ($cmd) {
         foreach ($commands as $name => $c) {
             $extra .= sprintf("\n  php bin/slate %-58s %s", $name, (string)($c[0] ?? ''));
         }
-        $out("Slate CLI\n\n  php bin/slate cache:clear                                              Clear the page cache\n  php bin/slate module:list | module:make <slug> | module:install <url|zip> | module:activate <slug>\n  php bin/slate module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>\n  php bin/slate module:export <slug> [--to=file.zip]                     Package a module for reuse\n  php bin/slate safe-mode:on | safe-mode:off                             Start without modules\n  php bin/slate version" . ($extra !== '' ? "\n\nFrom modules:$extra" : ''));
+        $out("Slate CLI\n\n  php bin/slate cache:clear                                              Clear the page cache\n  php bin/slate module:list | module:make <slug> | module:install <url|zip> | module:activate <slug>\n  php bin/slate module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>\n  php bin/slate module:export <slug> [--to=file.zip]                     Package a module for reuse\n  php bin/slate safe-mode:on | safe-mode:off                             Start without modules\n  php bin/slate cron [--force] [--verbose]                               Run scheduled tasks (server crontab)\n  php bin/slate backup:create [--files] | backup:list | backup:restore <file>\n  php bin/slate version" . ($extra !== '' ? "\n\nFrom modules:$extra" : ''));
 }

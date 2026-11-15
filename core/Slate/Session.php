@@ -69,6 +69,21 @@ final class Session
         $_SESSION['_flash'][] = ['type' => $type, 'message' => $message];
     }
 
+    /** One-time value (e.g. a newly created secret shown once). */
+    public static function putValue(string $key, mixed $value): void
+    {
+        self::start();
+        $_SESSION['_once'][$key] = $value;
+    }
+
+    public static function takeValue(string $key): mixed
+    {
+        self::start();
+        $v = $_SESSION['_once'][$key] ?? null;
+        unset($_SESSION['_once'][$key]);
+        return $v;
+    }
+
     public static function takeFlash(): array
     {
         $f = $_SESSION['_flash'] ?? [];

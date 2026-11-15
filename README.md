@@ -14,6 +14,11 @@ A fast, secure, SEO-first content management system — the flexibility of WordP
 - **Speed** — one query loads all settings + content model; custom fields live on the row (no meta joins); full-page static cache serves visitors with **zero** database queries; HTML minification; lazy images with width/height.
 - **Security** — Argon2id passwords, login rate-limiting & lockout, TOTP two-factor auth, custom admin URL, CSRF protection on every write, strict session handling, security headers/HSTS, upload MIME validation & no-execute uploads folder, encrypted secrets (API keys, 2FA), HTML sanitizer for non-admin roles, activity log.
 - **Roles** — Administrator, Editor, Author, Contributor, Subscriber with granular capabilities.
+- **Revisions** — compare any saved version with the current one and restore it.
+- **Email** — SMTP or server mail for password resets, forms and modules; forgot-password by email.
+- **Backups** — database and files, scheduled with retention; restore from the command line.
+- **Scheduled tasks** — server cron or visitor-triggered; modules add their own jobs.
+- **REST API** — headless content API with per-user API keys (off by default).
 - **Modules** — Slate’s name for plugins. Install from a zip, GitHub or registries, create one with AI, update with rollback; crashing modules switch themselves off.
 - **Updates** — one-click core updates from GitHub Releases with automatic backup and rollback.
 

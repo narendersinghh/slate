@@ -109,6 +109,29 @@ final class Schema
                 ip VARCHAR(45) NOT NULL DEFAULT '',
                 created_at DATETIME NOT NULL
             )$tail",
+            // v2: content revisions and API keys
+            "CREATE TABLE IF NOT EXISTS {{revisions}} (
+                id $pk,
+                post_id $int NOT NULL,
+                user_id $int NULL,
+                title VARCHAR(255) NOT NULL DEFAULT '',
+                content $text NULL,
+                excerpt TEXT NULL,
+                fields $text NULL,
+                seo TEXT NULL,
+                created_at DATETIME NOT NULL
+            )$tail",
+            "CREATE INDEX idx_revisions_post ON {{revisions}} (post_id, id)",
+            "CREATE TABLE IF NOT EXISTS {{api_keys}} (
+                id $pk,
+                user_id $int NOT NULL,
+                name VARCHAR(100) NOT NULL DEFAULT '',
+                prefix VARCHAR(16) NOT NULL UNIQUE,
+                token_hash CHAR(64) NOT NULL,
+                scope VARCHAR(20) NOT NULL DEFAULT 'read',
+                last_used DATETIME NULL,
+                created_at DATETIME NOT NULL
+            )$tail",
         ];
     }
 
@@ -136,6 +159,9 @@ final class Schema
         $migrations = [
             1 => static function (): void {
                 self::install();
+            },
+            2 => static function (): void {
+                self::install(); // adds revisions + api_keys (CREATE … IF NOT EXISTS)
             },
         ];
         foreach ($migrations as $version => $fn) {

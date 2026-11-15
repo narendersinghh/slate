@@ -162,9 +162,11 @@
   if (settingsForm) {
     const evalShow = () => {
       $$('[data-show-if]', settingsForm).forEach((row) => {
-        const [key, val] = row.dataset.showIf.split('=');
+        const neg = row.dataset.showIf.includes('!=');
+        const [key, val] = row.dataset.showIf.split(neg ? '!=' : '=');
         const ctl = $('[data-key="' + key + '"]', settingsForm);
-        row.hidden = ctl ? (ctl.type === 'checkbox' ? String(ctl.checked ? 1 : 0) !== val : ctl.value !== val) : false;
+        const cur = ctl ? (ctl.type === 'checkbox' ? String(ctl.checked ? 1 : 0) : ctl.value) : null;
+        row.hidden = ctl ? (neg ? cur === val : cur !== val) : false;
       });
     };
     settingsForm.addEventListener('change', evalShow);

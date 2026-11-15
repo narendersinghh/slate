@@ -84,5 +84,35 @@ $isSelf = (int)$u['id'] === Auth::id();
       <?php endif; ?>
     </div>
   </section>
+
+  <?php if (\Slate\Api::enabled() || \Slate\Api::keys((int)$u['id'])): $keys = \Slate\Api::keys((int)$u['id']); $newKey = \Slate\Session::takeValue('new_api_key'); ?>
+  <section class="card" id="api-keys">
+    <div class="card-head"><h2><?= icon('link', 16) ?> API keys</h2></div>
+    <div class="card-pad stack">
+      <?php if (!\Slate\Api::enabled()): ?><div class="alert"><?= icon('info', 16) ?> The REST API is switched off (Settings → Integrations → REST API). Existing keys do nothing until it is on.</div><?php endif; ?>
+      <?php if ($newKey): ?>
+        <div class="alert alert-success stack-sm"><strong><?= icon('check', 16) ?> Copy your new key now — it will not be shown again.</strong>
+          <code class="secret" style="user-select:all;word-break:break-all"><?= e($newKey) ?></code></div>
+      <?php endif; ?>
+      <p class="muted">Keys let apps and scripts use the API as you, with your permissions. Send them as <code>Authorization: Bearer &lt;key&gt;</code>.</p>
+      <?php if ($keys): ?>
+      <ul class="list list-compact">
+        <?php foreach ($keys as $k): ?>
+          <li><span class="list-main"><span><strong><?= e($k['name']) ?></strong>
+            <small><code>slt_<?= e($k['prefix']) ?>_…</code> · <?= $k['scope'] === 'write' ? 'Read &amp; write' : 'Read only' ?> · created <?= e(time_ago($k['created_at'])) ?> · <?= $k['last_used'] ? 'used ' . e(time_ago($k['last_used'])) : 'never used' ?></small></span></span>
+            <form method="post" action="<?= e(admin_url('profile/api-keys/' . (int)$k['id'] . '/revoke')) ?>"><?= csrf_field() ?>
+              <button class="btn btn-sm btn-danger" data-confirm="Revoke “<?= e($k['name']) ?>”? Apps using it stop working immediately.">Revoke</button></form></li>
+        <?php endforeach; ?>
+      </ul>
+      <?php endif; ?>
+      <form method="post" action="<?= e(admin_url('profile/api-keys')) ?>" class="inline-form">
+        <?= csrf_field() ?>
+        <input class="input" name="name" placeholder="What is it for? e.g. Mobile app" maxlength="100" required>
+        <select class="input" name="scope"><option value="read">Read only</option><option value="write">Read &amp; write</option></select>
+        <button class="btn btn-primary" type="submit">Create key</button>
+      </form>
+    </div>
+  </section>
+  <?php endif; ?>
   <?php endif; ?>
 </div>

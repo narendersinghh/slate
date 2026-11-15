@@ -33,6 +33,7 @@ final class App
             date_default_timezone_set('UTC');
         }
         self::headers();
+        Cron::maybeRunAfterRequest();
 
         Modules::boot();
         Theme::boot();
@@ -49,6 +50,12 @@ final class App
         if ($path === '/admin' || str_starts_with($path, '/admin/')) {
             Frontend::notFound();
             return;
+        }
+        if ($path === '/api/v1' || str_starts_with($path, '/api/v1/')) {
+            if (Api::enabled() || ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
+                Api::handle(substr($path, 7));
+                return;
+            }
         }
         Frontend::handle($path);
     }

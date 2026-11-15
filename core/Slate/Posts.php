@@ -251,6 +251,7 @@ final class Posts
             $termIds = DB::col('SELECT term_id FROM {{term_relationships}} WHERE post_id = :id', ['id' => $id]);
             DB::delete('term_relationships', ['post_id' => $id]);
             DB::delete('posts', ['id' => $id]);
+            Revisions::deleteFor($id);
             DB::query('UPDATE {{posts}} SET parent_id = NULL WHERE parent_id = :id', ['id' => $id]);
             Terms::recount($termIds);
         }

@@ -158,6 +158,85 @@ final class Auth
         return substr(hash('sha256', $user['password'] . ($user['totp_secret'] ?? '')), 0, 24);
     }
 
+    /** Run the rest of this request as $user (API keys, CLI). No session is created. */
+    public static function actAs(?array $user): void
+    {
+        if ($user) {
+            unset($user['password'], $user['totp_secret']);
+            $user['meta'] = is_array($user['meta'] ?? null) ? $user['meta'] : (json_decode((string)($user['meta'] ?? ''), true) ?: []);
+        }
+        self::$user = $user;
+        self::$resolved = true;
+    }
+
+    // ------------------------------------------------------------------ password reset
+
+    private const RESET_TTL = 3600;
+
+    /**
+     * Email a reset link to the account matching $login (username or email). Always behaves the same
+     * whether or not the account exists, so it cannot be used to discover accounts. Counts towards login lockout.
+     */
+    public static function requestReset(string $login): void
+    {
+        $login = trim($login);
+        if ($login === '' || self::isLockedOut()) {
+            return;
+        }
+        DB::insert('login_attempts', ['ip' => self::ip(), 'username' => mb_substr('reset:' . $login, 0, 191), 'attempted_at' => now()]);
+        $user = DB::row('SELECT * FROM {{users}} WHERE username = :l OR email = :l2 LIMIT 1', ['l' => $login, 'l2' => strtolower($login)]);
+        if (!$user || $user['status'] !== 'active') {
+            usleep(random_int(300000, 700000));
+            return;
+        }
+        $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $meta = json_decode((string)$user['meta'], true) ?: [];
+        $meta['reset'] = ['h' => hash('sha256', $token), 'exp' => time() + self::RESET_TTL];
+        DB::update('users', ['meta' => json_encode($meta)], ['id' => $user['id']]);
+        $link = site_url(admin_slug() . '/reset') . '?u=' . (int)$user['id'] . '&t=' . $token;
+        $site = (string)Options::get('site_title', 'Slate');
+        $html = '<p>Hi ' . e($user['display_name'] ?: $user['username']) . ',</p>'
+            . '<p>Someone asked to reset the password for your account on <strong>' . e($site) . '</strong>. '
+            . 'Use the button below within one hour to choose a new password.</p>'
+            . '<p><a href="' . e($link) . '" style="display:inline-block;background:#F26B2D;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:600">Choose a new password</a></p>'
+            . '<p style="color:#666;font-size:13px">If you did not ask for this, ignore this email — your password stays the same.<br>Request from IP ' . e(self::ip()) . '.</p>';
+        Mailer::send($user['email'], "Reset your password — $site", $html);
+        log_activity('password_reset_requested', $user['username']);
+    }
+
+    /** The user a reset link belongs to, if the link is valid and not expired. */
+    public static function resetUser(int $uid, string $token): ?array
+    {
+        if ($uid < 1 || $token === '' || strlen($token) > 100) {
+            return null;
+        }
+        $user = DB::row('SELECT * FROM {{users}} WHERE id = :id', ['id' => $uid]);
+        $r = $user ? (json_decode((string)$user['meta'], true) ?: [])['reset'] ?? null : null;
+        if (!$user || $user['status'] !== 'active' || !is_array($r) || (int)($r['exp'] ?? 0) < time()
+            || !hash_equals((string)($r['h'] ?? ''), hash('sha256', $token))) {
+            return null;
+        }
+        return $user;
+    }
+
+    /** Set a new password from a reset link. Returns an error message or null. Ends every other session. */
+    public static function completeReset(int $uid, string $token, string $password): ?string
+    {
+        $user = self::resetUser($uid, $token);
+        if (!$user) {
+            return 'This link is invalid or has expired. Request a new one.';
+        }
+        if ($problem = self::passwordProblems($password)) {
+            return $problem;
+        }
+        $meta = json_decode((string)$user['meta'], true) ?: [];
+        unset($meta['reset']);
+        DB::update('users', ['password' => self::hash($password), 'meta' => json_encode($meta)], ['id' => $uid]);
+        DB::query('DELETE FROM {{login_attempts}} WHERE ip = :ip', ['ip' => self::ip()]);
+        log_activity('password_reset', $user['username']);
+        return null;
+    }
+
     public static function algo(): string|int
     {
         return defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT;

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0 — Revisions, email, backups, scheduled tasks, REST API
+- **Revisions**: every editor save keeps the previous version (title, content, excerpt, custom fields, SEO); compare with a
+  line diff and restore in one click (restoring is undoable too). Settings → General → Writing & revisions (default 25 per item).
+- **Email**: one mail system for core and modules — the server's mail() or **SMTP** (STARTTLS/SSL, login), HTML + text,
+  test button. Settings → General → Email. `Slate\Mailer::send()`; `mail_send` filter lets a module deliver (e.g. an API service).
+- **Forgot password**: reset links by email (one hour, single use, never reveal whether an account exists, rate limited
+  with the login lockout); a reset signs the account out everywhere else.
+- **Backups**: database (pure PHP, works without mysqldump) and optional files archive in `content/backups/`; daily/weekly
+  schedule, retention, download, delete. `php bin/slate backup:create [--files] | backup:list | backup:restore <file>`
+  (restore makes a safety backup first).
+- **Scheduled tasks**: `cron_jobs` filter for core and modules; runs from a server cron (`php bin/slate cron`) or after
+  visits when none is set up. Built-in jobs: scheduled publishing, cleanup (old login attempts, activity log after N days,
+  stale temp files and AI drafts), automatic backups, module update checks. Settings → System → Scheduled tasks.
+- **REST API** at `/api/v1` (off by default): list/get content with filters and pagination, terms, menus, media; create,
+  update and delete with API keys (Profile → API keys; read or read & write, act with the user's permissions, shown once,
+  stored hashed); CORS allow-list; `api_routes` / `api_post` / `api_types` hooks.
+- Example module removed from the core; `modules/` ships empty.
+- Settings `show_if` supports `!=`.
+
 ## 0.7.0 — Modules live outside the core
 - Forms, Site Migration and Auto CPT Generator moved to [slate-modules](https://github.com/narendersinghh/slate-modules),
   which is also the default registry: install them from **Modules → Available**. Slate itself ships only the

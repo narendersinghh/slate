@@ -87,6 +87,27 @@ function admin_dispatch(string $path): void
         }
         admin_view('login', ['step' => 'login', 'error' => $res['error'] ?? 'Login failed.', 'login' => $login], false);
     });
+    $r->get('/forgot', static fn() => admin_view('password', ['mode' => 'forgot'], false));
+    $r->post('/forgot', static function () {
+        Auth::requestReset((string)input('login', ''));
+        admin_view('password', ['mode' => 'sent'], false);
+    });
+    $r->get('/reset', static function () {
+        $uid = (int)($_GET['u'] ?? 0);
+        $token = (string)($_GET['t'] ?? '');
+        header('Referrer-Policy: no-referrer');
+        admin_view('password', Auth::resetUser($uid, $token) ? ['mode' => 'reset', 'uid' => $uid, 'token' => $token] : ['mode' => 'invalid'], false);
+    });
+    $r->post('/reset', static function () {
+        $uid = (int)input('u', 0);
+        $token = (string)input('t', '');
+        $pw = (string)input('password', '');
+        $err = $pw !== (string)input('password2', '') ? 'The two passwords do not match.' : Auth::completeReset($uid, $token, $pw);
+        if ($err === null) {
+            redirect(admin_url('login') . '?reset=1');
+        }
+        admin_view('password', Auth::resetUser($uid, $token) ? ['mode' => 'reset', 'uid' => $uid, 'token' => $token, 'error' => $err] : ['mode' => 'invalid'], false);
+    });
     $r->get('/logout', static function () {
         if (Csrf::valid($_GET['_csrf'] ?? null)) {
             log_activity('logout');
@@ -274,6 +295,107 @@ function admin_dispatch(string $path): void
         admin_view('user-edit', ['user' => $user, 'profile' => true, 'title' => 'Your profile']);
     });
     $r->post('/profile', static fn() => admin_save_user(true));
+    $r->post('/profile/api-keys', static function () {
+        Auth::require('access_admin');
+        $token = \Slate\Api::createKey(Auth::id(), (string)input('name', ''), (string)input('scope', 'read'));
+        Session::putValue('new_api_key', $token);
+        redirect(admin_url('profile') . '#api-keys');
+    });
+    $r->post('/profile/api-keys/{id:\d+}/revoke', static function (string $id) {
+        Auth::require('access_admin');
+        \Slate\Api::revokeKey((int)$id, Auth::id());
+        Session::flash('success', 'API key revoked.');
+        redirect(admin_url('profile') . '#api-keys');
+    });
+
+    // ---------- Email, backups, scheduled tasks ----------
+    $r->post('/system/email/test', static function () {
+        admin_require_settings('general');
+        $to = trim((string)input('test_to', ''));
+        $ok = \Slate\Mailer::send($to, 'Test email from ' . Options::get('site_title', 'Slate'),
+            '<p>This is a test email from <strong>' . e((string)Options::get('site_title', 'Slate')) . '</strong>.</p><p>If you can read this, email delivery works.</p>');
+        Session::flash($ok ? 'success' : 'error', $ok ? "Test email sent to $to. Check the inbox (and spam folder)." : 'Sending failed: ' . \Slate\Mailer::lastError());
+        redirect(admin_url('settings/general/email'));
+    });
+    $r->post('/system/backups/create', static function () {
+        Auth::require('manage_updates');
+        $res = \Slate\Backup::create(!empty($_GET['files']));
+        if ($res['ok']) {
+            \Slate\Backup::prune();
+        }
+        Session::flash($res['ok'] ? 'success' : 'error', $res['ok'] ? 'Backup created: ' . implode(', ', array_map('basename', $res['files'])) : 'Backup failed: ' . $res['error']);
+        redirect(admin_url('settings/system/backups'));
+    });
+    $r->get('/system/backups/download/{name}', static function (string $name) {
+        Auth::require('manage_updates');
+        $file = \Slate\Backup::path($name) ?? admin_404();
+        log_activity('backup_downloaded', $name);
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: ' . (str_ends_with($name, '.zip') ? 'application/zip' : 'application/gzip'));
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        header('Content-Length: ' . filesize($file));
+        readfile($file);
+        exit;
+    });
+    $r->post('/system/backups/delete', static function () {
+        Auth::require('manage_updates');
+        $name = (string)input('backup', '');
+        $ok = \Slate\Backup::delete($name);
+        if ($ok) {
+            log_activity('backup_deleted', $name);
+        }
+        Session::flash($ok ? 'success' : 'error', $ok ? 'Backup deleted.' : 'Backup not found.');
+        redirect(admin_url('settings/system/backups'));
+    });
+    $r->post('/system/cron/run', static function () {
+        admin_require_settings('system');
+        $res = \Slate\Cron::run(false, 'admin');
+        $failed = array_filter($res, static fn($v) => $v !== 'ok' && $v !== 'skipped');
+        $ran = count(array_filter($res, static fn($v) => $v === 'ok'));
+        Session::flash($failed ? 'error' : 'success', $failed ? 'Some tasks failed: ' . implode('; ', array_map(static fn($k, $v) => "$k: $v", array_keys($failed), $failed))
+            : ($ran ? "$ran task(s) ran." : 'Nothing was due.'));
+        redirect(admin_url('settings/system/cron'));
+    });
+
+    // ---------- Revisions ----------
+    $r->get('/content/{type}/{id:\d+}/revisions', static function (string $type, string $id) {
+        Auth::require('edit_posts');
+        $def = ContentModel::type($type) ?? admin_404();
+        $post = Posts::find((int)$id);
+        if (!$post || $post['type'] !== $type) {
+            admin_404();
+        }
+        if (!admin_can_edit($post)) {
+            Auth::require('edit_others_posts');
+        }
+        $list = \Slate\Revisions::list((int)$id);
+        $revId = (int)($_GET['rev'] ?? ($list[0]['id'] ?? 0));
+        $rev = $revId ? \Slate\Revisions::find($revId) : null;
+        if ($rev && (int)$rev['post_id'] !== (int)$id) {
+            $rev = null;
+        }
+        admin_view('revisions', ['type' => $def, 'post' => $post, 'list' => $list, 'rev' => $rev, 'title' => 'Revisions: ' . ($post['title'] ?: '(no title)')]);
+    });
+    $r->post('/content/{type}/{id:\d+}/revisions/{rev:\d+}/restore', static function (string $type, string $id, string $rev) {
+        Auth::require('edit_posts');
+        $post = Posts::find((int)$id);
+        if (!$post || $post['type'] !== $type) {
+            admin_404();
+        }
+        if (!admin_can_edit($post)) {
+            Auth::require('edit_others_posts');
+        }
+        $r = \Slate\Revisions::find((int)$rev);
+        if (!$r || (int)$r['post_id'] !== (int)$id || !\Slate\Revisions::restore((int)$rev)) {
+            Session::flash('error', 'Could not restore that revision.');
+        } else {
+            log_activity('revision_restored', "$type:{$post['title']}");
+            Session::flash('success', 'Revision restored. The version you replaced was kept as a revision too.');
+        }
+        redirect(admin_url("content/$type/$id"));
+    });
     $r->post('/profile/2fa', static function () {
         Auth::require('access_admin');
         if (input('disable')) {
@@ -947,6 +1069,9 @@ function admin_save_post(string $type): void
         $msg = 'Required: ' . implode(', ', $missing);
         is_ajax() ? json_response(['ok' => false, 'error' => $msg], 422) : Session::flash('error', $msg);
         back();
+    }
+    if ($existing) {
+        \Slate\Revisions::snapshot($existing, $data);
     }
     $newId = Posts::save($data, $id);
     $post = Posts::find($newId);

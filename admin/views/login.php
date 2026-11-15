@@ -14,6 +14,7 @@ require __DIR__ . '/partials/auth-head.php';
       <p class="muted"><?= $step === '2fa' ? 'Enter the 6-digit code from your authenticator app.' : 'Sign in to manage your website.' ?></p>
     </div>
     <?php if (!empty($error)): ?><div class="alert alert-error" role="alert"><?= icon('alert', 16) ?> <?= e($error) ?></div><?php endif; ?>
+    <?php if (isset($_GET['reset']) && empty($error)): ?><div class="alert alert-success" role="status"><?= icon('check', 16) ?> Password changed. Sign in with your new password.</div><?php endif; ?>
     <form method="post" action="<?= e(admin_url('login')) ?>" class="stack">
       <?= csrf_field() ?>
       <input type="hidden" name="redirect" value="<?= e($_GET['redirect'] ?? $_POST['redirect'] ?? '') ?>">
@@ -25,7 +26,7 @@ require __DIR__ . '/partials/auth-head.php';
         <label class="field"><span>Username or email</span>
           <input class="input input-lg" name="login" value="<?= e($login ?? '') ?>" autocomplete="username" required autofocus>
         </label>
-        <label class="field"><span>Password</span>
+        <label class="field"><span>Password <a class="small" href="<?= e(admin_url('forgot')) ?>" tabindex="-1">Forgot password?</a></span>
           <span class="input-group">
             <input class="input input-lg" type="password" name="password" autocomplete="current-password" required>
             <button class="btn btn-ghost" type="button" onclick="var i=this.previousElementSibling;i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'Show':'Hide'">Show</button>

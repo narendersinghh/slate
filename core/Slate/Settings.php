@@ -55,6 +55,23 @@ final class Settings
                     ['key' => 'time_format', 'type' => 'text', 'label' => 'Time format', 'default' => 'g:i a'],
                     ['key' => 'language', 'type' => 'text', 'label' => 'Site language (HTML lang)', 'default' => 'en'],
                 ]],
+                'writing' => ['label' => 'Writing & revisions', 'fields' => [
+                    ['key' => 'revisions_keep', 'type' => 'number', 'label' => 'Revisions kept per item', 'default' => 25, 'min' => 0, 'max' => 500,
+                        'help' => 'Every save in the editor keeps the previous version so it can be compared and restored. 0 turns revisions off.'],
+                ]],
+                'email' => ['label' => 'Email', 'render' => 'email', 'fields' => [
+                    ['key' => 'mail_from_name', 'type' => 'text', 'label' => 'From name', 'default' => '', 'help' => 'Defaults to the site title.'],
+                    ['key' => 'mail_from_email', 'type' => 'email', 'label' => 'From address', 'default' => '',
+                        'help' => 'An address on your own domain (e.g. no-reply@yourdomain.com), so mail is not marked as spam. Defaults to no-reply@ your site domain.'],
+                    ['key' => 'mail_transport', 'type' => 'select', 'label' => 'Send with', 'default' => 'php',
+                        'options' => ['php' => 'This server (PHP mail)', 'smtp' => 'SMTP server (recommended)']],
+                    ['key' => 'smtp_host', 'type' => 'text', 'label' => 'SMTP host', 'default' => '', 'placeholder' => 'smtp.hostinger.com', 'show_if' => 'mail_transport=smtp'],
+                    ['key' => 'smtp_port', 'type' => 'number', 'label' => 'Port', 'default' => 587, 'min' => 1, 'max' => 65535, 'show_if' => 'mail_transport=smtp'],
+                    ['key' => 'smtp_encryption', 'type' => 'select', 'label' => 'Encryption', 'default' => 'tls', 'show_if' => 'mail_transport=smtp',
+                        'options' => ['tls' => 'STARTTLS (port 587)', 'ssl' => 'SSL/TLS (port 465)', 'none' => 'None (not recommended)']],
+                    ['key' => 'smtp_user', 'type' => 'text', 'label' => 'Username', 'default' => '', 'show_if' => 'mail_transport=smtp'],
+                    ['key' => 'smtp_pass', 'type' => 'secret', 'label' => 'Password', 'default' => '', 'help' => 'Stored encrypted.', 'show_if' => 'mail_transport=smtp'],
+                ]],
                 'users' => ['label' => 'Users & registration', 'fields' => [
                     ['key' => 'registration_enabled', 'type' => 'toggle', 'label' => 'Anyone can register', 'default' => false],
                     ['key' => 'default_role', 'type' => 'select', 'label' => 'New user default role', 'default' => 'subscriber', 'options' => 'roles'],
@@ -116,6 +133,13 @@ final class Settings
             ]],
 
             'integrations' => ['label' => 'Integrations', 'icon' => 'plug', 'sections' => [
+                'api' => ['label' => 'REST API', 'render' => 'api', 'fields' => [
+                    ['key' => 'api_enabled', 'type' => 'toggle', 'label' => 'Enable the REST API (/api/v1)', 'default' => false,
+                        'help' => 'For headless front-ends, mobile apps and integrations. Writing always needs an API key (Profile → API keys).'],
+                    ['key' => 'api_public_read', 'type' => 'toggle', 'label' => 'Allow reading published content without a key', 'default' => true, 'show_if' => 'api_enabled=1'],
+                    ['key' => 'api_cors', 'type' => 'text', 'label' => 'Allowed origins (CORS)', 'default' => '', 'placeholder' => 'https://app.example.com',
+                        'help' => 'Websites allowed to call the API from a browser, separated by spaces. * allows any. Empty: none.', 'show_if' => 'api_enabled=1'],
+                ]],
                 'google' => ['label' => 'Google', 'fields' => [
                     ['key' => 'gtm_id', 'type' => 'text', 'label' => 'Google Tag Manager container ID', 'placeholder' => 'GTM-XXXXXXX', 'default' => '', 'pattern' => '^GTM-[A-Z0-9]+$'],
                     ['key' => 'ga4_id', 'type' => 'text', 'label' => 'Google Analytics 4 measurement ID', 'placeholder' => 'G-XXXXXXXXXX', 'default' => '', 'pattern' => '^G-[A-Z0-9]+$',
@@ -194,7 +218,9 @@ final class Settings
                     ['key' => 'security_hsts', 'type' => 'toggle', 'label' => 'HSTS (Strict-Transport-Security)', 'help' => 'Only enable when the whole site works over HTTPS.', 'default' => false],
                     ['key' => 'security_trust_proxy', 'type' => 'toggle', 'label' => 'Behind a proxy / CDN (trust X-Forwarded-For)', 'default' => false],
                 ]],
-                'activity' => ['label' => 'Activity log', 'render' => 'activity'],
+                'activity' => ['label' => 'Activity log', 'render' => 'activity', 'fields' => [
+                    ['key' => 'activity_keep_days', 'type' => 'number', 'label' => 'Keep activity for (days)', 'default' => 180, 'min' => 7, 'max' => 3650],
+                ]],
             ]],
 
             'ai' => ['label' => 'AI', 'icon' => 'sparkles', 'sections' => [
@@ -221,6 +247,17 @@ final class Settings
                         'options' => ['stable' => 'Stable releases only', 'beta' => 'Include pre-releases']],
                     ['key' => 'update_token', 'type' => 'secret', 'label' => 'GitHub token (private repos only)', 'default' => ''],
                     ['key' => 'update_auto_check', 'type' => 'toggle', 'label' => 'Check for updates automatically (every 12h)', 'default' => true],
+                ]],
+                'backups' => ['label' => 'Backups', 'render' => 'backups', 'fields' => [
+                    ['key' => 'backups_schedule', 'type' => 'select', 'label' => 'Automatic backups', 'default' => 'off',
+                        'options' => ['off' => 'Off', 'daily' => 'Daily', 'weekly' => 'Weekly']],
+                    ['key' => 'backups_include_files', 'type' => 'toggle', 'label' => 'Include files in automatic backups', 'default' => false,
+                        'help' => 'Uploads, modules, themes and config.php. Can be large; the database alone is enough to restore content.', 'show_if' => 'backups_schedule!=off'],
+                    ['key' => 'backups_keep', 'type' => 'number', 'label' => 'Backups to keep (of each kind)', 'default' => 7, 'min' => 1, 'max' => 100],
+                ]],
+                'cron' => ['label' => 'Scheduled tasks', 'render' => 'cron', 'fields' => [
+                    ['key' => 'cron_visitor_trigger', 'type' => 'toggle', 'label' => 'Run tasks after visits when no server cron is set up', 'default' => true,
+                        'help' => 'A server cron job is more reliable: it runs on time even when nobody visits.'],
                 ]],
                 'maintenance' => ['label' => 'Maintenance mode', 'fields' => [
                     ['key' => 'maintenance_mode', 'type' => 'toggle', 'label' => 'Enable maintenance mode', 'help' => 'Visitors get a 503 page; logged-in team members see the site.', 'default' => false],

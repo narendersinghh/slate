@@ -110,6 +110,9 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
           <div class="meta-list">
             <div><span>Created</span><span><?= e(local_date($post['created_at'], 'M j, Y g:i a')) ?></span></div>
             <div><span>Updated</span><span data-updated><?= e(time_ago($post['updated_at'])) ?></span></div>
+            <?php if ($revCount = \Slate\Revisions::count((int)$post['id'])): ?>
+            <div><span>Revisions</span><span><a href="<?= e(admin_url("content/$slug/{$post['id']}/revisions")) ?>"><?= $revCount ?> · compare</a></span></div>
+            <?php endif; ?>
           </div>
           <div class="side-links">
             <button type="submit" class="link" formaction="<?= e(admin_url("content/$slug/{$post['id']}/duplicate")) ?>"><?= icon('copy', 14) ?> Duplicate</button>

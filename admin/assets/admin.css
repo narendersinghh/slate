@@ -828,3 +828,17 @@ label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; c
 .rr-rich-area p { margin: 0 0 .6em; }
 .repeater-row label.field[hidden] { display: none; }
 .ed-form-widget::before { content: "☑ Form widget · "; color: var(--accent); }
+
+/* Revisions */
+.revisions-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+.revisions-list { position: sticky; top: 80px; max-height: calc(100vh - 110px); overflow: auto; }
+.revisions-list li.active { background: var(--accent-soft); }
+.diff { font: 12.5px/1.6 var(--mono); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: auto; max-height: 520px; background: var(--surface-2); }
+.diff > div { padding: 1px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff > div > span { display: inline-block; width: 16px; color: var(--muted); user-select: none; }
+.diff-add, .diff-legend.diff-add { background: var(--success-soft); color: var(--success); }
+.diff-del, .diff-legend.diff-del { background: var(--danger-soft); color: var(--danger); }
+.diff-eq { color: var(--muted); }
+.diff-gap { color: var(--muted); text-align: center; background: var(--surface-3); font-size: 11px; }
+.diff-legend { padding: 1px 8px; border-radius: 6px; margin-right: 6px; }
+@media (max-width: 860px) { .revisions-layout { grid-template-columns: 1fr; } .revisions-list { position: static; max-height: 260px; } }

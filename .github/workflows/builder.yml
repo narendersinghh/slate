@@ -1,0 +1,74 @@
+# Visual builder end-to-end test (drag, style, undo, save, reload, visitor output, screenshots).
+# Dependabot patch updates merge into develop automatically when this passes; minor/major updates wait for a person.
+name: Builder test
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, gd, zip, curl, mbstring
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Use the library versions from package.json (as the release will)
+        run: npm run vendor
+      - run: npx playwright install --with-deps chromium
+      - name: Install a throwaway Slate site
+        run: php bin/ci-install http://127.0.0.1:8000
+        env:
+          SLATE_CI_PASS: ci-password-123
+      - name: Start PHP
+        run: PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000 dev-server.php > php.log 2>&1 &
+      - run: npx playwright test tests/builder.spec.mjs
+        env:
+          SLATE_URL: http://127.0.0.1:8000
+          SLATE_PASS: ci-password-123
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: builder-screens
+          path: |
+            test-results/
+            playwright-report/
+            php.log
+          retention-days: 14
+
+  automerge:
+    # Only Dependabot, only patch versions, only after the test above passed.
+    needs: test
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && github.base_ref == 'develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@v2
+      - if: steps.meta.outputs.update-type == 'version-update:semver-patch'
+        run: gh pr merge --squash "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - if: steps.meta.outputs.update-type != 'version-update:semver-patch'
+        run: gh pr comment "$PR" --body "Tests passed. This is a ${UPDATE#version-update:semver-} update, so it waits for a person to review and merge."
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          UPDATE: ${{ steps.meta.outputs.update-type }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

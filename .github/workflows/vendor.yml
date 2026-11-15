@@ -1,0 +1,32 @@
+# After a dependency update lands on develop, copy the new browser files into admin/assets/vendor/ and commit them,
+# so the site keeps running without Node. Never touches main.
+name: Refresh vendored files
+
+on:
+  push:
+    branches: [develop]
+    paths: [package.json, package-lock.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts --omit=dev
+      - run: npm run vendor
+      - name: Commit if anything changed
+        run: |
+          if [ -n "$(git status --porcelain admin/assets/vendor)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add admin/assets/vendor
+            git commit -m "Refresh vendored browser libraries ($(cat admin/assets/vendor/grapesjs/VERSION | tr -d '\n'))"
+            git push
+          fi

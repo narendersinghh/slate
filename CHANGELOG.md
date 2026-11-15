@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0 — Hooks for modules
+- `<html>` language and direction from `html_attrs()` / `html_lang` / `html_dir` filters (themes and Templates use it).
+- Routing: `Frontend::resolving()`, `route_resolved` action (redirect/404 before rendering), `frontend_vars` filter.
+- `Frontend::page()` and `Frontend::content()` render module pages through the theme and the normal output pipeline;
+  `Theme::wrap()` never nests `<main>` when the theme's header already opens one (also fixes admin Templates on such themes).
+- Sitemaps: `sitemap_posts`, `sitemap_entry`, `sitemap_urlset` filters (e.g. hreflang alternates).
+- Menus: `menu_item` filter.
+- Fix: saving or deleting a custom-field group no longer stores groups that modules add at runtime.
+- Multilingual 1.1 and Shop 1.1 use these hooks (no more workarounds).
+
 ## 0.11.0 — Module foundations
 - `Posts::query(['fields' => […]])`: filter by custom-field values (null = not set), portable via `DB::jsonField()`.
 - `posts_query_args` and `posts_query_sql` hooks: modules can add conditions to every content query (used by Multilingual).

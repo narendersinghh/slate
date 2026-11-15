@@ -1,5 +1,5 @@
 <?php
-// Install a throwaway Slate site for CI (SQLite). Usage: SLATE_CI_PASS=… php tests/ci-install.php http://127.0.0.1:8000
+// Install a throwaway Slate site for CI (SQLite). Usage: SLATE_CI_PASS=… php bin/ci-install http://127.0.0.1:8000
 declare(strict_types=1);
 if (PHP_SAPI !== 'cli') {
     exit(1);

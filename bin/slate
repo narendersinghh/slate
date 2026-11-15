@@ -85,7 +85,7 @@ switch ($cmd) {
         }
         $r = \Slate\ModuleInstaller::fromFiles($slug, \Slate\ModuleBuilder::scaffold($slug, (string)($opts['name'] ?? ucwords(str_replace('-', ' ', $slug))),
             (string)($opts['description'] ?? ''), true));
-        $r['ok'] ? $out("✓ Created modules/$slug/ — edit module.php, then: php bin/slate module:activate $slug") : $fail($r['error']);
+        $r['ok'] ? $out("✓ Created modules/$slug/, edit module.php, then: php bin/slate module:activate $slug") : $fail($r['error']);
         break;
 
     case 'module:install':
@@ -134,7 +134,7 @@ switch ($cmd) {
             $fail("Cannot write $to");
         }
         \Slate\Updater::rrmdir(dirname($file));
-        $out("✓ Exported $arg to $to — install it elsewhere with: php bin/slate module:install $to");
+        $out("✓ Exported $arg to $to, install it elsewhere with: php bin/slate module:install $to");
         break;
 
     case 'module:check':
@@ -147,7 +147,7 @@ switch ($cmd) {
             $out("  ✕ $e");
         }
         foreach ($scan['findings'] as $f) {
-            $out(sprintf('  [%s] %s — %s', $f['risk'], $f['label'], implode(', ', $f['where'])));
+            $out(sprintf('  [%s] %s, %s', $f['risk'], $f['label'], implode(', ', $f['where'])));
         }
         if (!$scan['errors'] && !$scan['findings']) {
             $out('  Nothing notable.');
@@ -199,7 +199,7 @@ switch ($cmd) {
         $r = \Slate\Integrity::check(!empty($opts['notify']));
         $out(($r['official'] ? "Core verified against GitHub ({$r['official']})" : 'Official file list unavailable; compared with the trusted snapshot') . " · {$r['files']} files");
         foreach ($r['issues'] as $i) {
-            $out(sprintf('  [%s] %-9s %s — %s', $i['level'], $i['kind'], $i['path'], $i['detail']));
+            $out(sprintf('  [%s] %-9s %s, %s', $i['level'], $i['kind'], $i['path'], $i['detail']));
         }
         $out($r['issues'] ? count($r['issues']) . ' finding(s).' : '✓ No unexpected file changes.');
         exit(array_filter($r['issues'], static fn($i) => $i['level'] === 'danger') ? 2 : 0);

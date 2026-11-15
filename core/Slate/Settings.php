@@ -381,6 +381,7 @@ final class Settings
             'timezones' => array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()),
             'roles' => array_map(static fn($r) => $r['label'], Roles::all()),
             'themes' => Theme::available(),
+            'post_types' => array_map(static fn($t) => $t['plural'], ContentModel::types()),
             'ai_providers' => array_map(static fn($p) => $p['label'], Ai::PRESETS),
             default => [],
         };
@@ -406,6 +407,7 @@ final class Settings
                 'media' => $raw ? (int)$raw : null,
                 'secret' => null,
                 'email' => trim((string)$raw),
+                'checkboxes' => array_values(array_intersect(array_map('strval', (array)$raw), array_map('strval', array_keys(self::options($f['options']))))),
                 default => is_string($raw) ? str_replace("\r\n", "\n", $raw) : '',
             };
             if ($f['type'] === 'secret') {

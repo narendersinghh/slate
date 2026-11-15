@@ -30,7 +30,7 @@ Modules::settings([
 ```
 
 Field types: `text`, `email`, `url`, `number` (`min`, `max`, `step`, `suffix`), `textarea` / `code` (`rows`),
-`toggle`, `select` (`options` array), `secret` (stored encrypted; read it with `Crypto::decrypt(Options::get(key))`),
+`toggle`, `select` (`options` array), `checkboxes` (several choices from `options`, saved as an array), `secret` (stored encrypted; read it with `Crypto::decrypt(Options::get(key))`),
 `media`, `color`, plus `heading` (group title) and `info` (a note). `show_if` => `'key=value'` / `'key!=value'`
 shows a field only when another field matches. Values are read with `Options::get('key')`.
 Prefix every key with your module (`shop_`), and keep labels short with the detail in `help`.

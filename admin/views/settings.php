@@ -98,6 +98,12 @@ $tabDef = $tabs[$tab] ?? null;
                 <?php foreach ($opts as $ov => $ol): ?><option value="<?= e($ov) ?>"<?= (string)$val === (string)$ov ? ' selected' : '' ?>><?= e($ol) ?></option><?php endforeach; ?>
               </select>
               <?php break;
+            case 'checkboxes': $opts = Settings::options($f['options']); $cur = array_map('strval', (array)$val); ?>
+              <input type="hidden" name="<?= e($name) ?>[]" value="">
+              <div class="choice-list">
+                <?php foreach ($opts as $ov => $ol): ?><label class="choice"><input type="checkbox" name="<?= e($name) ?>[]" value="<?= e($ov) ?>"<?= in_array((string)$ov, $cur, true) ? ' checked' : '' ?>> <?= e($ol) ?></label><?php endforeach; ?>
+              </div>
+              <?php break;
             case 'textarea': case 'code': ?>
               <textarea class="input<?= $f['type'] === 'code' ? ' code' : '' ?>" id="s_<?= e($key) ?>" name="<?= e($name) ?>" rows="<?= (int)($f['rows'] ?? 4) ?>"<?= $f['type'] === 'code' ? ' spellcheck="false"' : '' ?><?= !empty($f['counter']) ? ' data-count="' . (int)$f['counter'] . '"' : '' ?><?= !empty($f['placeholder']) ? ' placeholder="' . e($f['placeholder']) . '"' : '' ?>><?= e((string)$val) ?></textarea>
               <?php break;

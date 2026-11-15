@@ -10,6 +10,6 @@
     "grapesjs": "0.23.8"
   },
   "devDependencies": {
-    "@playwright/test": "1.49.1"
+    "@playwright/test": "1.64.1"
   }
 }

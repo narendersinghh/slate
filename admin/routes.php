@@ -1034,7 +1034,9 @@ function admin_dispatch(string $path): void
         Auth::require($page['cap']);
         ob_start();
         ($page['render'])();
-        admin_view('module-page', ['html' => ob_get_clean(), 'title' => $page['label']]);
+        $group = Modules::adminGroups()[$page['module'] ?? ''] ?? null;
+        admin_view('module-page', ['html' => ob_get_clean(), 'title' => $page['label'],
+            'module' => $group && $group['name'] !== $page['label'] ? $group['name'] : '']);
     });
 
     // ---------- Settings ----------

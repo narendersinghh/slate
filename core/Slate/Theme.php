@@ -68,6 +68,20 @@ final class Theme
         throw new \RuntimeException('Theme "' . self::active() . '" has no index.php template.');
     }
 
+    /**
+     * Print header partial + $body + footer partial. $body is wrapped in <main id="content"> unless the theme's header
+     * already opens <main> itself (so pages never end up with nested <main> elements).
+     */
+    public static function wrap(string $body): void
+    {
+        ob_start();
+        self::partial('header');
+        $header = (string)ob_get_clean();
+        echo $header;
+        echo stripos($header, '<main') === false ? '<main id="content" class="site-main">' . $body . '</main>' : $body;
+        self::partial('footer');
+    }
+
     public static function partial(string $name, array $vars = []): void
     {
         $file = self::path('partials/' . preg_replace('/[^a-z0-9_-]/i', '', $name) . '.php');

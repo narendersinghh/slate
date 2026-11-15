@@ -143,9 +143,7 @@ final class Templates
             return (string)ob_get_clean();
         }
         ob_start();
-        Theme::partial('header');
-        echo '<main id="content" class="site-main">' . $body . '</main>';
-        Theme::partial('footer');
+        Theme::wrap($body);
         return (string)ob_get_clean();
     }
 

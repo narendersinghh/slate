@@ -283,9 +283,7 @@ final class Frontend
         self::$data = array_merge(self::$data, $vars, ['kind' => $kind]);
         Hooks::action('route_resolved', $kind, $vars);
         ob_start();
-        Theme::partial('header');
-        echo '<main id="content" class="site-main">' . $html . '</main>';
-        Theme::partial('footer');
+        Theme::wrap($html);
         self::finish((string)ob_get_clean());
     }
 

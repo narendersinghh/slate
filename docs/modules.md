@@ -89,6 +89,7 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `the_content` | filter | `string $html, array $post` → html |
 | `html_output` | filter | full page HTML → html |
 | `permalink`, `term_link` | filter | url of a post / term |
+| `menu_item` | filter | `$item, ?$post, ?$term` → one resolved menu item (url, label, children) |
 | `html_lang`, `html_dir` | filter | `<html lang>` / `dir` (themes print `<html <?= html_attrs() ?>>`) |
 | `route_resolved` | action | `$kind, $vars` — the URL is resolved, nothing rendered yet: redirect or 404 here |
 | `frontend_vars` | filter | `$vars, $kind` → variables passed to the theme/template |

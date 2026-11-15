@@ -86,6 +86,9 @@ final class Menus
                     $it['label'] = $it['label'] ?: $t['name'];
                 }
                 $it['children'] = $map($it['children'] ?? []);
+                // Modules can change any item (e.g. point to the translation in the current language).
+                $it = (array)Hooks::filter('menu_item', $it, $p ?? null, $t ?? null);
+                unset($p, $t);
             }
             return $items;
         };

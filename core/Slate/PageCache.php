@@ -94,6 +94,7 @@ final class PageCache
         if (!Options::get('cache_pages', true)) {
             @unlink(self::DIR . '/.enabled');
         }
+        @unlink(self::DIR . '/.headers');
         return $n;
     }
 
@@ -103,14 +104,56 @@ final class PageCache
         return ['count' => count($files), 'size' => array_sum(array_map('filesize', $files))];
     }
 
-    public static function securityHeaders(): void
+    /** Default Content-Security-Policy: blocks clickjacking, <base> hijacking and plugins without restricting scripts. */
+    public const DEFAULT_CSP = "base-uri 'self'; object-src 'none'; frame-ancestors 'self'";
+
+    /** Security headers from the Settings → Security options (needs the database). */
+    public static function headerLines(): array
     {
-        if (is_file(self::DIR . '/.noheaders')) {
-            return;
+        $lines = [];
+        if (Options::get('security_headers', true)) {
+            $lines[] = 'X-Content-Type-Options: nosniff';
+            $lines[] = 'X-Frame-Options: SAMEORIGIN';
+            $lines[] = 'Referrer-Policy: strict-origin-when-cross-origin';
+            $lines[] = 'Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()';
+            $lines[] = 'Cross-Origin-Opener-Policy: same-origin-allow-popups';
+            $csp = trim(preg_replace('/\s+/', ' ', (string)Options::get('security_csp', self::DEFAULT_CSP)));
+            if ($csp !== '') {
+                $lines[] = 'Content-Security-Policy: ' . $csp;
+            }
         }
-        header('X-Content-Type-Options: nosniff');
-        header('X-Frame-Options: SAMEORIGIN');
-        header('Referrer-Policy: strict-origin-when-cross-origin');
-        header('Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()');
+        if (Options::get('security_hsts') && is_https()) {
+            $lines[] = 'Strict-Transport-Security: max-age=31536000; includeSubDomains';
+        }
+        return $lines;
+    }
+
+    /**
+     * Send the security headers. With the database loaded they come from the settings and are
+     * remembered in a small file, so cached pages (served before the database connects) send the same ones.
+     */
+    public static function securityHeaders(?array $lines = null): void
+    {
+        $file = self::DIR . '/.headers';
+        if ($lines === null) {
+            $lines = is_file($file) ? json_decode((string)@file_get_contents($file), true) : null;
+            if (!is_array($lines)) {
+                return; // Not known yet: the next uncached request writes it.
+            }
+        } else {
+            $json = json_encode(array_values($lines));
+            if (!is_file($file) || @file_get_contents($file) !== $json) {
+                if (!is_dir(self::DIR)) {
+                    @mkdir(self::DIR, 0755, true);
+                }
+                @file_put_contents($file, $json, LOCK_EX);
+            }
+        }
+        header_remove('X-Powered-By');
+        foreach ($lines as $line) {
+            if (is_string($line) && !preg_match('/[\r\n]/', $line)) {
+                header($line);
+            }
+        }
     }
 }

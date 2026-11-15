@@ -64,7 +64,15 @@ final class Auth
     {
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
         if (Options::get('security_trust_proxy') && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            $ip = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
+            // The right-most entry is the one added by the proxy in front of us; entries to its
+            // left come from the client and can be forged, so they must never be trusted.
+            $hops = array_reverse(array_map('trim', explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR'])));
+            foreach ($hops as $hop) {
+                if (filter_var($hop, FILTER_VALIDATE_IP)) {
+                    $ip = $hop;
+                    break;
+                }
+            }
         }
         return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
     }

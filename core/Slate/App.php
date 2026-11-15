@@ -72,12 +72,7 @@ final class App
     private static function headers(): void
     {
         header_remove('X-Powered-By');
-        if (Options::get('security_headers', true)) {
-            PageCache::securityHeaders();
-        }
-        if (Options::get('security_hsts') && is_https()) {
-            header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
-        }
+        PageCache::securityHeaders(PageCache::headerLines());
         if (Options::get('seo_noindex_site')) {
             header('X-Robots-Tag: noindex, nofollow');
         }

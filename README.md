@@ -33,7 +33,7 @@ the email. Place it with the **☑ Form** button in any rich-text editor, a *For
 **Templates** in the sidebar lets you design every page type without touching theme files: single pages for each post
 type, archives, taxonomy archives, 404 and search. Write HTML with simple tags — `{{title}}`, `{{{content}}}`,
 `{{field:tagline}}`, `{{field:photo|image}}`, `{{#each field:faqs}}{{item:question}}{{/each}}`,
-`{{#query type=leaders limit=6}}…{{/query}}`, `{{#posts}}…{{/posts}}` — plus optional CSS. “Reset to starter” builds a
+`{{#query type=product limit=6}}…{{/query}}`, `{{#posts}}…{{/posts}}` — plus optional CSS. “Reset to starter” builds a
 template that already shows every custom field. Preview it, then switch it **Active**.
 
 ## Migrating a WordPress site

@@ -7,9 +7,9 @@ namespace Slate;
  * Site-wide templates managed in the admin (Templates): HTML + simple tags, no PHP.
  *
  * Kinds & targets:
- *   single  : <post type>   e.g. single/leaders, single/page, single/post
- *   archive : <post type>   listing at /books/, blog listing (post)
- *   term    : <taxonomy>    e.g. term/category, term/nationality
+ *   single  : <post type>   e.g. single/product, single/page, single/post
+ *   archive : <post type>   listing at /products/, blog listing (post)
+ *   term    : <taxonomy>    e.g. term/category, term/brand
  *   special : 404 | search
  *
  * Tags (all output is HTML-escaped unless written with triple braces {{{ }}}):
@@ -29,7 +29,7 @@ namespace Slate;
  *   {{#each terms:taxonomy}} {{item.name}} {{item.url}} {{item.count}} {{/each}}
  *   {{#each related:field}} … post tags … {{/each}}      (relationship field posts)
  *   {{#posts}} … post tags … {{else}} No items {{/posts}}  (items of the current archive / term / search)
- *   {{#query type=leaders limit=6 orderby=title order=asc term=role:keynote-speaker}} … {{/query}}
+ *   {{#query type=product limit=6 orderby=title order=asc term=category:featured}} … {{/query}}
  */
 final class Templates
 {

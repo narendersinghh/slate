@@ -18,8 +18,11 @@ final class Session
         $lifetime = (DB::connected() ? (int)Options::get('security_session_hours', 12) : 12) * 3600;
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
-        ini_set('session.sid_length', '48');
-        ini_set('session.sid_bits_per_character', '6');
+        if (PHP_VERSION_ID < 80400) {
+            // Deprecated (and already strong by default) on PHP 8.4+.
+            ini_set('session.sid_length', '48');
+            ini_set('session.sid_bits_per_character', '6');
+        }
         ini_set('session.gc_maxlifetime', (string)$lifetime);
         session_name(self::NAME);
         session_set_cookie_params([

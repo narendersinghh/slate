@@ -188,7 +188,9 @@ final class Settings
                     ['key' => 'security_require_2fa', 'type' => 'toggle', 'label' => 'Require two-factor auth for administrators', 'default' => false],
                 ]],
                 'headers' => ['label' => 'HTTP security headers', 'fields' => [
-                    ['key' => 'security_headers', 'type' => 'toggle', 'label' => 'Send security headers', 'help' => 'X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy.', 'default' => true],
+                    ['key' => 'security_headers', 'type' => 'toggle', 'label' => 'Send security headers', 'help' => 'X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy and the Content-Security-Policy below.', 'default' => true],
+                    ['key' => 'security_csp', 'type' => 'textarea', 'label' => 'Content-Security-Policy', 'rows' => 3, 'default' => \Slate\PageCache::DEFAULT_CSP,
+                        'help' => 'Sent on public pages. The default stops clickjacking and <base>/plugin injection without blocking scripts. Tighten it (e.g. script-src) only after testing every page; leave empty to send none.'],
                     ['key' => 'security_hsts', 'type' => 'toggle', 'label' => 'HSTS (Strict-Transport-Security)', 'help' => 'Only enable when the whole site works over HTTPS.', 'default' => false],
                     ['key' => 'security_trust_proxy', 'type' => 'toggle', 'label' => 'Behind a proxy / CDN (trust X-Forwarded-For)', 'default' => false],
                 ]],

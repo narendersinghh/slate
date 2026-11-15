@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 — Security hardening
+- Security headers: cached pages now send exactly the same headers as uncached ones (HSTS was missing on cached pages, and
+  switching headers off had no effect on them). New **Content-Security-Policy** setting (Settings → Security → Headers) with a
+  safe default (`base-uri 'self'; object-src 'none'; frame-ancestors 'self'`), plus `Cross-Origin-Opener-Policy`.
+  `X-Powered-By` is removed from cached pages too; the obsolete `interest-cohort` permission is now `browsing-topics`.
+- Behind a proxy/CDN, the visitor IP is taken from the right-most `X-Forwarded-For` entry (added by the proxy), so clients
+  can no longer forge their IP to dodge login rate limiting.
+- PHP 8.4: no more deprecation warnings for session ID settings on every admin request.
+- Core docs and examples are now site-neutral.
+
 ## 0.5.0 — Live templates
 - Templates engine: modules can add tags (`template_tag`), conditions (`template_lookup`) and loop blocks (`template_block`);
   `{{term.*}}` values and `{{#each term.field:…}}` on taxonomy archives; dotted paths (`{{item.fields.color}}`);

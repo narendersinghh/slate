@@ -14,7 +14,7 @@ A fast, secure, SEO-first content management system — the flexibility of WordP
 - **Speed** — one query loads all settings + content model; custom fields live on the row (no meta joins); full-page static cache serves visitors with **zero** database queries; HTML minification; lazy images with width/height.
 - **Security** — Argon2id passwords, login rate-limiting & lockout, TOTP two-factor auth, custom admin URL, CSRF protection on every write, strict session handling, security headers/HSTS, upload MIME validation & no-execute uploads folder, encrypted secrets (API keys, 2FA), HTML sanitizer for non-admin roles, activity log.
 - **Roles** — Administrator, Editor, Author, Contributor, Subscriber with granular capabilities.
-- **Modules** — Slate’s name for plugins. Drop a folder into `/modules`, activate it in the admin.
+- **Modules** — Slate’s name for plugins. Install from a zip, GitHub or registries, create one with AI, update with rollback; crashing modules switch themselves off.
 - **Updates** — one-click core updates from GitHub Releases with automatic backup and rollback.
 
 ## Brand
@@ -91,6 +91,7 @@ core/                Framework (Slate\* classes), helpers, template API
 admin/               Dashboard: routes, JSON API, views, assets (vanilla JS/CSS, no build step)
 themes/default/      Default theme (templates/, partials/, assets/, theme.json, functions.php)
 modules/             Modules (plugins) — hello-world example included
+docs/                Developer guides (docs/modules.md)
 content/             Uploads, cache, backups, SQLite DB (never touched by updates)
 ```
 
@@ -114,19 +115,26 @@ Always call `slate_head()`, `slate_body_open()` and `slate_footer()` — they ou
 
 ## Modules
 
+Modules are Slate's plugins: everything site-specific (a shop, bookings, a directory, an integration) lives in one.
+**Modules → Add new** installs a zip, a GitHub repository (or one folder of it) or any zip URL, creates a blank module, or
+has the AI assistant write one for you to review. **Modules → Available** lists every module offered by your registries —
+JSON files anyone can publish (Modules → Sources). Updates are backed up and roll back on failure; a module that crashes is
+switched off automatically so the site stays up.
+
 ```
-modules/my-module/module.json   {"name":"My module","version":"1.0.0","requires":"0.1.0"}
+modules/my-module/module.json   {"name":"My module","version":"1.0.0","requires":"0.6.0","depends":{"other":">=1.0"}}
 modules/my-module/module.php
+modules/my-module/migrations/001-tables.php   (optional, run once)
 ```
 
 ```php
-use Slate\Hooks; use Slate\Modules;
+use Slate\Hooks; use Slate\Modules; use Slate\Router;
 Hooks::add('the_content', fn($html, $post) => $html . '<p>Thanks for reading</p>');
-Hooks::add('seo_schema', fn($graph) => $graph);
+Hooks::add('routes', fn(Router $r) => $r->get('/hello', fn() => print 'Hello'));
 Modules::adminPage('My module', 'my-module', fn() => print 'Settings UI');
 ```
 
-Hooks: `init`, `head`, `body_open`, `footer`, `the_content`, `html_output`, `post_before_save`, `post_saved`, `post_deleted`, `media_uploaded`, `permalink`, `post_types`, `taxonomies`, `settings_tabs`, `settings_saved`, `seo_title`, `seo_description`, `seo_robots`, `seo_head`, `seo_schema`, `seo_schema_node`, `admin_routes`, `modules_loaded`.
+Full guide — manifest, hooks, APIs, migrations, registries, CLI: **[docs/modules.md](docs/modules.md)**.
 
 ## Releasing updates
 

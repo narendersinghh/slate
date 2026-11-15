@@ -9,9 +9,9 @@ ServerSignature Off
 
     # Block direct access to sensitive files and folders
     RewriteRule ^(config\.php|config\.sample\.php|composer\.(json|lock)|\.git.*|.*\.sqlite|.*\.log|.*\.md)$ - [F,L,NC]
-    RewriteRule ^(core|modules|content/backups|content/cache)/.*\.php$ - [F,L,NC]
+    RewriteRule ^(core|modules|content/backups|content/cache)/.*\.(php\d?|phtml|phar|inc)$ - [F,L,NC]
     RewriteRule ^content/.*\.(sqlite|log|zip)$ - [F,L,NC]
-    RewriteRule ^themes/.*\.php$ - [F,L,NC]
+    RewriteRule ^themes/.*\.(php\d?|phtml|phar|inc)$ - [F,L,NC]
     RewriteRule ^(wp-content|wp-includes)/.*\.(php\d?|phtml|phar)$ - [F,L,NC]
     RewriteRule ^bin(/.*)?$ - [F,L,NC]
     RewriteRule ^admin/(views|install\.php|routes\.php|api\.php)(/.*)?$ - [F,L,NC]

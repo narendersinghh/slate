@@ -14,6 +14,9 @@ use Slate\Hooks;
 use Slate\Media;
 use Slate\Menus;
 use Slate\Modules;
+use Slate\ModuleBuilder;
+use Slate\ModuleInstaller;
+use Slate\ModuleScanner;
 use Slate\Options;
 use Slate\PageCache;
 use Slate\Posts;
@@ -37,6 +40,11 @@ function admin_dispatch(string $path): void
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($method === 'POST' && !in_array(trim($path, '/'), ['login'], true)) {
         Csrf::check();
+    }
+
+    // Module files changed since last time (git pull, FTP, update)? Run their new migrations.
+    if ($method === 'GET' && Auth::user() && Auth::can('manage_modules')) {
+        Modules::maintain();
     }
 
     $r = new Router();
@@ -523,22 +531,170 @@ function admin_dispatch(string $path): void
     });
 
     // ---------- Modules ----------
-    $r->get('/modules', static function () {
+    $moduleView = static function (string $tab, array $vars = []): void {
         Auth::require('manage_modules');
-        admin_view('modules', ['modules' => Modules::all(), 'title' => 'Modules']);
+        admin_view('modules', $vars + ['tab' => $tab, 'title' => 'Modules', 'modules' => Modules::all(true),
+            'errors' => Modules::errors(), 'locked' => ModuleInstaller::lockReason()]);
+    };
+    $moduleDone = static function (array $res, string $success, ?string $to = null): never {
+        if ($res['ok']) {
+            Session::flash('success', $success);
+        } else {
+            Session::flash('error', $res['error']);
+        }
+        redirect($to ?? admin_url('modules'));
+    };
+    $installed = static function (array $res) use ($moduleDone): never {
+        if (!$res['ok']) {
+            $moduleDone($res, '', admin_url('modules/add'));
+        }
+        $msg = !empty($res['updated'])
+            ? 'Module updated to ' . ($res['version'] ?? 'the new version') . '. The previous version was backed up.'
+            : 'Module installed. Review what it can do, then activate it.';
+        $moduleDone($res, $msg, admin_url('modules/' . $res['slug'] . '/check'));
+    };
+    $slugOr404 = static function (string $slug): string {
+        return Modules::validSlug($slug) && Modules::get($slug) ? $slug : admin_404();
+    };
+
+    $r->get('/modules', static function () use ($moduleView) {
+        Auth::require('manage_modules');
+        $moduleView('installed', ['updates' => ModuleInstaller::updates()]);
     });
-    $r->post('/modules/{slug}/toggle', static function (string $slug) {
+    $r->get('/modules/available', static function () use ($moduleView) {
         Auth::require('manage_modules');
+        $moduleView('available', ['available' => ModuleInstaller::available(isset($_GET['refresh'])),
+            'registryErrors' => ModuleInstaller::registryErrors(), 'updates' => ModuleInstaller::updates(isset($_GET['refresh']))]);
+    });
+    $r->get('/modules/add', static fn() => $moduleView('add', ['aiEnabled' => \Slate\Ai::enabled()]));
+    $r->get('/modules/sources', static fn() => $moduleView('sources', ['registries' => ModuleInstaller::registries(),
+        'hasToken' => (string)Options::get('modules_github_token') !== '']));
+
+    $r->post('/modules/sources', static function () {
+        Auth::require('manage_modules');
+        $urls = array_filter(array_map('trim', preg_split('/\s+/', (string)input('registries', ''))), static fn($u) => preg_match('#^https?://\S+$#i', $u));
+        Options::set('module_registries', implode("\n", array_unique($urls)), false);
+        if (input('token_clear')) {
+            Options::set('modules_github_token', '', false);
+        } elseif (trim((string)input('token', '')) !== '') {
+            Options::set('modules_github_token', \Slate\Crypto::encrypt(trim((string)input('token'))), false);
+        }
+        Options::delete('module_updates');
+        Session::flash('success', 'Module sources saved.');
+        redirect(admin_url('modules/sources'));
+    });
+    $r->post('/modules/{slug}/toggle', static function (string $slug) use ($slugOr404) {
+        Auth::require('manage_modules');
+        $slugOr404($slug);
         if (Modules::isActive($slug)) {
-            Modules::deactivate($slug);
-            Session::flash('success', 'Module deactivated.');
+            $err = Modules::deactivate($slug);
+            Session::flash($err ? 'error' : 'success', $err ?: 'Module deactivated.');
         } elseif ($err = Modules::activate($slug)) {
             Session::flash('error', $err);
         } else {
             Session::flash('success', 'Module activated.');
         }
         log_activity('module_toggled', $slug);
+        redirect((string)input('back', '') === 'check' ? admin_url("modules/$slug/check") : admin_url('modules'));
+    });
+    $r->post('/modules/upload', static function () use ($installed) {
+        Auth::require('manage_modules');
+        $f = $_FILES['module'] ?? null;
+        if (!$f || ($f['error'] ?? 1) !== UPLOAD_ERR_OK || !is_uploaded_file((string)$f['tmp_name'])) {
+            Session::flash('error', 'Choose a module .zip file to upload (the server may also limit upload size).');
+            redirect(admin_url('modules/add'));
+        }
+        $installed(ModuleInstaller::fromZip((string)$f['tmp_name'], null, (bool)input('replace'), null, '', null, basename((string)$f['name'])));
+    });
+    $r->post('/modules/install-url', static function () use ($installed) {
+        Auth::require('manage_modules');
+        $installed(ModuleInstaller::fromUrl((string)input('url', ''), trim((string)input('sha256', '')) ?: null, (bool)input('replace')));
+    });
+    $r->post('/modules/install/{slug}', static function (string $slug) use ($installed) {
+        Auth::require('manage_modules');
+        foreach (ModuleInstaller::available() as $e) {
+            if ($e['slug'] === $slug && $e['download'] !== '') {
+                $installed(ModuleInstaller::fromUrl($e['download'], $e['sha256'], false, $slug));
+            }
+        }
+        Session::flash('error', 'That module is not listed by your registries.');
+        redirect(admin_url('modules/available'));
+    });
+    $r->post('/modules/{slug}/update', static function (string $slug) use ($installed, $slugOr404) {
+        Auth::require('manage_modules');
+        $installed(ModuleInstaller::update($slugOr404($slug)));
+    });
+    $r->post('/modules/{slug}/delete', static function (string $slug) use ($moduleDone, $slugOr404) {
+        Auth::require('manage_modules');
+        $res = ModuleInstaller::delete($slugOr404($slug), (bool)input('purge'));
+        $moduleDone($res, 'Module deleted. A backup was kept in content/backups/modules/.');
+    });
+    $r->post('/modules/{slug}/restore', static function (string $slug) use ($moduleDone, $slugOr404) {
+        Auth::require('manage_modules');
+        $slugOr404($slug);
+        $file = basename((string)input('file', ''));
+        $ok = false;
+        foreach (ModuleInstaller::backups($slug) as $b) {
+            if ($b['file'] === $file && ModuleInstaller::allowed()) {
+                $ok = ModuleInstaller::restore($slug, SLATE_CONTENT . '/backups/modules/' . $file);
+            }
+        }
+        if ($ok) {
+            log_activity('module_restored', "$slug $file");
+        }
+        $moduleDone(['ok' => $ok, 'error' => 'Could not restore that backup.'], 'Previous version restored.', admin_url("modules/$slug/check"));
+    });
+    $r->post('/modules/{slug}/dismiss', static function (string $slug) {
+        Auth::require('manage_modules');
+        Modules::clearError($slug);
         redirect(admin_url('modules'));
+    });
+    $r->get('/modules/{slug}/check', static function (string $slug) use ($moduleView, $slugOr404) {
+        Auth::require('manage_modules');
+        $slugOr404($slug);
+        $moduleView('check', ['module' => Modules::get($slug), 'scan' => ModuleScanner::scan(SLATE_MODULES . "/$slug"),
+            'backups' => ModuleInstaller::backups($slug), 'dependents' => Modules::dependents($slug)]);
+    });
+    $r->post('/modules/create', static function () use ($installed) {
+        Auth::require('manage_modules');
+        $name = trim((string)input('name', ''));
+        $slug = slugify((string)input('slug', '') ?: $name);
+        if ($name === '' || !Modules::validSlug($slug)) {
+            Session::flash('error', 'Give the module a name.');
+            redirect(admin_url('modules/add'));
+        }
+        $installed(ModuleInstaller::fromFiles($slug, ModuleBuilder::scaffold($slug, $name, trim((string)input('description', '')), (bool)input('admin_page'))));
+    });
+    $r->post('/modules/ai', static function () {
+        Auth::require('manage_modules');
+        @set_time_limit(300);
+        $res = ModuleBuilder::generate((string)input('request', ''));
+        if (!$res['ok']) {
+            Session::flash('error', $res['error']);
+            redirect(admin_url('modules/add'));
+        }
+        $id = ModuleBuilder::saveDraft($res + ['request' => (string)input('request', '')]);
+        redirect(admin_url("modules/draft/$id"));
+    });
+    $r->get('/modules/draft/{id}', static function (string $id) use ($moduleView) {
+        Auth::require('manage_modules');
+        $d = ModuleBuilder::draft($id) ?? admin_404();
+        $moduleView('draft', ['draftId' => $id, 'draft' => $d, 'scan' => ModuleBuilder::scanFiles($d['files'])]);
+    });
+    $r->post('/modules/draft/{id}/install', static function (string $id) use ($installed) {
+        Auth::require('manage_modules');
+        $d = ModuleBuilder::draft($id) ?? admin_404();
+        $res = ModuleInstaller::fromFiles($d['slug'], $d['files']);
+        if ($res['ok']) {
+            ModuleBuilder::dropDraft($id);
+        }
+        $installed($res);
+    });
+    $r->post('/modules/draft/{id}/discard', static function (string $id) {
+        Auth::require('manage_modules');
+        ModuleBuilder::dropDraft($id);
+        Session::flash('success', 'Draft discarded.');
+        redirect(admin_url('modules/add'));
     });
     $r->any('/m/{slug}', static function (string $slug) {
         $page = Modules::adminPages()[$slug] ?? admin_404();

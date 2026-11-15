@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 — Open module system
+- **Install modules from anywhere**: upload a zip, paste a GitHub repository or a folder inside one
+  (`…/tree/main/my-module`, private repositories with a token), any zip URL, or one click from **registries** —
+  plain JSON lists anyone can publish (Modules → Sources). Modules → Available lists everything your registries offer,
+  installed or not, with optional sha256 checksums.
+- **Updates** for modules from their registry or source, with automatic backup to `content/backups/modules/`, rollback
+  on failure and one-click restore of previous versions. Delete modules (optionally running their `uninstall.php`).
+- **Create modules** from a blank template or with the **AI module builder**: describe it, review the code and what it
+  can do, then install. Developer guide: `docs/modules.md`.
+- **Code check** before install/activation: syntax errors are refused; a plain-language list shows what the code can do
+  (shell commands, evaluated code, file writes, network calls, own tables…).
+- **Crash protection**: a module that fails while loading is switched off automatically and reported on the Modules page —
+  the site stays up. `content/safe-mode` (or `php bin/slate safe-mode:on`) starts without modules.
+- Manifest: `depends` with version constraints (activated together, protected from deactivation), `requires_php`,
+  PSR-4 `autoload`, `source`, `settings`, `tags`. Per-module `migrations/` run once on activation and after updates
+  (also after a git pull or FTP upload).
+- Modules can register public URLs with the new `routes` hook (`$r->get('/cart', …)`).
+- `'modules_locked' => true` in config.php switches installing/updating/deleting off for hardened sites.
+- CLI: `module:list|make|install|activate|deactivate|update|check|delete`, `safe-mode:on|off`.
+- `.htaccess`/nginx: `.phtml`, `.phar`, `.php5`, `.inc` files in core, modules, themes and content are blocked too.
+
 ## 0.5.1 — Security hardening
 - Security headers: cached pages now send exactly the same headers as uncached ones (HSTS was missing on cached pages, and
   switching headers off had no effect on them). New **Content-Security-Policy** setting (Settings → Security → Headers) with a

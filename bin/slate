@@ -6,6 +6,9 @@
  *   php bin/slate import:wordpress --url=https://example.com --user=admin [--password=APP_PASSWORD]
  *        [--no-design] [--no-theme] [--no-media] [--no-drafts] [--types=post,page,...] [--fresh]
  *   php bin/slate cache:clear
+ *   php bin/slate module:list | module:make <slug> [--name="My module"] | module:install <url|file.zip> [--replace]
+ *        module:activate <slug> | module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>
+ *   php bin/slate safe-mode:on | safe-mode:off       start without modules (rescue a broken site)
  *   php bin/slate version
  *
  * The password can also be given via the WP_APP_PASSWORD environment variable, or typed when prompted
@@ -35,6 +38,7 @@ foreach (array_slice($argvList, 1) as $a) {
         $opts[$m[1]] = $m[2] ?? true;
     }
 }
+$arg = isset($argvList[1]) && !str_starts_with($argvList[1], '--') ? $argvList[1] : '';
 $out = static function (string $s): void {
     fwrite(STDOUT, $s . PHP_EOL);
 };
@@ -136,6 +140,92 @@ switch ($cmd) {
         $out('  Open ' . site_url() . ' to review. Re-run this command any time to sync changes (it updates, never duplicates).');
         break;
 
+    case 'module:list':
+        $updates = \Slate\ModuleInstaller::updates(true);
+        foreach (Modules::all(true) as $slug => $m) {
+            $out(sprintf('%s %-26s %-9s %s%s', $m['active'] ? '●' : '○', $slug, $m['version'], $m['name'],
+                isset($updates[$slug]) ? '  (update: ' . $updates[$slug]['version'] . ')' : ''));
+        }
+        foreach (Modules::errors() as $slug => $e) {
+            $out("! $slug was switched off: {$e['message']}");
+        }
+        break;
+
+    case 'module:make':
+        $slug = slugify($arg);
+        if (!Modules::validSlug($slug)) {
+            $fail('Usage: php bin/slate module:make <slug> [--name="My module"] [--description="…"]');
+        }
+        $r = \Slate\ModuleInstaller::fromFiles($slug, \Slate\ModuleBuilder::scaffold($slug, (string)($opts['name'] ?? ucwords(str_replace('-', ' ', $slug))),
+            (string)($opts['description'] ?? ''), true));
+        $r['ok'] ? $out("✓ Created modules/$slug/ — edit module.php, then: php bin/slate module:activate $slug") : $fail($r['error']);
+        break;
+
+    case 'module:install':
+        if ($arg === '') {
+            $fail('Usage: php bin/slate module:install <https://github.com/… | https://….zip | ./file.zip> [--replace] [--sha256=…]');
+        }
+        $r = is_file($arg)
+            ? \Slate\ModuleInstaller::fromZip($arg, null, !empty($opts['replace']), null, '', null, basename($arg))
+            : \Slate\ModuleInstaller::fromUrl($arg, isset($opts['sha256']) ? (string)$opts['sha256'] : null, !empty($opts['replace']));
+        if (!$r['ok']) {
+            $fail($r['error']);
+        }
+        $out('✓ ' . ($r['updated'] ? 'Updated' : 'Installed') . " {$r['slug']} {$r['version']}");
+        foreach ($r['scan']['findings'] as $f) {
+            $out("  [{$f['risk']}] {$f['label']}");
+        }
+        $out("  Activate with: php bin/slate module:activate {$r['slug']}");
+        break;
+
+    case 'module:activate':
+        ($err = Modules::activate($arg)) ? $fail($err) : $out("✓ Activated $arg");
+        break;
+
+    case 'module:deactivate':
+        ($err = Modules::deactivate($arg, !empty($opts['force']))) ? $fail($err) : $out("✓ Deactivated $arg");
+        break;
+
+    case 'module:update':
+        $r = \Slate\ModuleInstaller::update($arg);
+        $r['ok'] ? $out("✓ Updated $arg to {$r['version']}") : $fail($r['error']);
+        Modules::maintain();
+        break;
+
+    case 'module:delete':
+        $r = \Slate\ModuleInstaller::delete($arg, !empty($opts['purge']));
+        $r['ok'] ? $out("✓ Deleted $arg (backup: {$r['backup']})") : $fail($r['error']);
+        break;
+
+    case 'module:check':
+        if (!Modules::get($arg)) {
+            $fail("Module $arg is not installed.");
+        }
+        $scan = \Slate\ModuleScanner::scan(SLATE_MODULES . "/$arg");
+        $out("{$scan['files']} PHP files checked.");
+        foreach ($scan['errors'] as $e) {
+            $out("  ✕ $e");
+        }
+        foreach ($scan['findings'] as $f) {
+            $out(sprintf('  [%s] %s — %s', $f['risk'], $f['label'], implode(', ', $f['where'])));
+        }
+        if (!$scan['errors'] && !$scan['findings']) {
+            $out('  Nothing notable.');
+        }
+        exit($scan['errors'] ? 1 : 0);
+
+    case 'safe-mode:on':
+        file_put_contents(SLATE_CONTENT . '/safe-mode', 'Created ' . gmdate('c') . "\n");
+        PageCache::clear();
+        $out('✓ Safe mode on: the site runs without modules until you run safe-mode:off.');
+        break;
+
+    case 'safe-mode:off':
+        @unlink(SLATE_CONTENT . '/safe-mode');
+        PageCache::clear();
+        $out('✓ Safe mode off: modules load again.');
+        break;
+
     default:
-        $out("Slate CLI\n\n  php bin/slate import:wordpress --url=https://example.com --user=admin   Import a WordPress site\n  php bin/slate cache:clear                                              Clear the page cache\n  php bin/slate version");
+        $out("Slate CLI\n\n  php bin/slate import:wordpress --url=https://example.com --user=admin   Import a WordPress site\n  php bin/slate cache:clear                                              Clear the page cache\n  php bin/slate module:list | module:make <slug> | module:install <url|zip> | module:activate <slug>\n  php bin/slate module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>\n  php bin/slate safe-mode:on | safe-mode:off                             Start without modules\n  php bin/slate version");
 }

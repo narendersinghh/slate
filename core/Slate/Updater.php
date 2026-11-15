@@ -13,7 +13,7 @@ namespace Slate;
 final class Updater
 {
     /** Paths replaced during an update. */
-    public const CORE_PATHS = ['core', 'admin', 'themes/default', 'index.php', 'config.sample.php', 'README.md', 'CHANGELOG.md', 'nginx.conf.example'];
+    public const CORE_PATHS = ['core', 'admin', 'docs', 'themes/default', 'index.php', 'config.sample.php', 'README.md', 'CHANGELOG.md', 'nginx.conf.example'];
 
     private static function headers(): array
     {

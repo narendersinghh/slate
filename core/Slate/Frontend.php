@@ -13,6 +13,16 @@ final class Frontend
     {
         // Modules may map their URL schemes onto Slate's (e.g. "/x/2" → "/x/page/2").
         $path = (string)Hooks::filter('route_path', '/' . trim($path, '/'));
+
+        // Module routes: Hooks::add('routes', fn(Router $r) => $r->get('/cart', fn() => ...)).
+        if (Hooks::has('routes')) {
+            $router = new Router();
+            Hooks::action('routes', $router);
+            $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+            if ($router->dispatch($method === 'HEAD' ? 'GET' : $method, $path)) {
+                return;
+            }
+        }
         $page = 1;
         if (preg_match('#^(.*?)/page/(\d+)$#', $path, $m)) {
             $path = $m[1] ?: '/';

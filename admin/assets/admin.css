@@ -1142,3 +1142,5 @@ details.disclosure[open] > summary { border-bottom: 1px solid var(--border); }
 }
 .lt, .lt-toolbar, .lt-toolbar > * { min-width: 0; max-width: 100%; }
 .lt-top .tabs-pill { min-width: 0; }
+.terms-list { min-width: 0; }
+.split > form.card { position: sticky; top: calc(var(--topbar-h) + 16px); }

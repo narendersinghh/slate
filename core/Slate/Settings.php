@@ -12,12 +12,17 @@ final class Settings
 {
     private static ?array $tabs = null;
     private static ?array $defaults = null;
+    /** Number of module settings sections the caches were built with (modules may load after the first call). */
+    private static int $builtFor = -1;
 
     public static function tabs(): array
     {
-        if (self::$tabs !== null) {
+        $n = count(Modules::settingsSections());
+        if (self::$tabs !== null && self::$builtFor === $n) {
             return self::$tabs;
         }
+        self::$builtFor = $n;
+        self::$defaults = null;
         $tabs = [
             'general' => ['label' => 'General', 'icon' => 'sliders', 'description' => 'Site name, homepage, links, language and registration.', 'sections' => [
                 'identity' => ['label' => 'Site identity', 'fields' => [
@@ -329,7 +334,7 @@ final class Settings
 
     public static function defaults(): array
     {
-        if (self::$defaults !== null) {
+        if (self::$defaults !== null && self::$builtFor === count(Modules::settingsSections())) {
             return self::$defaults;
         }
         $d = [];

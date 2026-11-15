@@ -40,23 +40,6 @@ $t = $term ?? ['id' => 0, 'name' => '', 'slug' => '', 'description' => '', 'pare
     </div>
   </form>
 
-  <section class="card">
-    <?php if (!$terms): ?>
-      <div class="empty-state"><?= icon('tag', 32) ?><h2>No <?= e(strtolower($tax['plural'])) ?> yet</h2><p class="muted">Add the first one using the form.</p></div>
-    <?php else: ?>
-    <div class="table-wrap"><table class="table">
-      <thead><tr><th>Name</th><th>Slug</th><th class="num">Count</th></tr></thead>
-      <tbody>
-      <?php foreach ($terms as $o): ?>
-        <tr class="<?= $o['id'] === $t['id'] ? 'is-current' : '' ?>">
-          <td><a class="row-title" href="<?= e(admin_url("terms/$slug/{$o['id']}")) ?>"><?= str_repeat('<span class="muted">— </span>', $o['depth'] ?? 0) . e($o['name']) ?></a></td>
-          <td><code><?= e($o['slug']) ?></code></td>
-          <td class="num"><?= (int)$o['count'] ?></td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table></div>
-    <?php endif; ?>
-  </section>
+  <div class="terms-list"><?= $table->render($rows, $total) ?></div>
 </div>
 <?php $scripts = ['editor.js']; ?>

@@ -310,18 +310,24 @@ function admin_dispatch(string $path): void
     });
 
     // ---------- Terms ----------
-    $r->get('/terms/{tax}', static function (string $tax) {
+    $r->get('/terms/{tax}', static fn(string $tax) => admin_terms_screen($tax, null));
+    $r->get('/terms/{tax}/{id:\d+}', static fn(string $tax, string $id) => admin_terms_screen($tax, (int)$id));
+    $r->post('/terms/{tax}/bulk', static function (string $tax) {
         Auth::require('manage_terms');
-        $def = ContentModel::taxonomy($tax) ?? admin_404();
-        admin_view('terms', ['tax' => $def, 'terms' => $def['hierarchical'] ? Terms::tree($tax) : Terms::all($tax), 'term' => null,
-            'fields' => ContentModel::fieldsFor('term', $tax), 'title' => $def['plural']]);
-    });
-    $r->get('/terms/{tax}/{id:\d+}', static function (string $tax, string $id) {
-        Auth::require('manage_terms');
-        $def = ContentModel::taxonomy($tax) ?? admin_404();
-        $term = Terms::find((int)$id) ?? admin_404();
-        admin_view('terms', ['tax' => $def, 'terms' => $def['hierarchical'] ? Terms::tree($tax) : Terms::all($tax), 'term' => $term,
-            'fields' => ContentModel::fieldsFor('term', $tax), 'title' => 'Edit ' . $def['singular']]);
+        ContentModel::taxonomy($tax) ?? admin_404();
+        $n = 0;
+        if ((string)input('action') === 'delete') {
+            foreach (array_map('intval', (array)input('ids', [])) as $id) {
+                $t = Terms::find($id);
+                if ($t && $t['taxonomy'] === $tax) {
+                    Terms::delete($id);
+                    $n++;
+                }
+            }
+            PageCache::clear();
+        }
+        Session::flash('success', "$n deleted. Content using them was kept.");
+        back();
     });
     $r->post('/terms/{tax}/save', static function (string $tax) {
         Auth::require('manage_terms');
@@ -1382,6 +1388,58 @@ function admin_content_table(array $def): \Slate\ListTable
         'empty' => ['icon' => $def['icon'] ?? 'file', 'title' => 'No ' . strtolower($def['plural']) . ' yet', 'text' => 'Create your first one to get started.',
             'html' => '<a class="btn btn-primary" href="' . e("$base/new") . '">' . icon('plus', 16) . ' Add ' . e(strtolower($def['singular'])) . '</a>'],
     ]);
+}
+
+/** Taxonomy screen: add/edit form + searchable, sortable list of terms. */
+function admin_terms_screen(string $tax, ?int $id): void
+{
+    Auth::require('manage_terms');
+    $def = ContentModel::taxonomy($tax) ?? admin_404();
+    $term = $id ? (Terms::find($id) ?? admin_404()) : null;
+    $all = $def['hierarchical'] ? Terms::tree($tax) : Terms::all($tax);
+    $fields = ContentModel::fieldsFor('term', $tax);
+    $postType = $def['post_types'][0] ?? null;
+    $cols = [
+        'name' => ['label' => 'Name', 'primary' => true, 'sort' => 'name', 'render' => static fn($o) => '<a class="row-title" href="' . e(admin_url("terms/$tax/{$o['id']}")) . '">'
+            . str_repeat('<span class="muted">— </span>', (int)($o['depth'] ?? 0)) . e($o['name']) . '</a>', 'export' => static fn($o) => (string)$o['name']],
+        'slug' => ['label' => 'Slug', 'sort' => 'slug', 'render' => static fn($o) => '<code class="cell-code">' . e($o['slug']) . '</code>', 'export' => static fn($o) => (string)$o['slug']],
+        'description' => ['label' => 'Description', 'default' => false, 'render' => static fn($o) => e(str_limit((string)$o['description'], 90)), 'export' => static fn($o) => (string)$o['description']],
+    ];
+    foreach ($fields as $name => $f) {
+        if (in_array($f['type'] ?? '', ['repeater', 'group', 'gallery', 'wysiwyg', 'code', 'flexible', 'message', 'tab'], true)) {
+            continue;
+        }
+        $cols["field_$name"] = ['label' => $f['label'] ?? $name, 'default' => false, 'render' => static function ($o) use ($name): string {
+            $v = $o['fields'][$name] ?? null;
+            return $v === null || $v === '' ? '<span class="muted">—</span>' : e(str_limit(is_array($v) ? implode(', ', array_map('strval', array_filter($v, 'is_scalar'))) : (string)$v, 60));
+        }];
+    }
+    $cols['count'] = ['label' => 'Count', 'sort' => 'count', 'sort_dir' => 'desc', 'align' => 'right', 'render' => static fn($o) => $postType
+        ? '<a href="' . e(admin_url("content/$postType") . '?f%5Btax_' . $tax . '%5D=' . $o['id']) . '">' . number_format((int)$o['count']) . '</a>' : number_format((int)$o['count']),
+        'export' => static fn($o) => (string)(int)$o['count']];
+    $cols['id'] = ['label' => 'ID', 'default' => false, 'sort' => 'id', 'align' => 'right', 'render' => static fn($o) => (string)(int)$o['id']];
+    $table = new \Slate\ListTable("terms.$tax", $cols, [
+        'base' => admin_url("terms/$tax"), 'search' => 'Search ' . strtolower($def['plural']) . '…', 'sort' => '', 'export' => true,
+        'bulk' => ['delete' => ['label' => 'Delete', 'danger' => true, 'confirm' => 'Delete the selected ' . strtolower($def['plural']) . '? Content using them is kept.']],
+        'bulk_action' => admin_url("terms/$tax/bulk"), 'per_page' => 50,
+        'row_actions' => static fn($o) => '<a href="' . e(admin_url("terms/$tax/{$o['id']}")) . '">Edit</a><a href="' . e(Terms::link($o)) . '" target="_blank" rel="noopener">View</a>',
+        'empty' => ['icon' => 'tag', 'title' => 'No ' . strtolower($def['plural']) . ' yet', 'text' => 'Add the first one with the form.'],
+    ]);
+    $s = $table->state();
+    $rows = $all;
+    if ($s['q'] !== '') {
+        $q = mb_strtolower($s['q']);
+        $rows = array_values(array_filter($rows, static fn($o) => str_contains(mb_strtolower($o['name'] . ' ' . $o['slug'] . ' ' . $o['description']), $q)));
+    }
+    if ($s['sort'] !== '') {
+        $k = $s['sort'];
+        usort($rows, static fn($a, $b) => ($s['dir'] === 'asc' ? 1 : -1) * (in_array($k, ['count', 'id'], true) ? (int)$a[$k] <=> (int)$b[$k] : strnatcasecmp((string)$a[$k], (string)$b[$k])));
+    }
+    if ($table->exporting()) {
+        $table->exportCsv($rows, $tax . '-' . gmdate('Y-m-d') . '.csv');
+    }
+    admin_view('terms', ['tax' => $def, 'terms' => $all, 'term' => $term, 'fields' => $fields, 'table' => $table,
+        'rows' => array_slice($rows, $s['offset'], $s['per']), 'total' => count($rows), 'title' => $term ? 'Edit ' . $def['singular'] : $def['plural']]);
 }
 
 /** Users list table. */

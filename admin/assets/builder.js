@@ -65,6 +65,8 @@
     { id: 'dyn-form', label: 'Form', category: 'Dynamic', media: I.form, content: '<div class="pb-form">{{form:contact}}</div>' },
     { id: 'dyn-posts', label: 'Latest posts', category: 'Dynamic', media: I.list, content: { type: 'slate-code', code: '{{#query type="post" limit="3"}}<article style="margin-bottom:24px"><h3><a href="{{url}}">{{title}}</a></h3><p>{{excerpt}}</p></article>{{/query}}' } },
   ];
+  (PB.dynamic || []).forEach((d) => blocks.push({ id: d.id, label: d.label, category: 'This template', media: d.code ? I.list : I.tag,
+    content: d.code ? { type: 'slate-code', code: d.code } : d.html }));
   (PB.saved || []).forEach((b) => blocks.push({ id: 'saved-' + b.id, label: b.label, category: 'Saved blocks', media: I.star,
     content: (b.css ? '<style>' + b.css + '</style>' : '') + b.html, attributes: { 'data-saved-id': b.id } }));
 
@@ -112,10 +114,8 @@
       init() { this.listenTo(this.model, 'change:code', this.paint); },
       paint() {
         const code = this.model.get('code') || '';
-        this.el.innerHTML = '<div style="font:600 12px system-ui,sans-serif;letter-spacing:.02em;margin-bottom:6px">⧉ ' + esc(codeLabel(code)) +
-          '</div><pre style="margin:0;white-space:pre-wrap;font:12px ui-monospace,monospace;opacity:.75;max-height:140px;overflow:hidden">' + esc(code.slice(0, 600)) + '</pre>' +
-          '<div style="font:11px system-ui,sans-serif;opacity:.6;margin-top:6px">Filled in with real content for visitors · double-click to edit</div>';
-        this.el.style.cssText = 'border:1.5px dashed rgba(242,107,45,.7);background:rgba(242,107,45,.06);border-radius:8px;padding:12px 14px;margin:8px 0;color:inherit';
+        this.el.innerHTML = '<div class="pb-code-box"><div class="pb-code-label">⧉ ' + esc(codeLabel(code)) + '</div><pre>' + esc(code.slice(0, 600)) +
+          '</pre><div class="pb-code-hint">Filled in with real content for visitors · double-click to edit</div></div>';
       },
       editCode() {
         const body = document.createElement('div');
@@ -162,6 +162,7 @@
     assetManager: { upload: false, custom: true },
     projectData: PB.project || undefined,
     components: PB.project ? undefined : lockTemplateLogic(PB.html || ''),
+    style: PB.project ? undefined : (PB.css || ''),
     protectedCss: '',
     baseCss: '* ::-webkit-scrollbar{width:8px;height:8px}* ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18);border-radius:8px}',
   });
@@ -173,7 +174,9 @@
     if (!doc || doc.getElementById('slate-ds')) return;
     const st = doc.createElement('style');
     st.id = 'slate-ds';
-    st.textContent = PB.dsCss + 'body{margin:0;min-height:100vh}.pb-html:empty,.pb-row>div:empty{min-height:40px}';
+    st.textContent = PB.dsCss + 'body{margin:0;min-height:100vh}.pb-html:empty,.pb-row>div:empty{min-height:40px}'
+      + '[data-slate-code]{display:block;width:auto;margin:10px 0}.pb-code-box{display:block;box-sizing:border-box;width:100%;border:1.5px dashed rgba(242,107,45,.7);background:rgba(242,107,45,.06);border-radius:8px;padding:12px 14px;color:inherit}'
+      + '.pb-code-label{font:600 12px system-ui,sans-serif;letter-spacing:.02em;margin-bottom:6px}.pb-code-box pre{margin:0;white-space:pre-wrap;word-break:break-word;font:12px ui-monospace,monospace;opacity:.75;max-height:140px;overflow:hidden}.pb-code-hint{font:11px system-ui,sans-serif;opacity:.6;margin-top:6px}';
     doc.head.insertBefore(st, doc.head.firstChild);
   }
   editor.on('canvas:frame:load', injectDs);
@@ -535,7 +538,10 @@
   $$('[data-pb-save]').forEach((b) => b.addEventListener('click', () => save(b.dataset.pbSave)));
 
   async function switchClassic() {
-    if (!confirm('Go back to the classic editor? The content returns to how it was before the visual design. The design is kept, and you can switch back any time.')) return;
+    const msg = PB.kind === 'template'
+      ? 'Go back to the code editor? The template code returns exactly to how it was before the visual design.'
+      : 'Go back to the classic editor? The content returns to how it was before the visual design. The design is kept, and you can switch back any time.';
+    if (!confirm(msg)) return;
     if (dirty) await save('draft');
     const res = await post(PB.mode, { mode: 'classic' });
     if (res.ok) { dirty = false; location.href = PB.edit; } else toast(res.error || 'Could not switch.', 'error');

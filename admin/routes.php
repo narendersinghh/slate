@@ -926,6 +926,31 @@ function admin_dispatch(string $path): void
         Session::flash('success', 'Template saved.');
         redirect(admin_url('templates/' . $id));
     });
+    $r->get('/templates/{id}/builder', static function (string $id) {
+        Auth::require('manage_content_model');
+        $t = \Slate\Templates::find($id) ?? admin_404();
+        if (!\Slate\Builder::enabled()) {
+            Session::flash('error', 'The visual builder is switched off (Settings → Content & media → Visual builder).');
+            redirect(admin_url("templates/$id"));
+        }
+        $sample = in_array($t['kind'], ['single'], true) ? (Posts::query(['type' => $t['target'], 'limit' => 1, 'count' => false])['items'][0] ?? null) : null;
+        admin_view('builder', ['tpl' => $t, 'sample' => $sample], false);
+    });
+    $r->post('/templates/{id}/builder', static function (string $id) {
+        Auth::require('manage_content_model');
+        $in = json_input();
+        if ($err = \Slate\Templates::saveDesign($id, $in)) {
+            json_response(['ok' => false, 'error' => $err], 422);
+        }
+        log_activity('template_designed', $id);
+        json_response(['ok' => true, 'message' => 'Template saved.']);
+    });
+    $r->post('/templates/{id}/builder/mode', static function (string $id) {
+        Auth::require('manage_content_model');
+        \Slate\Templates::backToCode($id);
+        log_activity('template_back_to_code', $id);
+        is_ajax() ? json_response(['ok' => true]) : redirect(admin_url("templates/$id"));
+    });
     $r->post('/templates/{id}/delete', static function (string $id) {
         Auth::require('manage_content_model');
         \Slate\Templates::delete($id);

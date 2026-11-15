@@ -9,27 +9,41 @@ use Slate\DesignSystem;
 use Slate\Posts;
 
 $ds = DesignSystem::get();
-$base = admin_url("content/{$type['slug']}/{$post['id']}");
-$config = [
-    'save' => "$base/builder",
-    'mode' => "$base/builder/mode",
-    'edit' => $base,
-    'revisions' => "$base/revisions",
-    'view' => Posts::permalink($post) . ($post['status'] !== 'publish' ? '?preview=' . $post['id'] : ''),
+$isTpl = isset($tpl);
+if ($isTpl) {
+    $tb = is_array($tpl['builder'] ?? null) && ($tpl['builder']['mode'] ?? '') === 'builder' ? $tpl['builder'] : null;
+    $base = admin_url('templates/' . $tpl['id']);
+    $preview = admin_template_preview_url($tpl);
+    $config = [
+        'kind' => 'template',
+        'save' => "$base/builder", 'mode' => "$base/builder/mode", 'edit' => $base, 'revisions' => '',
+        'view' => $preview ?: '', 'status' => $tpl['enabled'] ? 'publish' : 'draft', 'canPublish' => false,
+        'project' => $tb['project'] ?? null, 'html' => $tb ? null : (string)$tpl['html'], 'css' => $tb ? null : (string)$tpl['css'],
+        'layout' => $tpl['wrap'] ? 'theme' : 'blank', 'title' => $tpl['name'], 'chrome' => Builder::chrome($sample ?? null),
+        'dynamic' => \Slate\Templates::builderBlocks($tpl),
+    ];
+    $heading = ['Template · Visual builder', $tpl['name']];
+} else {
+    $base = admin_url("content/{$type['slug']}/{$post['id']}");
+    $config = [
+        'kind' => 'item',
+        'save' => "$base/builder", 'mode' => "$base/builder/mode", 'edit' => $base, 'revisions' => "$base/revisions",
+        'view' => Posts::permalink($post) . ($post['status'] !== 'publish' ? '?preview=' . $post['id'] : ''),
+        'status' => $post['status'], 'canPublish' => \Slate\Auth::can('publish_posts'),
+        'project' => $builder['project'] ?? null, 'html' => $builder ? null : (string)$post['content'], 'css' => null,
+        'layout' => $builder['layout'] ?? (string)\Slate\Options::get('builder_default_layout', 'theme'),
+        'title' => $post['title'], 'chrome' => Builder::chrome($post), 'dynamic' => [],
+    ];
+    $heading = [$type['singular'] . ' · Visual builder', $post['title'] ?: 'Untitled'];
+}
+$config += [
     'blocksUrl' => admin_url('builder/blocks'),
     'csrf' => Csrf::token(),
-    'status' => $post['status'],
-    'canPublish' => \Slate\Auth::can('publish_posts'),
-    'project' => $builder['project'] ?? null,
-    'html' => $builder ? null : (string)$post['content'],
-    'layout' => $builder['layout'] ?? (string)\Slate\Options::get('builder_default_layout', 'theme'),
     'styles' => Builder::canvasStyles(),
     'dsCss' => DesignSystem::css(),
     'colors' => array_map(static fn($c) => ['id' => $c['id'], 'name' => $c['name'] ?? $c['id'], 'value' => $c['value']], $ds['colors']),
     'fonts' => array_values(array_unique(array_filter([$ds['fonts']['heading'] ?? '', $ds['fonts']['body'] ?? '']))),
     'saved' => Builder::savedBlocks(),
-    'title' => $post['title'],
-    'chrome' => Builder::chrome($post),
     'ai' => \Slate\Ai::enabled() && \Slate\Auth::can('use_ai'),
     'aiUrl' => admin_url('builder/ai'),
     'aiSettings' => admin_url('settings/ai/provider'),
@@ -40,7 +54,7 @@ $config = [
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title><?= e(($post['title'] ?: 'Untitled') . ' ‹ Visual builder') ?></title>
+<title><?= e($heading[1] . ' ‹ Visual builder') ?></title>
 <link rel="icon" type="image/svg+xml" href="<?= e(url('admin/assets/brand/favicon.svg')) ?>">
 <link rel="stylesheet" href="<?= e(asset_url('admin/assets/admin.css')) ?>">
 <link rel="stylesheet" href="<?= e(asset_url('admin/assets/vendor/grapesjs/grapes.min.css')) ?>">
@@ -55,8 +69,8 @@ window.PB = <?= json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
 <body class="pb-app">
 <header class="pb-bar">
   <div class="pb-bar-left">
-    <a class="icon-btn" href="<?= e($base) ?>" title="Back to the editor" aria-label="Back to the editor" data-pb-leave><?= icon('chevron-left') ?></a>
-    <div class="pb-title"><small class="muted"><?= e($type['singular']) ?> · Visual builder</small><strong><?= e($post['title'] ?: 'Untitled') ?></strong></div>
+    <a class="icon-btn" href="<?= e($base) ?>" title="Back" aria-label="Back" data-pb-leave><?= icon('chevron-left') ?></a>
+    <div class="pb-title"><small class="muted"><?= e($heading[0]) ?></small><strong><?= e($heading[1]) ?></strong></div>
     <span class="pb-state muted" data-pb-state></span>
   </div>
   <div class="pb-bar-mid" role="group" aria-label="Device">
@@ -79,14 +93,14 @@ window.PB = <?= json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
     <div class="dropdown">
       <button type="button" class="icon-btn" data-dropdown aria-label="More"><?= icon('more', 18) ?></button>
       <div class="dropdown-menu dropdown-right">
-        <a href="<?= e($config['view']) ?>" target="_blank" rel="noopener"><?= icon('external', 15) ?> Open the page</a>
-        <a href="<?= e($config['revisions']) ?>"><?= icon('clock', 15) ?> Revisions</a>
-        <button type="button" class="dropdown-btn" data-cmd="classic"><?= icon('file-text', 15) ?> Switch to classic editor</button>
+        <?php if ($config['view']): ?><a href="<?= e($config['view']) ?>" target="_blank" rel="noopener"><?= icon('external', 15) ?> <?= $isTpl ? 'Preview' : 'Open the page' ?></a><?php endif; ?>
+        <?php if ($config['revisions']): ?><a href="<?= e($config['revisions']) ?>"><?= icon('clock', 15) ?> Revisions</a><?php endif; ?>
+        <button type="button" class="dropdown-btn" data-cmd="classic"><?= icon($isTpl ? 'code' : 'file-text', 15) ?> <?= $isTpl ? 'Back to code editor' : 'Switch to classic editor' ?></button>
         <button type="button" class="dropdown-btn" data-cmd="clear"><?= icon('trash', 15) ?> Start from an empty page</button>
       </div>
     </div>
-    <button type="button" class="btn btn-sm" data-pb-save="draft">Save</button>
-    <button type="button" class="btn btn-sm btn-primary" data-pb-save="publish"><?= $post['status'] === 'publish' ? 'Update' : ($config['canPublish'] ? 'Publish' : 'Submit') ?></button>
+    <button type="button" class="btn btn-sm<?= $isTpl ? ' btn-primary' : '' ?>" data-pb-save="draft">Save</button>
+    <?php if (!$isTpl): ?><button type="button" class="btn btn-sm btn-primary" data-pb-save="publish"><?= $post['status'] === 'publish' ? 'Update' : ($config['canPublish'] ? 'Publish' : 'Submit') ?></button><?php endif; ?>
   </div>
 </header>
 

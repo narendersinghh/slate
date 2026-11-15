@@ -22,6 +22,12 @@ $tag = static fn(string $code, string $label = '') => '<button type="button" cla
       <span class="save-state muted" data-save-state></span>
     </div>
     <div class="page-actions">
+      <?php if ($t['id'] !== '' && \Slate\Builder::enabled()):
+          $designed = is_array($t['builder'] ?? null);
+          $logic = !$designed && \Slate\Builder::hasTemplateLogic((string)$t['html']); ?>
+        <a class="btn" href="<?= e(admin_url('templates/' . $t['id'] . '/builder')) ?>"<?= $logic
+            ? ' data-confirm="This template has loops or conditions. In the visual builder they become locked code blocks you can move and edit as code. A copy of the current code is kept, and &quot;Back to code editor&quot; restores it exactly. Continue?"' : '' ?>><?= icon('layers', 16) ?> <?= $designed ? 'Open visual builder' : 'Design visually' ?></a>
+      <?php endif; ?>
       <a class="btn btn-ghost" href="<?= e($preview ?: '#') ?>" target="_blank" rel="noopener" data-preview<?= $preview ? '' : ' hidden' ?>><?= icon('eye', 16) ?> Preview</a>
       <label class="switch-row btn btn-ghost" style="gap:8px"><input type="checkbox" class="switch" name="enabled" value="1"<?= $t['enabled'] ? ' checked' : '' ?>> Active</label>
       <button class="btn btn-primary" type="submit"><?= icon('check', 16) ?> Save</button>

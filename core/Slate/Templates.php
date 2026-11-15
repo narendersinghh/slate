@@ -82,6 +82,7 @@ final class Templates
                 }
             }
         }
+        $prevBuilder = $all[$id]['builder'] ?? null;
         $all[$id] = [
             'id' => $id,
             'name' => mb_substr(trim(strip_tags((string)($in['name'] ?? ''))) ?: self::label($kind, $target), 0, 120),
@@ -93,9 +94,94 @@ final class Templates
             'enabled' => !empty($in['enabled']),
             'updated_at' => now(),
         ];
+        // Visual design data (Builder): kept unless replaced. Saving code from the code editor means the code is now
+        // the source of truth, so the visual project is marked out of date (it is rebuilt from the code next time).
+        if (array_key_exists('builder', $in)) {
+            $all[$id]['builder'] = $in['builder'];
+        } elseif (is_array($prevBuilder)) {
+            $all[$id]['builder'] = ['mode' => 'code'] + $prevBuilder;
+        }
         Options::set('templates', $all);
         PageCache::clear();
         return $id;
+    }
+
+    /** Save a design from the visual builder: html/css for the engine, the project for the builder. First time: keep the code. */
+    public static function saveDesign(string $id, array $in): ?string
+    {
+        $t = self::find($id);
+        if (!$t) {
+            return 'Template not found.';
+        }
+        $project = $in['project'] ?? null;
+        $json = json_encode($project, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_array($project) || $json === false || strlen($json) > Builder::MAX_PROJECT) {
+            return 'The design is too large or invalid.';
+        }
+        $prev = is_array($t['builder'] ?? null) ? $t['builder'] : [];
+        $backup = $prev['backup'] ?? ['html' => $t['html'], 'css' => $t['css'], 'wrap' => $t['wrap'], 'saved_at' => now()];
+        self::save(['id' => $id, 'name' => $t['name'], 'kind' => $t['kind'], 'target' => $t['target'], 'enabled' => $t['enabled'],
+            'html' => (string)($in['html'] ?? ''), 'css' => Builder::cleanCss((string)($in['css'] ?? '')),
+            'wrap' => ($in['layout'] ?? 'theme') !== 'blank',
+            'builder' => ['mode' => 'builder', 'project' => $project, 'backup' => $backup, 'v' => 1]]);
+        return null;
+    }
+
+    /** Back to the code editor: restore the code exactly as it was before the first visual design. */
+    public static function backToCode(string $id): void
+    {
+        $t = self::find($id);
+        $b = is_array($t['builder'] ?? null) ? $t['builder'] : null;
+        if (!$t || !$b) {
+            return;
+        }
+        $bk = (array)($b['backup'] ?? []);
+        self::save(['id' => $id, 'name' => $t['name'], 'kind' => $t['kind'], 'target' => $t['target'], 'enabled' => $t['enabled'],
+            'html' => (string)($bk['html'] ?? $t['html']), 'css' => (string)($bk['css'] ?? $t['css']), 'wrap' => (bool)($bk['wrap'] ?? $t['wrap']),
+            'builder' => ['mode' => 'code'] + $b]);
+    }
+
+    /**
+     * Blocks for the builder that fit this template: the item's title, content, image, fields, terms… (as tags the
+     * engine fills in). Loops are returned as locked code.
+     * @return array<int, array{id:string,label:string,html?:string,code?:string}>
+     */
+    public static function builderBlocks(array $t): array
+    {
+        $b = [];
+        $add = static function (string $id, string $label, string $html = '', string $code = '') use (&$b): void {
+            $b[] = array_filter(['id' => $id, 'label' => $label, 'html' => $html, 'code' => $code], static fn($v) => $v !== '');
+        };
+        if ($t['kind'] === 'single') {
+            $add('t-title', 'Title', '<h1>{{title}}</h1>');
+            $add('t-content', 'Content', '<div class="entry-content">{{{content}}}</div>');
+            $add('t-image', 'Featured image', '<figure style="margin:0">{{image}}</figure>');
+            $add('t-excerpt', 'Excerpt', '<p>{{excerpt}}</p>');
+            $add('t-meta', 'Date & author', '<p class="small">{{date}} · {{author}}</p>');
+            foreach (ContentModel::taxonomiesFor($t['target']) as $tx => $def) {
+                $add('t-terms-' . $tx, $def['plural'], '<p>{{terms:' . $tx . '}}</p>');
+            }
+            foreach (ContentModel::fieldsFor('post', $t['target']) as $name => $f) {
+                $type = $f['type'] ?? 'text';
+                if ($type === 'repeater') {
+                    $add('t-f-' . $name, $f['label'] ?? $name, '', '{{#each field:' . $name . '}}<div>{{index}}</div>{{/each}}');
+                } elseif (in_array($type, ['image'], true)) {
+                    $add('t-f-' . $name, $f['label'] ?? $name, '<figure style="margin:0">{{field:' . $name . '|image}}</figure>');
+                } elseif (in_array($type, ['wysiwyg', 'textarea'], true)) {
+                    $add('t-f-' . $name, $f['label'] ?? $name, '<div>{{{field:' . $name . '}}}</div>');
+                } elseif (!in_array($type, ['group', 'gallery', 'flexible', 'message', 'tab', 'code'], true)) {
+                    $add('t-f-' . $name, $f['label'] ?? $name, '<p><strong>' . e($f['label'] ?? $name) . ':</strong> {{field:' . $name . '}}</p>');
+                }
+            }
+            $add('t-related', 'More of this type', '', '{{#query type=' . $t['target'] . ' limit=3}}<article><h3><a href="{{url}}">{{title}}</a></h3><p>{{excerpt}}</p></article>{{/query}}');
+        } else {
+            $add('t-archive-title', 'Archive title', '<h1>{{archive.title}}</h1>');
+            $add('t-archive-desc', 'Archive description', '<div>{{{archive.description}}}</div>');
+            $add('t-posts', 'List of items', '', '{{#posts}}<article style="margin-bottom:24px"><h2><a href="{{url}}">{{title}}</a></h2><p>{{excerpt}}</p></article>{{else}}<p>Nothing here yet.</p>{{/posts}}');
+            $add('t-pagination', 'Pagination', '<nav>{{{pagination}}}</nav>');
+        }
+        $add('t-breadcrumbs', 'Breadcrumbs', '<nav class="small">{{{breadcrumbs}}}</nav>');
+        return $b;
     }
 
     public static function delete(string $id): void

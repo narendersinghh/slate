@@ -96,11 +96,40 @@ final class Builder
         return self::save($postId, ['html' => $html, 'css' => $css, 'layout' => $layout, 'project' => self::projectFromHtml($html, $css)]);
     }
 
-    /** A minimal GrapesJS project around HTML + CSS: the editor parses both into components and style rules on load. */
+    /**
+     * A minimal GrapesJS project around HTML + CSS: the editor parses both into components and style rules on load.
+     * Template logic is sealed in <slate-code> placeholders first, like the builder does with HTML it opens.
+     */
     public static function projectFromHtml(string $html, string $css): array
     {
         return ['assets' => [], 'styles' => [], 'symbols' => [], 'dataSources' => [],
-            'pages' => [['frames' => [['component' => ['type' => 'wrapper', 'components' => $html], 'styles' => $css]]]]];
+            'pages' => [['frames' => [['component' => ['type' => 'wrapper', 'components' => self::lockTemplateLogic($html)], 'styles' => $css]]]]];
+    }
+
+    /** PHP twin of lockTemplateLogic() in builder.js: each outermost {{#x}}…{{/x}} block → <slate-code data-code="base64">. */
+    public static function lockTemplateLogic(string $html): string
+    {
+        if (!str_contains($html, '{{#')) {
+            return $html;
+        }
+        preg_match_all('/\{\{\s*([#\/])\s*([\w:.-]+)[^}]*\}\}/', $html, $tags, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        $out = '';
+        $depth = 0;
+        $start = -1;
+        $last = 0;
+        foreach ($tags as $m) {
+            if ($m[1][0] === '#') {
+                if ($depth === 0) {
+                    $start = $m[0][1];
+                }
+                $depth++;
+            } elseif ($depth > 0 && --$depth === 0) {
+                $end = $m[0][1] + strlen($m[0][0]);
+                $out .= substr($html, $last, $start - $last) . '<slate-code data-code="' . base64_encode(substr($html, $start, $end - $start)) . '"></slate-code>';
+                $last = $end;
+            }
+        }
+        return $out . substr($html, $last);
     }
 
     /** Switch an item between the classic editor and its visual design (the design is kept either way). */
@@ -183,14 +212,16 @@ final class Builder
      * The site's real header and footer (for a read-only preview around the design in the builder).
      * Returns ['header' => html, 'footer' => html, 'main' => '<main …>' opening tag or ''], scripts and the admin bar removed.
      */
-    public static function chrome(array $post): array
+    public static function chrome(?array $post): array
     {
         if (Theme::active() === '') {
             return ['header' => '', 'footer' => '', 'main' => ''];
         }
         $marker = '<!--slate-builder-split-->';
-        Frontend::$data['post'] = $post;
-        Seo::$ctx = ['kind' => 'single', 'post' => $post];
+        if ($post) {
+            Frontend::$data['post'] = $post;
+            Seo::$ctx = ['kind' => 'single', 'post' => $post];
+        }
         try {
             ob_start();
             Theme::wrap($marker);

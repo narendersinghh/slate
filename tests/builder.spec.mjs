@@ -202,3 +202,49 @@ test('visual builder: template logic stays intact as a locked block', async ({ p
   expect(out).toContain('class="pb-loop-item"');   // the loop ran for visitors
   expect(out).not.toContain('{{#query');           // and its tags were rendered, not printed
 });
+
+test('templates: design visually, keep logic, back to code restores exactly', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await page.goto(`${BASE}/admin/login`);
+  await page.fill('input[name=login]', USER);
+  await page.fill('input[name=password]', PASS);
+  await page.click('button[type=submit]');
+
+  // A code template for posts with a loop
+  const code = '<article class="tpl-post"><h1>{{title}}</h1>{{#if excerpt}}<p class="tpl-ex">{{excerpt}}</p>{{/if}}<div>{{{content}}}</div></article>';
+  await page.goto(`${BASE}/admin/templates/new?kind=single&target=post`);
+  await page.evaluate((c) => {
+    const f = document.querySelector('[data-tpl-form]');
+    f.querySelector('[name=html]').value = c;
+    const cm = document.querySelector('[name=html]'); cm.dispatchEvent(new Event('input', { bubbles: true }));
+    f.querySelector('[name=enabled]').checked = true;
+  }, code);
+  await page.evaluate(() => document.querySelector('[data-tpl-form]').submit());
+  await page.waitForURL(/\/admin\/templates\/t[0-9a-f]+$/);
+  const tplUrl = page.url();
+
+  // Visual builder: logic becomes a locked block, template parts are offered as blocks
+  await page.goto(tplUrl + '/builder');
+  await page.waitForFunction(() => window.pbEditor && window.pbEditor.getWrapper());
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.pbEditor.getWrapper().find('[data-slate-code]').length)).toBe(1);
+  expect(await page.locator('.gjs-block', { hasText: 'Featured image' }).count()).toBe(1);
+  await page.evaluate(() => { window.pbEditor.getWrapper().append('<p class="tpl-added">Added visually</p>'); });
+  await page.click('[data-pb-save=draft]');
+  await expect(page.locator('[data-pb-state]')).toContainText('Saved', { timeout: 15_000 });
+  await page.screenshot({ path: `${SHOTS}/6-template.png` });
+
+  // Visitors: a post rendered through the designed template, with the logic evaluated
+  const post = await page.request.get(`${BASE}/hello-world/`);
+  const html = await post.text();
+  expect(html).toContain('class="tpl-post"');
+  expect(html).toContain('Added visually');
+  expect(html).not.toContain('{{#if');
+
+  // Back to code editor restores the original code exactly
+  await page.goto(tplUrl);
+  const back = await page.request.post(tplUrl + '/builder/mode', { headers: { 'X-CSRF-Token': await page.evaluate(() => window.SLATE.csrf), 'X-Requested-With': 'XMLHttpRequest' } });
+  expect(back.ok()).toBeTruthy();
+  await page.goto(tplUrl);
+  expect(await page.locator('[name=html]').inputValue()).toBe(code);
+});

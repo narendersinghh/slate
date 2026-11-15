@@ -1144,3 +1144,5 @@ details.disclosure[open] > summary { border-bottom: 1px solid var(--border); }
 .lt-top .tabs-pill { min-width: 0; }
 .terms-list { min-width: 0; }
 .split > form.card { position: sticky; top: calc(var(--topbar-h) + 16px); }
+.progress { height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.progress > span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .3s ease; }

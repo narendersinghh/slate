@@ -95,6 +95,7 @@ Handle the bulk POST at the top of your page callback (`Csrf::check()` is done b
 | `alert`, `alert-success`, `alert-error`, `banner` | Messages |
 | `muted`, `small`, `num`, `nowrap` | Text |
 | `kv` (two-column key/value grid), `steps` (numbered list) | Details |
+| `progress` with an inner `<span style="width:40%">` | Progress bar |
 
 Keep screens simple: one primary action per page, short labels, explanations in `help` text or a `muted` line,
 no walls of options — put rarely changed options in settings, not on the working screen.

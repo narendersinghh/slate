@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="<?= e(option('language', 'en')) ?>">
+<html <?= html_attrs() ?>>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

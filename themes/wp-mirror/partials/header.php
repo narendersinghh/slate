@@ -1,6 +1,6 @@
 <?php $site = wpm_site(); $bare = !empty($bare); ?>
 <!doctype html>
-<html lang="<?= e($site['lang'] ?: option('language', 'en')) ?>">
+<html <?= html_attrs($site['lang'] ?: null) ?>>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

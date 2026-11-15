@@ -8,6 +8,18 @@ final class Frontend
 {
     /** Globals available to templates. */
     public static array $data = [];
+    /** True while core is working out which content a URL points to (see resolving()). */
+    private static bool $resolving = false;
+
+    /**
+     * True while core resolves the request URL (comparing permalinks with the requested path). Permalink filters
+     * that decorate URLs for visitors (e.g. a language prefix already stripped by "route_path") can return the plain
+     * path while this is true.
+     */
+    public static function resolving(): bool
+    {
+        return self::$resolving;
+    }
 
     public static function handle(string $path): void
     {
@@ -23,6 +35,7 @@ final class Frontend
                 return;
             }
         }
+        self::$resolving = true;
         $page = 1;
         if (preg_match('#^(.*?)/page/(\d+)$#', $path, $m)) {
             $path = $m[1] ?: '/';
@@ -251,8 +264,38 @@ final class Frontend
         self::output('404', [], ['404']);
     }
 
+    /**
+     * Render a full page through the active theme (or an admin Template) — for modules that add their own views.
+     * $kind is free-form (e.g. "shop-cart"); $candidates are theme template names to try. Set Seo::$ctx first.
+     */
+    public static function page(string $kind, array $vars = [], array $candidates = []): void
+    {
+        self::output($kind, $vars, $candidates);
+    }
+
+    /**
+     * Render module-provided HTML inside the theme's header and footer, through the normal output pipeline
+     * (minification, "html_output", page cache — call PageCache::skip() first for personal pages).
+     */
+    public static function content(string $kind, string $html, array $vars = []): void
+    {
+        self::$resolving = false;
+        self::$data = array_merge(self::$data, $vars, ['kind' => $kind]);
+        Hooks::action('route_resolved', $kind, $vars);
+        ob_start();
+        Theme::partial('header');
+        echo '<main id="content" class="site-main">' . $html . '</main>';
+        Theme::partial('footer');
+        self::finish((string)ob_get_clean());
+    }
+
     private static function output(string $kind, array $vars, array $candidates = []): void
     {
+        self::$resolving = false;
+        // The request is resolved: modules may redirect (e.g. to the right language) before anything renders…
+        Hooks::action('route_resolved', $kind, $vars);
+        // …or adjust what the view receives.
+        $vars = (array)Hooks::filter('frontend_vars', $vars, $kind);
         self::$data = array_merge(self::$data, $vars, ['kind' => $kind]);
         $tpl = self::template($kind, $vars);
         if ($tpl) {
@@ -262,6 +305,11 @@ final class Frontend
             Theme::render($candidates ?: [$kind], $vars);
             $html = (string)ob_get_clean();
         }
+        self::finish($html);
+    }
+
+    private static function finish(string $html): void
+    {
         if (Options::get('html_minify', true)) {
             $html = self::minify($html);
         }

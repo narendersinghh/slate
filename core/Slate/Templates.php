@@ -133,7 +133,7 @@ final class Templates
         $body .= '<div class="site-template site-template-' . e($tpl['kind']) . '-' . e($tpl['target']) . '">' . self::render($tpl['html'], $ctx) . '</div>';
         if (empty($tpl['wrap'])) {
             ob_start();
-            echo '<!doctype html><html lang="' . e((string)Options::get('language', 'en')) . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
+            echo '<!doctype html><html ' . html_attrs() . '><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
             slate_head();
             echo '</head><body>';
             slate_body_open();

@@ -50,6 +50,7 @@ final class Sitemap
             "SELECT * FROM {{posts}} WHERE type = :t AND status = 'publish' ORDER BY published_at DESC LIMIT $per OFFSET $offset",
             ['t' => $type]
         );
+        $rows = (array)Hooks::filter('sitemap_posts', $rows, $type, $page);
         if (!$rows && $page > 1) {
             return null;
         }
@@ -61,17 +62,21 @@ final class Sitemap
         $parents = array_filter(array_column($posts, 'parent_id'));
         Posts::prime($parents);
         $x = ['<?xml version="1.0" encoding="UTF-8"?>', '<?xml-stylesheet type="text/xsl" href="' . e(url('core/assets/sitemap.xsl')) . '"?>',
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'];
+            (string)Hooks::filter('sitemap_urlset', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">')];
         foreach ($posts as $p) {
             $robots = $p['seo']['robots_index'] ?? 'default';
             if ($robots === 'noindex' || !empty($p['seo']['canonical'])) {
                 continue;
             }
-            $x[] = '<url><loc>' . e(Posts::permalink($p, true)) . '</loc><lastmod>' . gmdate('c', strtotime($p['updated_at'] . ' UTC')) . '</lastmod>';
+            // One <url> entry as lines; modules may add lines (e.g. <xhtml:link hreflang>) or return [] to leave it out.
+            $entry = ['<url><loc>' . e(Posts::permalink($p, true)) . '</loc><lastmod>' . gmdate('c', strtotime($p['updated_at'] . ' UTC')) . '</lastmod>'];
             if ($withImages && $p['featured_media_id'] && ($m = Media::find((int)$p['featured_media_id']))) {
-                $x[] = '<image:image><image:loc>' . e(site_url('content/uploads/' . $m['path'])) . '</image:loc></image:image>';
+                $entry[] = '<image:image><image:loc>' . e(site_url('content/uploads/' . $m['path'])) . '</image:loc></image:image>';
             }
-            $x[] = '</url>';
+            $entry[] = '</url>';
+            foreach ((array)Hooks::filter('sitemap_entry', $entry, $p) as $line) {
+                $x[] = (string)$line;
+            }
         }
         $x[] = '</urlset>';
         return implode("\n", $x);

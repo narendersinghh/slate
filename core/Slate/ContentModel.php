@@ -171,14 +171,15 @@ final class ContentModel
 
     public static function saveFieldGroup(array $group): void
     {
-        $all = self::fieldGroups();
+        // Stored groups only: groups added by modules through the "field_groups" filter must not be persisted.
+        $all = Options::get('field_groups') ?: [];
         $all[$group['id']] = $group;
         Options::set('field_groups', $all);
     }
 
     public static function deleteFieldGroup(string $id): void
     {
-        $all = self::fieldGroups();
+        $all = Options::get('field_groups') ?: [];
         unset($all[$id]);
         Options::set('field_groups', $all);
     }

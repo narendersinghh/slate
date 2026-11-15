@@ -234,6 +234,24 @@ function icon_logo(int $size = 32, string $variant = 'dark'): string
  * Typographic quotes and dashes in text (outside tags, scripts, code), like WordPress's wptexturize():
  * "x" → “x”, it's → it’s, ' - ' → ' – ', '--' → '–', '---' → '—', '...' → '…'.
  */
+/** Language code for <html lang>: the site language, adjustable by modules ("html_lang" filter). */
+function html_lang(?string $base = null): string
+{
+    return (string)\Slate\Hooks::filter('html_lang', $base !== null && $base !== '' ? $base : (string)option('language', 'en'));
+}
+
+/** Text direction for <html dir>: "ltr" unless a module says otherwise ("html_dir" filter). */
+function html_dir(): string
+{
+    return \Slate\Hooks::filter('html_dir', 'ltr') === 'rtl' ? 'rtl' : 'ltr';
+}
+
+/** lang="…" (and dir="rtl" when needed) for the <html> tag. */
+function html_attrs(?string $base = null): string
+{
+    return 'lang="' . e(html_lang($base)) . '"' . (html_dir() === 'rtl' ? ' dir="rtl"' : '');
+}
+
 function texturize(string $html): string
 {
     if ($html === '' || !preg_match('/[\'"\-.]|&#0?39;|&quot;/', $html)) {

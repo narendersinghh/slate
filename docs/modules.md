@@ -89,6 +89,10 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `the_content` | filter | `string $html, array $post` → html |
 | `html_output` | filter | full page HTML → html |
 | `permalink`, `term_link` | filter | url of a post / term |
+| `html_lang`, `html_dir` | filter | `<html lang>` / `dir` (themes print `<html <?= html_attrs() ?>>`) |
+| `route_resolved` | action | `$kind, $vars` — the URL is resolved, nothing rendered yet: redirect or 404 here |
+| `frontend_vars` | filter | `$vars, $kind` → variables passed to the theme/template |
+| `sitemap_posts`, `sitemap_entry`, `sitemap_urlset` | filter | rows of a sitemap page; lines of one `<url>` entry (return `[]` to drop it); the opening `<urlset>` tag |
 | `posts_query_args` | filter | change `Posts::query()` arguments (e.g. default filters) |
 | `posts_query_sql` | filter | `[$where, $params, $joins], $args` → add SQL conditions/joins to every `Posts::query()` |
 | `post_types`, `taxonomies` | filter | add content types and taxonomies in code |
@@ -130,6 +134,8 @@ Auth::user(); Auth::can('edit_posts'); Http::json('POST', $url, $headers, $paylo
 Mailer::send('a@b.com', 'Subject', '<p>HTML</p>', ['reply_to' => 'c@d.com']);   // SMTP when configured
 Revisions::snapshot($post, $newData);   // before Posts::save(), to make a change undoable
 ```
+
+Rendering module pages: `Frontend::page($kind, $vars, ['theme-template'])` or `Frontend::content($kind, $html)` (inside the theme's header/footer). `Frontend::resolving()` is true while core matches the URL.
 
 Helpers: `e()` (escape), `site_url()`, `admin_url()`, `url()`, `json_response()`, `redirect()`, `input()`, `csrf_field()`,
 `slugify()`, `log_activity()`, `field()`, `permalink()`, `query()`, `menu()`, `image()`.

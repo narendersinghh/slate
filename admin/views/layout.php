@@ -142,7 +142,15 @@ window.SLATE = <?= json_encode([
       <?php if (Auth::can('manage_users')): ?>
         <?= $navItem(admin_url('users'), 'users', 'Users', $is('/users')) ?>
       <?php endif; ?>
-      <?= $navItem(admin_url('settings'), 'settings', 'Settings', $is('/settings') && !$is('/settings/appearance/menus') && !$is('/settings/appearance/design') && !$is('/settings/appearance/theme') && !$is('/settings/modules'), $hasUpdate ? '<span class="badge-dot" title="Update available"></span>' : '') ?>
+      <?php $setOpen = $is('/settings') && !$is('/settings/appearance/menus') && !$is('/settings/appearance/design') && !$is('/settings/appearance/theme') && !$is('/settings/modules'); ?>
+      <div class="nav-group<?= $setOpen ? ' open' : '' ?>" data-nav-group="settings">
+        <?= $navItem(admin_url('settings'), 'settings', 'Settings', $setOpen, ($hasUpdate ? '<span class="badge-dot" title="Update available"></span>' : '') . '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show settings menu">' . icon('chevron-down', 14) . '</button>') ?>
+        <div class="nav-sub">
+          <?php foreach (\Slate\Settings::tabs() as $stk => $st): if (!admin_can_settings($stk) || $stk === 'modules') continue; ?>
+            <a href="<?= e(admin_url("settings/$stk/" . array_key_first($st['sections']))) ?>" class="<?= $is("/settings/$stk") ? 'active' : '' ?>"><?= e($st['label']) ?></a>
+          <?php endforeach; ?>
+        </div>
+      </div>
     </nav>
     <div class="sidebar-foot">
       <span>Slate <?= e(SLATE_VERSION) ?></span>
@@ -168,6 +176,18 @@ window.SLATE = <?= json_encode([
             <?php endforeach; ?>
             <?php if (Auth::can('upload_media')): ?><a href="<?= e(admin_url('media')) ?>#upload"><?= icon('upload', 15) ?> Upload media</a><?php endif; ?>
             <?php if (Auth::can('manage_users')): ?><a href="<?= e(admin_url('users/new')) ?>"><?= icon('user', 15) ?> User</a><?php endif; ?>
+          </div>
+        </div>
+        <?php endif; ?>
+        <?php if (Auth::can('manage_settings')): ?>
+        <div class="dropdown hide-sm">
+          <button class="icon-btn" type="button" data-dropdown aria-label="Settings" title="Settings"><?= icon('settings') ?></button>
+          <div class="dropdown-menu dropdown-right settings-menu">
+            <div class="dropdown-head"><strong>Settings</strong><small>Ctrl/⌘ K finds any setting</small></div>
+            <a href="<?= e(admin_url('settings')) ?>"><?= icon('grid', 15) ?> Overview</a>
+            <?php foreach (\Slate\Settings::tabs() as $stk => $st): if (!admin_can_settings($stk)) continue; ?>
+              <a href="<?= e(admin_url("settings/$stk/" . array_key_first($st['sections']))) ?>"><?= icon($st['icon'], 15) ?> <?= e($st['label']) ?></a>
+            <?php endforeach; ?>
           </div>
         </div>
         <?php endif; ?>

@@ -1108,8 +1108,10 @@ function admin_dispatch(string $path): void
         ob_start();
         ($page['render'])();
         $group = Modules::adminGroups()[$page['module'] ?? ''] ?? null;
-        admin_view('module-page', ['html' => ob_get_clean(), 'title' => $page['label'],
-            'module' => $group && $group['name'] !== $page['label'] ? $group['name'] : '']);
+        // Hidden detail pages highlight their module's first tab.
+        $current = $page['section'] === 'hidden' && $group && $group['pages'] ? admin_url('m/' . $group['pages'][0]['slug']) : admin_url('m/' . $slug);
+        admin_view('module-page', ['html' => ob_get_clean(), 'title' => $page['label'], 'module' => $group['name'] ?? '',
+            'moduleSlug' => (string)($page['module'] ?? ''), 'icon' => $group['icon'] ?? $page['icon'], 'currentUrl' => $current]);
     });
 
     // ---------- Settings ----------

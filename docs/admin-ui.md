@@ -41,10 +41,13 @@ Prefix every key with your module (`shop_`), and keep labels short with the deta
 use Slate\AdminUi;
 
 echo AdminUi::header('Orders', 'Payments, fulfilment and refunds.', 'cart', ['New order' => admin_url('m/shop-new')]);
-echo AdminUi::tabs([
-    'all' => ['All orders', admin_url('m/shop-orders'), 120],
-    'settings' => ['Settings', AdminUi::settingsUrl('slate-shop')],
-], 'all');
+// The dashboard draws your module's page tabs (its sidebar pages + Settings) automatically.
+// For a switch inside one page use views(); for wizards use steps().
+echo AdminUi::views([
+    'orders' => ['Orders', admin_url('m/shop-orders'), 120],
+    'refunds' => ['Refunds', admin_url('m/shop-orders') . '?show=refunds'],
+], 'orders');
+echo AdminUi::steps(['source' => 'Choose source', 'review' => 'Review', 'run' => 'Import'], 'review');
 echo AdminUi::kpis(['Revenue · 30 days' => '$1,240.00', 'Orders' => '18', 'Awaiting payment' => '2']);
 echo AdminUi::emptyState('No orders yet', 'Orders appear here as soon as someone checks out.', 'cart');
 echo AdminUi::pill('Paid', 'success');   // tones: success, warn, danger, info

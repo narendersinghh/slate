@@ -6,17 +6,13 @@ use Slate\Posts;
 $hour = (int)local_date(now(), 'G');
 $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
 ?>
-<section class="hero-panel">
-  <div>
-    <span class="eyebrow"><?= e(local_date(now(), 'l, F j')) ?></span>
-    <h1><?= e($greet) ?>, <em><?= e(explode(' ', Auth::user()['display_name'])[0]) ?></em></h1>
-    <p>Here’s what’s happening on <?= e(site_name()) ?> today.</p>
-  </div>
-  <div class="hero-actions">
+<div class="dash-top">
+  <div><h1><?= e($greet) ?>, <?= e(explode(' ', Auth::user()['display_name'])[0]) ?></h1><p class="muted"><?= e(local_date(now(), 'l, F j')) ?> · <?= e(site_name()) ?></p></div>
+  <div class="page-actions">
     <a class="btn" href="<?= e(url()) ?>" target="_blank" rel="noopener"><?= icon('eye', 16) ?> View site</a>
     <?php if (Auth::can('edit_posts')): ?><a class="btn btn-primary" href="<?= e(admin_url('content/post/new')) ?>"><?= icon('edit', 16) ?> Write a post</a><?php endif; ?>
   </div>
-</section>
+</div>
 
 <?php if (\Slate\Auth::can('manage_updates') && ($ir = \Slate\Integrity::report()) && ($bad = count(array_filter($ir['issues'], static fn($i) => $i['level'] === 'danger')))): ?>
 <div class="banner banner-danger"><span class="ic"><?= icon('shield', 18) ?></span>
@@ -32,14 +28,9 @@ $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good ev
 </div>
 <?php endif; ?>
 
-<?php if (\Slate\Auth::can('manage_settings') || \Slate\Auth::can('manage_updates')): ?>
-<section class="dash-section">
-  <div class="dash-section-head"><h2>Site status</h2><a class="btn btn-ghost btn-sm" href="<?= e(admin_url('settings')) ?>">All settings <?= icon('arrow-up-right', 14) ?></a></div>
-  <?php require __DIR__ . '/partials/site-status.php'; ?>
-</section>
-<?php endif; ?>
 
-<div class="stat-grid">
+
+<div class="stat-grid stat-grid-compact">
   <?php foreach ($stats as $slug => $st): ?>
   <a class="stat" href="<?= e(admin_url("content/$slug")) ?>">
     <span class="stat-top"><span class="stat-icon"><?= icon($st['type']['icon'] ?? 'file', 17) ?></span><span class="stat-arrow"><?= icon('arrow-up-right', 16) ?></span></span>
@@ -54,7 +45,8 @@ $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good ev
   </a>
 </div>
 
-<div class="grid-2">
+<div class="dash-layout">
+<div class="dash-main grid-2">
   <section class="card">
     <div class="card-head"><h2>Recently edited</h2></div>
     <?php if (!$recent): ?>
@@ -119,4 +111,23 @@ $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good ev
     </ul>
     <?php endif; ?>
   </section>
+</div>
+<aside class="dash-side">
+  <?php if (\Slate\Auth::can('manage_settings') || \Slate\Auth::can('manage_updates')): ?>
+  <section class="card">
+    <div class="card-head"><h2>Site status</h2><a class="btn btn-ghost btn-sm" href="<?= e(admin_url('settings')) ?>">Settings</a></div>
+    <?php $compact = true; require __DIR__ . '/partials/site-status.php'; ?>
+  </section>
+  <?php endif; ?>
+  <?php if (\Slate\Auth::can('manage_settings')): ?>
+  <section class="card">
+    <div class="card-head"><h2>Settings</h2></div>
+    <nav class="dash-links">
+      <?php foreach (\Slate\Settings::tabs() as $tk => $t): if (!admin_can_settings($tk)) continue; ?>
+        <a href="<?= e(admin_url("settings/$tk/" . array_key_first($t['sections']))) ?>"><?= icon($t['icon'], 15) ?><span><?= e($t['label']) ?></span><?= icon('chevron-right', 14) ?></a>
+      <?php endforeach; ?>
+    </nav>
+  </section>
+  <?php endif; ?>
+</aside>
 </div>

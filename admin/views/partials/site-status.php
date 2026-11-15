@@ -45,7 +45,7 @@ if ($canSettings) {
 $secured = Passkeys::count((int)$me['id']) > 0 || \Slate\DB::val('SELECT totp_secret IS NOT NULL AND totp_secret <> \'\' FROM {{users}} WHERE id = :id', ['id' => $me['id']]);
 $add($secured ? 'ok' : 'warn', 'key', 'Your sign-in', $secured ? 'Protected with 2FA or a passkey' : 'Password only, add a passkey or 2FA', admin_url('profile'));
 ?>
-<div class="status-grid" data-quick-settings data-url="<?= e(admin_url('settings/quick')) ?>">
+<div class="status-grid<?= !empty($compact) ? ' is-compact' : '' ?>" data-quick-settings data-url="<?= e(admin_url('settings/quick')) ?>">
   <?php foreach ($items as $it): ?>
     <div class="status-item status-<?= e($it['state']) ?>">
       <span class="status-icon"><?= icon($it['icon'], 16) ?></span>

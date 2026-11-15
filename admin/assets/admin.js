@@ -637,4 +637,8 @@
     const b = e.target.closest('[data-lt-filter-toggle]');
     if (b) b.closest('.lt-filters').classList.toggle('show-filters');
   });
+
+  // ---------- File fields: highlight while a file is dragged over ----------
+  document.addEventListener('dragenter', (e) => { if (e.target.matches?.('input[type=file]')) e.target.classList.add('is-over'); });
+  ['dragleave', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => { if (e.target.matches?.('input[type=file]')) e.target.classList.remove('is-over'); }));
 })();

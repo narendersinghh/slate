@@ -29,7 +29,69 @@ final class AdminUi
             }
             $html .= '</div>';
         }
-        return $html . '</div>';
+        return $html . '</div><!--slate:module-tabs-->';
+    }
+
+    /**
+     * The standard navigation of a module: its sidebar pages (and Settings) as tabs. Printed by the dashboard on
+     * every module page and on the module's settings screen, so modules never draw their own page tabs.
+     */
+    public static function moduleNav(string $module, string $currentUrl): string
+    {
+        $g = Modules::adminGroups()[$module] ?? null;
+        if (!$g) {
+            return '';
+        }
+        $tabs = [];
+        foreach ($g['pages'] as $p) {
+            if (Auth::can($p['cap'])) {
+                $tabs[admin_url('m/' . $p['slug'])] = [$p['label'], admin_url('m/' . $p['slug']), self::badge($p)];
+            }
+        }
+        if ($g['settings'] && Auth::can($g['settings']['cap'])) {
+            $u = isset($g['settings']['url']) ? admin_url($g['settings']['url']) : admin_url('m/' . $g['settings']['slug']);
+            $tabs[$u] = ['Settings', $u];
+        }
+        return count($tabs) > 1 ? self::tabs($tabs, $currentUrl) : '';
+    }
+
+    private static function badge(array $page): ?string
+    {
+        $n = isset($page['badge']) && is_callable($page['badge']) ? (int)($page['badge'])() : 0;
+        return $n > 0 ? (string)$n : null;
+    }
+
+    /** Wizard progress: key => label; earlier steps are shown as done. */
+    public static function steps(array $steps, string $current): string
+    {
+        $html = '<ol class="wizard-steps">';
+        $i = 0;
+        $reached = false;
+        foreach ($steps as $k => $label) {
+            $i++;
+            $on = (string)$k === $current;
+            $state = $on ? 'is-current' : ($reached ? '' : 'is-done');
+            if ($on) {
+                $reached = true;
+            }
+            $html .= '<li class="' . $state . '"' . ($on ? ' aria-current="step"' : '') . '><span>' . ($state === 'is-done' ? icon('check', 13) : $i) . '</span>' . e((string)$label) . '</li>';
+        }
+        if (!$reached) {
+            $html = str_replace('is-done', '', $html);
+        }
+        return $html . '</ol>';
+    }
+
+    /** Secondary switch inside a page (e.g. "Claims | Verified owners"): key => [label, url, optional count]. */
+    public static function views(array $items, string $current): string
+    {
+        $html = '<nav class="tabs-pill page-views">';
+        foreach ($items as $k => $t) {
+            [$label, $url, $count] = array_pad((array)$t, 3, null);
+            $html .= '<a href="' . e((string)$url) . '"' . ((string)$k === $current ? ' class="active" aria-current="page"' : '') . '>' . e((string)$label)
+                . ($count !== null && $count !== '' ? ' <span>' . e((string)$count) . '</span>' : '') . '</a>';
+        }
+        return $html . '</nav>';
     }
 
     /** Underlined tabs: key => [label, url, optional count]. */

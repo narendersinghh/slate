@@ -61,6 +61,7 @@ $tabDef = $tabs[$tab] ?? null;
     <div class="settings-head">
       <div class="crumbs"><a href="<?= e(admin_url('settings')) ?>">Settings</a><?= icon('chevron-right', 13) ?><span><?= e($tabDef['label']) ?></span></div>
       <h1><?= e($def['label']) ?></h1>
+      <?php if ($tab === 'modules'): ?><?= \Slate\AdminUi::moduleNav($section, admin_url("settings/modules/$section")) ?><?php endif; ?>
       <?php if (!empty($def['intro'])): ?><p class="muted"><?= e($def['intro']) ?></p><?php endif; ?>
     </div>
 

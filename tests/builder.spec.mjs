@@ -76,6 +76,9 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
     const ed = window.pbEditor;
     ed.Css.setRule('.' + c, { color: 'rgb(200, 30, 30)' });
     ed.Css.setRule('.' + c, { 'font-size': '24px' }, { atRuleType: 'media', atRuleParams: '(max-width: 480px)' });
+    // CSS with design-system variables in shorthands must survive the parser exactly as written
+    ed.Css.addRules('.' + c + '-box{background:var(--color-primary);border-radius:var(--radius);margin:var(--section-space) 0}');
+    ed.getWrapper().find('h1')[0].addClass(c + '-box');
   }, cls);
   expect(await page.evaluate(() => window.pbEditor.getCss())).toContain('rgb(200, 30, 30)');
 
@@ -101,6 +104,8 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
   expect(html).toContain('<div class="pb-page">');
   expect(html).toMatch(new RegExp(`\\.${cls}\\{[^}]*color:rgb\\(200, 30, 30\\)`));
   expect(html).toContain('@media (max-width: 480px)');
+  expect(html).toContain('background:var(--color-primary)');
+  expect(html).toContain('margin:var(--section-space) 0');
   expect(html).not.toContain('grapes');
   expect(html).not.toContain('data-pb-chrome');
   expect((html.match(/<header class="site-header/g) || []).length).toBe(1);

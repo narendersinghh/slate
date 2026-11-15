@@ -175,7 +175,7 @@ final class Settings
                 ]],
             ]],
 
-            'integrations' => ['label' => 'Integrations', 'icon' => 'plug', 'description' => 'Analytics, verification, custom code, webhooks and the API.', 'sections' => [
+            'integrations' => ['label' => 'Integrations', 'icon' => 'plug', 'description' => 'Analytics, verification, custom code, webhooks, the API and AI agents.', 'sections' => [
                 'analytics' => ['label' => 'Analytics & tracking', 'fields' => [
                     ['key' => 'gtm_id', 'type' => 'text', 'label' => 'Google Tag Manager container ID', 'placeholder' => 'GTM-XXXXXXX', 'default' => '', 'pattern' => '^GTM-[A-Z0-9]+$'],
                     ['key' => 'ga4_id', 'type' => 'text', 'label' => 'Google Analytics 4 measurement ID', 'placeholder' => 'G-XXXXXXXXXX', 'default' => '', 'pattern' => '^G-[A-Z0-9]+$',
@@ -208,6 +208,10 @@ final class Settings
                     ['key' => 'api_public_read', 'type' => 'toggle', 'label' => 'Allow reading published content without a key', 'default' => true, 'show_if' => 'api_enabled=1'],
                     ['key' => 'api_cors', 'type' => 'text', 'label' => 'Allowed origins (CORS)', 'default' => '', 'placeholder' => 'https://app.example.com',
                         'help' => 'Websites allowed to call the API from a browser, separated by spaces. * allows any. Empty: none.', 'show_if' => 'api_enabled=1'],
+                ]],
+                'mcp' => ['label' => 'AI agents (MCP)', 'render' => 'mcp', 'fields' => [
+                    ['key' => 'mcp_enabled', 'type' => 'toggle', 'label' => 'Let AI agents manage this site (MCP server at /api/mcp)', 'default' => false,
+                        'help' => 'For Claude, ChatGPT, Cursor and other MCP clients. Agents sign in with an API key and act with that user\'s permissions; new content stays a draft unless publishing is asked for and allowed, and every change keeps a revision. Works even when the REST API is off.'],
                 ]],
             ]],
 

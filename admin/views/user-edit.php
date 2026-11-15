@@ -110,16 +110,16 @@ $isSelf = (int)$u['id'] === Auth::id();
     </div>
   </section>
 
-  <?php if (\Slate\Api::enabled() || \Slate\Api::keys((int)$u['id'])): $keys = \Slate\Api::keys((int)$u['id']); $newKey = \Slate\Session::takeValue('new_api_key'); ?>
+  <?php if (\Slate\Api::enabled() || \Slate\Mcp::enabled() || \Slate\Api::keys((int)$u['id'])): $keys = \Slate\Api::keys((int)$u['id']); $newKey = \Slate\Session::takeValue('new_api_key'); ?>
   <section class="card" id="api-keys">
     <div class="card-head"><h2><?= icon('link', 16) ?> API keys</h2></div>
     <div class="card-pad stack">
-      <?php if (!\Slate\Api::enabled()): ?><div class="alert"><?= icon('info', 16) ?> The REST API is switched off (Settings → Integrations → REST API). Existing keys do nothing until it is on.</div><?php endif; ?>
+      <?php if (!\Slate\Api::enabled() && !\Slate\Mcp::enabled()): ?><div class="alert"><?= icon('info', 16) ?> The REST API and the AI agents (MCP) server are switched off (Settings → Integrations). Existing keys do nothing until one is on.</div><?php endif; ?>
       <?php if ($newKey): ?>
         <div class="alert alert-success stack-sm"><strong><?= icon('check', 16) ?> Copy your new key now, it will not be shown again.</strong>
           <code class="secret" style="user-select:all;word-break:break-all"><?= e($newKey) ?></code></div>
       <?php endif; ?>
-      <p class="muted">Keys let apps and scripts use the API as you, with your permissions. Send them as <code>Authorization: Bearer &lt;key&gt;</code>.</p>
+      <p class="muted">Keys let apps, scripts and AI agents (MCP) use the site as you, with your permissions. Send them as <code>Authorization: Bearer &lt;key&gt;</code>.</p>
       <?php if ($keys): ?>
       <ul class="list list-compact">
         <?php foreach ($keys as $k): ?>

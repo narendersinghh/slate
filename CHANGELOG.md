@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.15.0: AI-first building
+- **Design with AI** in the visual builder: describe a whole page, add a section, or select an element and say what
+  to change. The result is ordinary, editable builder content in your design system (colours, fonts, classes),
+  class-based CSS, images as placeholders for the media library, scripts removed, one undo step, never auto-published.
+- **MCP server** (`/api/mcp`, off by default, Settings → Integrations → AI agents): Claude, ChatGPT or any MCP client
+  can read the site, create and update content (drafts by default, revision first), design pages as editable builder
+  designs, import media from public URLs (SSRF-guarded), search, and restore revisions. Scoped API keys, rate limit,
+  Origin checks, everything logged. See docs/mcp.md.
+- **Templates in the visual builder**: "Design visually" adds template blocks (title, content, image, fields, terms,
+  item lists, pagination); loops and conditions become locked code blocks saved back verbatim; the original code is kept
+  and "Back to code editor" restores it exactly. Visitors still go through the same template engine.
+- Locked template-code blocks in page designs too; stored content leaves template logic out (search, excerpts, meta).
+- The builder parses CSS itself, so values with CSS variables in shorthands (`background: var(--color-primary)`) are
+  kept exactly (the browser parser dropped them).
+- AI requests to Claude use `claude-opus-5-5` with an effort level and server-side refusal fallbacks; no temperature.
+- Tests: a fake AI provider (`bin/mock-ai`) lets the builder's AI features run in CI without keys.
+
 ## 0.14.1: Builder safeguards
 - Converting an item to a visual design saves a revision first and remembers the original content; "Use classic
   editor" restores it exactly (the design is kept for later).

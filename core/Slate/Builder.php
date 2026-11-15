@@ -102,8 +102,117 @@ final class Builder
      */
     public static function projectFromHtml(string $html, string $css): array
     {
-        return ['assets' => [], 'styles' => [], 'symbols' => [], 'dataSources' => [],
-            'pages' => [['frames' => [['component' => ['type' => 'wrapper', 'components' => self::lockTemplateLogic($html)], 'styles' => $css]]]]];
+        [$rules, $rest] = self::cssRules($css);
+        return ['assets' => [], 'styles' => $rules, 'symbols' => [], 'dataSources' => [],
+            'pages' => [['frames' => [['component' => ['type' => 'wrapper', 'components' => self::lockTemplateLogic($html)], 'styles' => $rest]]]]];
+    }
+
+    /**
+     * CSS → GrapesJS style rules, values kept verbatim (the browser parser would drop shorthands that use var()).
+     * Plain rules and @media blocks are converted; other at-rules come back as CSS text for the editor to parse.
+     * @return array{0: array, 1: string} [rules, leftover css]
+     */
+    public static function cssRules(string $css): array
+    {
+        $css = (string)preg_replace('#/\*.*?\*/#s', '', $css);
+        $rules = [];
+        $rest = '';
+        $blocks = self::cssBlocks($css);
+        foreach ($blocks as [$prelude, $body]) {
+            if (preg_match('/^@media\s+(.+)$/is', $prelude, $m)) {
+                foreach (self::cssBlocks($body) as [$sel, $decl]) {
+                    if ($sel !== '' && $sel[0] !== '@') {
+                        $rules[] = self::cssRule($sel, $decl) + ['mediaText' => trim($m[1]), 'atRuleType' => 'media'];
+                    }
+                }
+            } elseif ($prelude !== '' && $prelude[0] === '@') {
+                $rest .= $prelude . '{' . $body . '}';
+            } elseif ($prelude !== '') {
+                $rules[] = self::cssRule($prelude, $body);
+            }
+        }
+        return [array_values(array_filter($rules, static fn($r) => $r['style'] !== [])), $rest];
+    }
+
+    /** Top-level "prelude { body }" pairs of a stylesheet (braces inside strings are respected). */
+    private static function cssBlocks(string $css): array
+    {
+        $out = [];
+        $len = strlen($css);
+        $depth = 0;
+        $quote = '';
+        $start = 0;
+        $open = 0;
+        for ($i = 0; $i < $len; $i++) {
+            $c = $css[$i];
+            if ($quote !== '') {
+                if ($c === '\\') {
+                    $i++;
+                } elseif ($c === $quote) {
+                    $quote = '';
+                }
+                continue;
+            }
+            if ($c === '"' || $c === "'") {
+                $quote = $c;
+            } elseif ($c === '{') {
+                if ($depth++ === 0) {
+                    $open = $i;
+                }
+            } elseif ($c === '}' && $depth > 0 && --$depth === 0) {
+                $prelude = trim(substr($css, $start, $open - $start));
+                // A statement at-rule (@charset …;) before the block belongs to nobody.
+                $prelude = trim((string)preg_replace('/^(@[a-z-]+[^;{]*;\s*)+/i', '', $prelude));
+                $out[] = [$prelude, substr($css, $open + 1, $i - $open - 1)];
+                $start = $i + 1;
+            }
+        }
+        return $out;
+    }
+
+    private static function cssRule(string $selector, string $body): array
+    {
+        $style = [];
+        $decls = [];
+        $cur = '';
+        $paren = 0;
+        $quote = '';
+        for ($i = 0, $n = strlen($body); $i < $n; $i++) {
+            $c = $body[$i];
+            if ($quote !== '') {
+                $quote = $c === $quote ? '' : $quote;
+            } elseif ($c === '"' || $c === "'") {
+                $quote = $c;
+            } elseif ($c === '(') {
+                $paren++;
+            } elseif ($c === ')') {
+                $paren = max(0, $paren - 1);
+            } elseif ($c === ';' && $paren === 0) {
+                $decls[] = $cur;
+                $cur = '';
+                continue;
+            }
+            $cur .= $c;
+        }
+        $decls[] = $cur;
+        foreach ($decls as $decl) {
+            $p = strpos($decl, ':');
+            if ($p === false) {
+                continue;
+            }
+            $prop = strtolower(trim(substr($decl, 0, $p)));
+            $val = trim(substr($decl, $p + 1));
+            if ($prop !== '' && $val !== '' && preg_match('/^-?-?[a-z][a-z0-9-]*$/', $prop)) {
+                $style[$prop] = $val;
+            }
+        }
+        $selector = trim((string)preg_replace('/\s+/', ' ', $selector));
+        // A plain class selector (.card, .btn.big, .card:hover) is linked to the classes so the style panel shows it.
+        if (preg_match('/^((?:\.[A-Za-z_][\w-]*)+)(?::([a-z-]+))?$/', $selector, $m)) {
+            $rule = ['selectors' => explode('.', ltrim($m[1], '.')), 'style' => $style];
+            return empty($m[2]) ? $rule : $rule + ['state' => $m[2]];
+        }
+        return ['selectors' => [], 'selectorsAdd' => $selector, 'style' => $style];
     }
 
     /** PHP twin of lockTemplateLogic() in builder.js: each outermost {{#x}}…{{/x}} block → <slate-code data-code="base64">. */

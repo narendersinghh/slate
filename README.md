@@ -20,6 +20,7 @@ A fast, secure, SEO-first content management system, the flexibility of WordPres
 - **Backups**: database and files, scheduled with retention; restore from the command line.
 - **Scheduled tasks**: server cron or visitor-triggered; modules add their own jobs.
 - **REST API**: headless content API with per-user API keys (off by default).
+- **AI agents (MCP)**: built-in Model Context Protocol server, so Claude, ChatGPT, Cursor and other agents can read the site, write drafts and design pages in the visual builder with a scoped API key (off by default). See [docs/mcp.md](docs/mcp.md).
 - **Modules** · Slate’s name for plugins. Install from a zip, GitHub or registries, create one with AI, update with rollback; crashing modules switch themselves off.
 - **Updates**: one-click core updates from GitHub Releases with automatic backup and rollback.
 

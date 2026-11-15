@@ -131,6 +131,83 @@
   });
   }
 
+
+  // ------------------------------------------------------------------ CSS parser
+  // GrapesJS reads CSS through the browser's CSSOM, which drops shorthand values that use var() (e.g.
+  // `background: var(--color-primary)`) and expands shorthands. Slate is built on CSS variables, so the builder
+  // parses CSS itself and keeps every declaration exactly as written.
+  function splitTop(str, sep) {
+    const out = []; let depth = 0, q = '', cur = '';
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (q) { cur += ch; if (ch === q && str[i - 1] !== '\\') q = ''; continue; }
+      if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+      if (ch === '(') depth++;
+      if (ch === ')') depth--;
+      if (ch === sep && depth === 0) { out.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    if (cur.trim()) out.push(cur);
+    return out;
+  }
+  function parseDecls(body) {
+    const style = {};
+    splitTop(body, ';').forEach((d) => {
+      const i = d.indexOf(':');
+      if (i < 1) return;
+      const prop = d.slice(0, i).trim().toLowerCase();
+      const val = d.slice(i + 1).trim();
+      if (prop && val) style[prop] = val;
+    });
+    return style;
+  }
+  function parseBlocks(css) {
+    // -> [{ prelude, body }] at one nesting level; comments removed first
+    const out = []; let i = 0;
+    while (i < css.length) {
+      const open = css.indexOf('{', i);
+      if (open === -1) break;
+      const prelude = css.slice(i, open).trim();
+      let depth = 1, j = open + 1, q = '';
+      for (; j < css.length && depth; j++) {
+        const ch = css[j];
+        if (q) { if (ch === q && css[j - 1] !== '\\') q = ''; continue; }
+        if (ch === '"' || ch === "'") q = ch;
+        else if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+      }
+      out.push({ prelude, body: css.slice(open + 1, j - 1) });
+      i = j;
+    }
+    return out;
+  }
+  function slateCssParser(css) {
+    const rules = [];
+    const add = (sel, body, at) => {
+      const style = parseDecls(body);
+      const parts = splitTop(sel, ',').map((x) => x.trim()).filter(Boolean);
+      const simple = parts.length === 1 && parts[0].match(/^((?:\.[\w-]+)+)(?::([\w-]+))?$/);
+      const r = simple
+        ? { selectors: simple[1].split('.').filter(Boolean), state: simple[2] || '', style }
+        : { selectors: [], selectorsAdd: parts.join(', '), style };
+      if (at) Object.assign(r, at);
+      rules.push(r);
+    };
+    parseBlocks(String(css || '').replace(/\/\*[\s\S]*?\*\//g, '')).forEach((b) => {
+      const m = b.prelude.match(/^@(media|supports|container)\s*(.*)$/i);
+      if (m) {
+        parseBlocks(b.body).forEach((inner) => add(inner.prelude, inner.body, { atRule: m[1].toLowerCase(), mediaText: m[2].trim() }));
+      } else if (b.prelude.startsWith('@')) {
+        const kf = b.prelude.match(/^@(keyframes|font-face)\s*(.*)$/i);
+        if (kf && kf[1].toLowerCase() === 'font-face') rules.push({ selectors: [], selectorsAdd: '', atRule: 'font-face', style: parseDecls(b.body), singleAtRule: true });
+        // keyframes and other at-rules are left out (rare in page designs)
+      } else {
+        add(b.prelude, b.body);
+      }
+    });
+    return rules;
+  }
+
   // ------------------------------------------------------------------ editor
   const devices = [
     { id: 'Desktop', name: 'Desktop', width: '' },
@@ -140,6 +217,7 @@
   const palette = PB.colors.map((c) => c.value);
   const editor = grapesjs.init({
     plugins: [slateCodePlugin],
+    parser: { parserCss: slateCssParser },
     container: '#pb-editor',
     height: '100%',
     width: 'auto',

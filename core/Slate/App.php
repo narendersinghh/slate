@@ -73,6 +73,9 @@ final class App
             Frontend::notFound();
             return;
         }
+        if ($path === '/api/mcp') {
+            Mcp::handle(); // AI agents (Model Context Protocol); independent of the REST API switch
+        }
         if ($path === '/api/v1' || str_starts_with($path, '/api/v1/')) {
             if (Api::enabled() || ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
                 Api::handle(substr($path, 7));

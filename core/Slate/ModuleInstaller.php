@@ -167,6 +167,7 @@ final class ModuleInstaller
                 @opcache_reset();
             }
             log_activity($exists ? 'module_updated' : 'module_installed', "$slug {$m['version']}");
+            Integrity::trust("modules/$slug");
             PageCache::clear();
             return ['ok' => true, 'slug' => $slug, 'updated' => $exists, 'version' => $m['version'], 'scan' => $scan, 'backup' => $backup];
         } finally {
@@ -207,6 +208,7 @@ final class ModuleInstaller
                 return ['ok' => false, 'error' => 'Could not write to the modules folder.'];
             }
             log_activity('module_created', $slug);
+            Integrity::trust("modules/$slug");
             return ['ok' => true, 'slug' => $slug, 'scan' => $scan];
         } finally {
             Updater::rrmdir($work);
@@ -304,6 +306,7 @@ final class ModuleInstaller
             Options::set('module_migrations', $v, false);
         }
         log_activity('module_deleted', $slug);
+        Integrity::trust("modules/$slug");
         return ['ok' => true, 'backup' => basename($backup)];
     }
 
@@ -620,7 +623,11 @@ final class ModuleInstaller
             }
             $zip->extractTo($work);
             $zip->close();
-            return is_dir("$work/$slug") && self::place("$work/$slug", SLATE_MODULES . "/$slug");
+            $ok = is_dir("$work/$slug") && self::place("$work/$slug", SLATE_MODULES . "/$slug");
+            if ($ok) {
+                Integrity::trust("modules/$slug");
+            }
+            return $ok;
         } finally {
             Updater::rrmdir($work);
         }

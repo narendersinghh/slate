@@ -7,14 +7,19 @@ ServerSignature Off
     RewriteEngine On
     # RewriteBase /   (uncomment & adjust when installed in a sub-folder)
 
-    # Block direct access to sensitive files and folders
-    RewriteRule ^(config\.php|config\.sample\.php|composer\.(json|lock)|\.git.*|.*\.sqlite|.*\.log|.*\.md)$ - [F,L,NC]
-    RewriteRule ^(core|modules|content/backups|content/cache)/.*\.(php\d?|phtml|phar|inc)$ - [F,L,NC]
-    RewriteRule ^content/.*\.(sqlite|log|zip)$ - [F,L,NC]
-    RewriteRule ^themes/.*\.(php\d?|phtml|phar|inc)$ - [F,L,NC]
-    RewriteRule ^(wp-content|wp-includes)/.*\.(php\d?|phtml|phar)$ - [F,L,NC]
-    RewriteRule ^bin(/.*)?$ - [F,L,NC]
-    RewriteRule ^admin/(views|install\.php|routes\.php|api\.php)(/.*)?$ - [F,L,NC]
+    # Block direct access to sensitive files and folders. Blocked paths answer 404 (not 403),
+    # so scanners cannot even tell that they exist.
+    RewriteRule ^(config\.php|config\.sample\.php|composer\.(json|lock)|\.git.*|.*\.sqlite|.*\.log|.*\.md)$ - [R=404,L,NC]
+    RewriteRule (^|/)\.(?!well-known/) - [R=404,L,NC]
+    RewriteRule (^|/)(module|theme)\.json$ - [R=404,L,NC]
+    RewriteCond %{REQUEST_URI} !/content/uploads/
+    RewriteRule \.(example|dist|bak|old|orig|save|swp|sql|gz|tgz|tar)$ - [R=404,L,NC]
+    RewriteRule ^(core|modules|content/backups|content/cache)/.*\.(php\d?|phtml|phar|inc)$ - [R=404,L,NC]
+    RewriteRule ^content/.*\.(sqlite|log|zip)$ - [R=404,L,NC]
+    RewriteRule ^themes/.*\.(php\d?|phtml|phar|inc)$ - [R=404,L,NC]
+    RewriteRule ^(wp-content|wp-includes)/.*\.(php\d?|phtml|phar)$ - [R=404,L,NC]
+    RewriteRule ^bin(/.*)?$ - [R=404,L,NC]
+    RewriteRule ^admin/(views|install\.php|routes\.php|api\.php)(/.*)?$ - [R=404,L,NC]
 
     # Serve existing static files directly
     RewriteCond %{REQUEST_FILENAME} -f

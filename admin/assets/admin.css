@@ -842,3 +842,17 @@ label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; c
 .diff-gap { color: var(--muted); text-align: center; background: var(--surface-3); font-size: 11px; }
 .diff-legend { padding: 1px 8px; border-radius: 6px; margin-right: 6px; }
 @media (max-width: 860px) { .revisions-layout { grid-template-columns: 1fr; } .revisions-list { position: static; max-height: 260px; } }
+
+/* Security check */
+.sec-summary { display: flex; gap: 6px; flex-wrap: wrap; }
+.sec-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sec-list li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; }
+.sec-list li > div { flex: 1; min-width: 0; }
+.sec-list li small { color: var(--muted); }
+.sec-icon { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sec-ok .sec-icon { background: var(--success-soft); color: var(--success); }
+.sec-warn .sec-icon { background: var(--warn-soft); color: var(--warn); }
+.sec-bad .sec-icon { background: var(--danger-soft); color: var(--danger); }
+.sec-info .sec-icon { background: var(--surface-3); color: var(--muted); }
+.sec-tag { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-left: 6px; }
+.sec-bad .sec-tag { color: var(--danger); } .sec-warn .sec-tag { color: var(--warn); }

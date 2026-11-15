@@ -231,7 +231,7 @@ final class DesignSystem
             $out .= '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
                 . '<link rel="stylesheet" href="' . e($url) . '">';
         }
-        return $out . '<style id="slate-design-system">' . self::css($ds) . '</style>';
+        return $out . '<style id="ds-vars">' . self::css($ds) . '</style>';
     }
 
     /** Brand palette for the admin (when "match website" is on): primary + generated shades. */

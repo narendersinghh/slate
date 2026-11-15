@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.0 — Security
+- **Separate admin domain**: `admin_host` in config.php (or `php bin/slate admin:host`) — the dashboard only answers on
+  that host and is a plain 404 everywhere else; the public site on the admin host is only shown to signed-in team members.
+- **Dashboard IP allow-list** (`admin_ips`, IPv4/IPv6 CIDR). Recovery from SSH: `admin:url`, `admin:host`, `admin:ips`.
+- **File integrity monitor**: core verified against the official GitHub files of the installed commit/release, modules and
+  other code against a trusted snapshot, executables and `.htaccess` changes in data folders always flagged; daily task,
+  email alert, dashboard warning, `php bin/slate integrity:check | integrity:trust`. Installs/updates through Slate are
+  trusted automatically.
+- **Security check** page (Settings → Security): HTTPS, HSTS, dashboard address/host/IPs, 2FA coverage, debug, config.php
+  permissions, PHP, backups, cron, email, API, risky module code, integrity.
+- "Require two-factor auth for administrators" is now enforced (until set up, only the profile page is reachable).
+- Email alert when someone with settings access signs in from a new address.
+- No fingerprints: no `X-Slate-Cache` header (only with debug), no "cached by" comment, neutral cookie names
+  (`sid`, `li` — everyone signs in again once) and element ids.
+- `.htaccess`/nginx: blocked paths answer 404; hidden files, `module.json`/`theme.json` and `.example/.bak/.sql…` files blocked.
+- Fix: a syntax error in a core file is no longer blamed on (and switches off) the module that happened to be loading.
+
 ## 0.8.0 — Revisions, email, backups, scheduled tasks, REST API
 - **Revisions**: every editor save keeps the previous version (title, content, excerpt, custom fields, SEO); compare with a
   line diff and restore in one click (restoring is undoable too). Settings → General → Writing & revisions (default 25 per item).

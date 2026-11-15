@@ -156,9 +156,8 @@ Sites then see “Update available”. Updating backs up the current core to `co
 
 ## Security notes
 
-- Keep `config.php` private (it contains the encryption secret). The bundled `.htaccess`/nginx rules block direct access to it, to PHP files under `core/`, `themes/`, `modules/`, and to anything executable in `content/`.
-- Enable HTTPS and then HSTS (Settings → Security → Headers).
-- Turn on two-factor authentication for every administrator (Profile).
+See **[docs/security.md](docs/security.md)** and **Settings → Security → Security check**. In short: separate admin domain
+or custom admin URL, 2FA for every administrator, HTTPS + HSTS, a server cron for the daily file integrity check, SMTP for alerts.
 
 ## Roadmap
 

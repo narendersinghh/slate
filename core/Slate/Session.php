@@ -6,9 +6,9 @@ namespace Slate;
 /** Hardened PHP session handling. Only started when needed (admin / logged-in users). */
 final class Session
 {
-    public const NAME = 'slate_sid';
+    public const NAME = 'sid';
     /** Non-sensitive cookie that lets the page cache skip logged-in visitors without starting a session. */
-    public const FLAG = 'slate_li';
+    public const FLAG = 'li';
 
     public static function start(): void
     {

@@ -47,6 +47,14 @@ function admin_dispatch(string $path): void
         Modules::maintain();
     }
 
+    // "Require two-factor auth for administrators": until it is set up, only the profile page is reachable.
+    if (Auth::user() && Auth::user()['role'] === 'administrator' && Options::get('security_require_2fa')
+        && !in_array(trim($path, '/'), ['profile', 'profile/2fa', 'logout'], true)
+        && !DB::val('SELECT totp_secret FROM {{users}} WHERE id = :id', ['id' => Auth::id()])) {
+        Session::flash('error', 'Two-factor authentication is required for administrators. Set it up to continue.');
+        redirect(admin_url('profile') . '#2fa');
+    }
+
     $r = new Router();
 
     // ---------- Auth ----------
@@ -348,6 +356,19 @@ function admin_dispatch(string $path): void
         }
         Session::flash($ok ? 'success' : 'error', $ok ? 'Backup deleted.' : 'Backup not found.');
         redirect(admin_url('settings/system/backups'));
+    });
+    $r->post('/system/integrity/check', static function () {
+        Auth::require('manage_updates');
+        $r = \Slate\Integrity::check(false);
+        $n = count(array_filter($r['issues'], static fn($i) => $i['level'] !== 'info'));
+        Session::flash($n ? 'error' : 'success', $n ? "$n file(s) need a look." : 'No unexpected file changes.');
+        redirect(admin_url('settings/security/check'));
+    });
+    $r->post('/system/integrity/trust', static function () {
+        Auth::require('manage_updates');
+        $n = \Slate\Integrity::trust();
+        Session::flash('success', "Trusted the current $n files. Future changes will be reported.");
+        redirect(admin_url('settings/security/check'));
     });
     $r->post('/system/cron/run', static function () {
         admin_require_settings('system');

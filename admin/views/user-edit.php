@@ -56,7 +56,7 @@ $isSelf = (int)$u['id'] === Auth::id();
   </form>
 
   <?php if ($profile): ?>
-  <section class="card">
+  <section class="card" id="2fa">
     <div class="card-head"><h2><?= icon('lock', 16) ?> Two-factor authentication</h2></div>
     <div class="card-pad stack">
       <?php if (!empty($u['totp_secret'])): ?>

@@ -148,7 +148,11 @@ final class Modules
             require_once $file;
             return true;
         } catch (\Error $e) {
-            // Syntax errors, missing classes/functions: the module cannot work, switch it off.
+            // Syntax errors, missing classes/functions: the module cannot work, switch it off —
+            // unless the broken file is core code the module merely loaded (not the module's fault).
+            if ($e instanceof \ParseError && self::slugFromPath($e->getFile()) !== $slug) {
+                throw $e;
+            }
             self::fail($slug, $e->getMessage(), $e->getFile(), $e->getLine());
         } catch (\Throwable $e) {
             error_log("Slate module $slug failed: " . $e->getMessage());
@@ -171,9 +175,10 @@ final class Modules
                 return;
             }
             $slug = self::$loading;
-            // Parse/compile errors anywhere in a module's files are never transient.
-            if ($slug === null && ($err['type'] & (E_PARSE | E_COMPILE_ERROR))) {
-                $slug = self::slugFromPath((string)$err['file']);
+            $owner = self::slugFromPath((string)$err['file']);
+            if ($err['type'] & (E_PARSE | E_COMPILE_ERROR)) {
+                // A broken file belongs to whoever owns it: never blame a module for a broken core file.
+                $slug = $owner;
             }
             if ($slug === null) {
                 return;

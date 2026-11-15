@@ -210,7 +210,9 @@ final class Settings
                     ['key' => 'security_session_hours', 'type' => 'number', 'label' => 'Session idle timeout (hours)', 'default' => 12, 'min' => 1, 'max' => 720],
                     ['key' => 'security_min_password', 'type' => 'number', 'label' => 'Minimum password length', 'default' => 10, 'min' => 8, 'max' => 64],
                     ['key' => 'security_require_2fa', 'type' => 'toggle', 'label' => 'Require two-factor auth for administrators', 'default' => false],
+                    ['key' => 'security_login_alerts', 'type' => 'toggle', 'label' => 'Email administrators when they sign in from a new address', 'default' => true],
                 ]],
+                'check' => ['label' => 'Security check', 'render' => 'security-check'],
                 'headers' => ['label' => 'HTTP security headers', 'fields' => [
                     ['key' => 'security_headers', 'type' => 'toggle', 'label' => 'Send security headers', 'help' => 'X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy and the Content-Security-Policy below.', 'default' => true],
                     ['key' => 'security_csp', 'type' => 'textarea', 'label' => 'Content-Security-Policy', 'rows' => 3, 'default' => \Slate\PageCache::DEFAULT_CSP,

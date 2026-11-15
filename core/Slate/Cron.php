@@ -24,6 +24,7 @@ final class Cron
             'cleanup' => ['every' => 86400, 'label' => 'Clean up old login attempts, activity and temporary files', 'run' => [self::class, 'cleanup']],
             'backup' => ['every' => 3600, 'label' => 'Automatic backups (Settings → System → Backups)', 'run' => [Backup::class, 'scheduled']],
             'module_updates' => ['every' => 43200, 'label' => 'Check for module updates', 'run' => static fn() => ModuleInstaller::updates(true)],
+            'integrity' => ['every' => 86400, 'label' => 'File integrity check (emails administrators about tampering)', 'run' => [Integrity::class, 'scheduled']],
         ];
         $jobs = Hooks::filter('cron_jobs', $jobs);
         return array_filter($jobs, static fn($j) => is_array($j) && isset($j['run']) && is_callable($j['run']) && (int)($j['every'] ?? 0) >= 60);

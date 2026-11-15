@@ -9,6 +9,8 @@
  *        module:export <slug> [--to=file.zip]
  *   php bin/slate safe-mode:on | safe-mode:off       start without modules (rescue a broken site)
  *   php bin/slate cron [--force] [--job=name] [--verbose]   run scheduled tasks (add to the server's crontab)
+ *   php bin/slate admin:url [slug] | admin:host <host|off> | admin:ips "<ip cidr …>|off"   where the dashboard answers
+ *   php bin/slate integrity:check [--notify] | integrity:trust [path]   file tampering check
  *   php bin/slate backup:create [--files] | backup:list | backup:restore <file> [--yes]
  *   php bin/slate version
  *
@@ -192,6 +194,64 @@ switch ($cmd) {
         $r['ok'] ? $out("✓ Restored {$r['statements']} statements. Safety backup: {$r['safety']}") : $fail($r['error']);
         break;
 
+    case 'integrity:check':
+        $r = \Slate\Integrity::check(!empty($opts['notify']));
+        $out(($r['official'] ? "Core verified against GitHub ({$r['official']})" : 'Official file list unavailable; compared with the trusted snapshot') . " · {$r['files']} files");
+        foreach ($r['issues'] as $i) {
+            $out(sprintf('  [%s] %-9s %s — %s', $i['level'], $i['kind'], $i['path'], $i['detail']));
+        }
+        $out($r['issues'] ? count($r['issues']) . ' finding(s).' : '✓ No unexpected file changes.');
+        exit(array_filter($r['issues'], static fn($i) => $i['level'] === 'danger') ? 2 : 0);
+
+    case 'integrity:trust':
+        $out('✓ Trusted ' . \Slate\Integrity::trust($arg) . ' files' . ($arg !== '' ? " under $arg" : '') . '.');
+        break;
+
+    case 'admin:url':
+        // php bin/slate admin:url            show the dashboard address
+        // php bin/slate admin:url studio-x7  move the dashboard to /studio-x7
+        if ($arg !== '') {
+            if (!preg_match('/^[a-z0-9-]{3,40}$/', $arg) || in_array($arg, ['api', 'content', 'themes', 'modules', 'core', 'bin'], true)) {
+                $fail('Use 3–40 lowercase letters, numbers or dashes (not a reserved folder name).');
+            }
+            Options::set('security_admin_slug', $arg);
+            PageCache::clear();
+        }
+        $out('Dashboard: ' . \Slate\AdminAccess::baseUrl() . '/' . admin_slug() . '/login');
+        foreach (\Slate\AdminAccess::allowedIps() ? ['Only from: ' . implode(', ', \Slate\AdminAccess::allowedIps())] : [] as $l) {
+            $out($l);
+        }
+        break;
+
+    case 'admin:host':
+        // php bin/slate admin:host cms.example.com | off
+        if ($arg === '') {
+            $out('Admin host: ' . (\Slate\AdminAccess::adminHost() ?: '(any host)'));
+            break;
+        }
+        $host = strtolower($arg) === 'off' ? null : strtolower(preg_replace('#^https?://|/.*$#', '', $arg));
+        if ($host !== null && !preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/', $host)) {
+            $fail('Not a valid host name.');
+        }
+        ($e = \Slate\AdminAccess::setConfig('admin_host', $host)) ? $fail($e) : $out($host ? "✓ The dashboard now answers only on https://$host/" . admin_slug() . '/' : '✓ The dashboard answers on any host again.');
+        break;
+
+    case 'admin:ips':
+        // php bin/slate admin:ips "203.0.113.7 10.0.0.0/8" | off
+        if ($arg === '') {
+            $out('Allowed: ' . (implode(', ', \Slate\AdminAccess::allowedIps()) ?: '(everyone)'));
+            break;
+        }
+        $ips = strtolower($arg) === 'off' ? null : array_values(array_filter(preg_split('/[\s,]+/', $arg) ?: []));
+        foreach ((array)$ips as $ip) {
+            [$n, $b] = array_pad(explode('/', $ip, 2), 2, null);
+            if (@inet_pton($n) === false || ($b !== null && !ctype_digit($b))) {
+                $fail("Not an IP or CIDR range: $ip");
+            }
+        }
+        ($e = \Slate\AdminAccess::setConfig('admin_ips', $ips)) ? $fail($e) : $out($ips ? '✓ Dashboard limited to ' . implode(', ', $ips) : '✓ Dashboard reachable from any address.');
+        break;
+
     case 'safe-mode:on':
         file_put_contents(SLATE_CONTENT . '/safe-mode', 'Created ' . gmdate('c') . "\n");
         PageCache::clear();
@@ -217,5 +277,5 @@ switch ($cmd) {
         foreach ($commands as $name => $c) {
             $extra .= sprintf("\n  php bin/slate %-58s %s", $name, (string)($c[0] ?? ''));
         }
-        $out("Slate CLI\n\n  php bin/slate cache:clear                                              Clear the page cache\n  php bin/slate module:list | module:make <slug> | module:install <url|zip> | module:activate <slug>\n  php bin/slate module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>\n  php bin/slate module:export <slug> [--to=file.zip]                     Package a module for reuse\n  php bin/slate safe-mode:on | safe-mode:off                             Start without modules\n  php bin/slate cron [--force] [--verbose]                               Run scheduled tasks (server crontab)\n  php bin/slate backup:create [--files] | backup:list | backup:restore <file>\n  php bin/slate version" . ($extra !== '' ? "\n\nFrom modules:$extra" : ''));
+        $out("Slate CLI\n\n  php bin/slate cache:clear                                              Clear the page cache\n  php bin/slate module:list | module:make <slug> | module:install <url|zip> | module:activate <slug>\n  php bin/slate module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>\n  php bin/slate module:export <slug> [--to=file.zip]                     Package a module for reuse\n  php bin/slate safe-mode:on | safe-mode:off                             Start without modules\n  php bin/slate cron [--force] [--verbose]                               Run scheduled tasks (server crontab)\n  php bin/slate backup:create [--files] | backup:list | backup:restore <file>\n  php bin/slate admin:url [slug] | admin:host <host|off> | admin:ips \"<ips>|off\"   Dashboard access\n  php bin/slate integrity:check | integrity:trust [path]                File tampering check\n  php bin/slate version" . ($extra !== '' ? "\n\nFrom modules:$extra" : ''));
 }

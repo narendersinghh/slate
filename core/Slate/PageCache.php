@@ -54,7 +54,9 @@ final class PageCache
             return;
         }
         header('Content-Type: text/html; charset=utf-8');
-        header('X-Slate-Cache: HIT');
+        if (SLATE_DEBUG) {
+            header('X-Cache: HIT');
+        }
         header('Cache-Control: public, max-age=0, must-revalidate');
         self::securityHeaders();
         readfile($file);
@@ -71,7 +73,7 @@ final class PageCache
             @mkdir(self::DIR, 0755, true);
         }
         self::writeFlag();
-        @file_put_contents(self::key(), $html . "\n<!-- cached by Slate " . gmdate('c') . ' -->', LOCK_EX);
+        @file_put_contents(self::key(), $html, LOCK_EX);
     }
 
     private static function writeFlag(): void

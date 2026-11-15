@@ -137,6 +137,37 @@ final class Auth
         DB::query('DELETE FROM {{login_attempts}} WHERE ip = :ip', ['ip' => self::ip()]);
         self::$resolved = false;
         log_activity('login', $user['username']);
+        self::newLocationAlert($user);
+    }
+
+    /**
+     * Email users with dashboard-changing powers when they sign in from an address not seen before
+     * (the last 10 are remembered). The very first sign-in only records the address.
+     */
+    private static function newLocationAlert(array $user): void
+    {
+        if (!Options::get('security_login_alerts', true) || !Roles::can((string)$user['role'], 'manage_settings')) {
+            return;
+        }
+        $meta = json_decode((string)($user['meta'] ?? ''), true) ?: [];
+        $known = array_values(array_filter((array)($meta['known_ips'] ?? []), 'is_string'));
+        $ip = self::ip();
+        $first = !$known;
+        if (in_array($ip, $known, true)) {
+            return;
+        }
+        $meta['known_ips'] = array_slice(array_merge([$ip], $known), 0, 10);
+        DB::update('users', ['meta' => json_encode($meta)], ['id' => $user['id']]);
+        if ($first) {
+            return;
+        }
+        $site = (string)Options::get('site_title', 'Slate');
+        $agent = mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? 'unknown browser'), 0, 200);
+        $link = AdminAccess::baseUrl() . '/' . admin_slug() . '/profile';
+        Mailer::send($user['email'], "New sign-in to $site", '<p>Hi ' . e($user['display_name'] ?: $user['username']) . ',</p>'
+            . '<p>Your account on <strong>' . e($site) . '</strong> was just signed in to from a new address:</p>'
+            . '<p><strong>IP:</strong> ' . e($ip) . '<br><strong>Browser:</strong> ' . e($agent) . '<br><strong>Time:</strong> ' . e(gmdate('Y-m-d H:i')) . ' UTC</p>'
+            . '<p>If this was you, nothing to do. If not, <a href="' . e($link) . '">change your password and turn on two-factor authentication</a> right away.</p>');
     }
 
     public static function logout(): void
@@ -193,7 +224,7 @@ final class Auth
         $meta = json_decode((string)$user['meta'], true) ?: [];
         $meta['reset'] = ['h' => hash('sha256', $token), 'exp' => time() + self::RESET_TTL];
         DB::update('users', ['meta' => json_encode($meta)], ['id' => $user['id']]);
-        $link = site_url(admin_slug() . '/reset') . '?u=' . (int)$user['id'] . '&t=' . $token;
+        $link = AdminAccess::baseUrl() . '/' . admin_slug() . '/reset?u=' . (int)$user['id'] . '&t=' . $token;
         $site = (string)Options::get('site_title', 'Slate');
         $html = '<p>Hi ' . e($user['display_name'] ?: $user['username']) . ',</p>'
             . '<p>Someone asked to reset the password for your account on <strong>' . e($site) . '</strong>. '

@@ -18,6 +18,12 @@ $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good ev
   </div>
 </section>
 
+<?php if (\Slate\Auth::can('manage_updates') && ($ir = \Slate\Integrity::report()) && ($bad = count(array_filter($ir['issues'], static fn($i) => $i['level'] === 'danger')))): ?>
+<div class="banner banner-danger"><span class="ic"><?= icon('shield', 18) ?></span>
+  <div><strong><?= $bad ?> file<?= $bad === 1 ? '' : 's' ?> changed unexpectedly.</strong> The file integrity check found changes nobody made through Slate.</div>
+  <a class="btn btn-sm" href="<?= e(admin_url('settings/security/check')) ?>">Review</a>
+</div>
+<?php endif; ?>
 <?php if (!empty($update) && version_compare($update['latest'] ?? '0', SLATE_VERSION, '>')): ?>
 <div class="banner banner-accent">
   <?= icon('download', 18) ?>

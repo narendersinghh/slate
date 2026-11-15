@@ -42,10 +42,22 @@ final class App
         // 4. Route.
         $admin = admin_slug();
         if ($path === "/$admin" || str_starts_with($path, "/$admin/")) {
+            // Wrong host or address for the dashboard: indistinguishable from any missing page.
+            if (!AdminAccess::dashboardAllowed()) {
+                Frontend::notFound();
+                return;
+            }
             // Old /admin URL 404s when a custom admin slug is set (hides the login).
             require SLATE_ADMIN . '/routes.php';
             admin_dispatch(substr($path, strlen($admin) + 1) ?: '/');
             return;
+        }
+        // On the private admin host the public site is only shown to signed-in team members.
+        if (AdminAccess::onAdminHost()) {
+            header('X-Robots-Tag: noindex, nofollow');
+            if (!Auth::can('access_admin')) {
+                redirect(admin_url('login') . '?redirect=' . rawurlencode($_SERVER['REQUEST_URI'] ?? '/'));
+            }
         }
         if ($path === '/admin' || str_starts_with($path, '/admin/')) {
             Frontend::notFound();

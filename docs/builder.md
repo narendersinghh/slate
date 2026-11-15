@@ -12,6 +12,29 @@ Open any page (or other content type with an editor) and choose **Design with th
 - **Save** (Ctrl/⌘ S) keeps a revision; **Publish/Update** makes it live. Choose *With site header & footer* or *Blank page*.
 - **Classic editor**: the ⋯ menu switches back; the design is kept and you can return to it any time.
 
+## Design with AI
+
+Click **✦ AI** in the builder (or ✦ on a selected element):
+
+- **Whole page**: describe the page (who it is for, what it says, the main action) and get a complete design.
+- **Add a section**: testimonials, pricing, FAQ, a signup band… added before the footer.
+- **Change selected**: "shorter", "three columns", "primary colour background", "translate to Hindi".
+
+The result is ordinary builder content in your design system's colours, fonts and classes: every word, image and
+style stays editable, images are placeholders you swap from the media library, scripts are removed, and one undo
+removes it. Nothing is published until you click Publish. Set up a provider (Claude, OpenAI, Gemini, a local model…)
+in Settings → AI assistant. External AI agents can also build pages through the MCP server (docs/mcp.md).
+
+## Templates
+
+Open a template and click **Design visually**. The block panel gains *This template*: title, content, featured
+image, excerpt, date and author, each custom field and taxonomy of that content type, related items, and for
+listings the list of items and pagination. They are template tags the engine fills in for every item, so one design
+serves every post, product or profile. Loops and conditions (`{{#query}}`, `{{#if}}`, `{{#each}}`) are kept as
+locked code blocks you can move and edit as code (double-click), saved back exactly. The first visual save keeps the
+template's code; **Back to code editor** restores it exactly. Saving from the code editor makes the code the source
+of truth again.
+
 ## Your existing design is never changed
 
 - Nothing converts automatically. Existing pages, posts and code Templates keep rendering through the theme and

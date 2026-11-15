@@ -45,7 +45,7 @@ foreach (Templates::SPECIAL as $k => $label) {
           <?php else: ?><span class="muted small">Theme default</span><?php endif; ?>
         </td>
         <td class="nowrap" style="text-align:right">
-          <?php foreach ($existing as $t): ?><a class="btn btn-sm" href="<?= e(admin_url('templates/' . $t['id'])) ?>"><?= icon('edit', 14) ?> <?= e(mb_strimwidth($t['name'], 0, 28, '…')) ?></a> <?php endforeach; ?>
+          <?php foreach ($existing as $t): $visual = ($t['builder']['mode'] ?? '') === 'builder'; ?><a class="btn btn-sm" href="<?= e(admin_url('templates/' . $t['id'] . ($visual ? '/builder' : ''))) ?>" title="<?= $visual ? 'Designed visually' : 'Code template' ?>"><?= icon($visual ? 'layers' : 'code', 14) ?> <?= e(mb_strimwidth($t['name'], 0, 28, '…')) ?></a> <?php endforeach; ?>
           <a class="btn btn-sm <?= $existing ? 'btn-ghost' : 'btn-primary' ?>" href="<?= e(admin_url('templates/new?kind=' . $kind . '&target=' . $target)) ?>"><?= icon('plus', 14) ?> <?= $existing ? 'New version' : 'Create' ?></a>
         </td>
       </tr>

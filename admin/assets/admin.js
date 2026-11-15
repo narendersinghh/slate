@@ -631,4 +631,10 @@
       run();
     });
   })();
+
+  // ---------- Small screens: show/hide list filters ----------
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-lt-filter-toggle]');
+    if (b) b.closest('.lt-filters').classList.toggle('show-filters');
+  });
 })();

@@ -211,6 +211,7 @@ final class ListTable
       <?php if ($this->opts['search'] !== false): ?>
         <label class="lt-search"><?= icon('search', 15) ?><input class="input" type="search" name="q" value="<?= e($s['q']) ?>" placeholder="<?= e($this->opts['search']) ?>" aria-label="Search"></label>
       <?php endif; ?>
+      <?php if ($this->opts['filters']): ?><button type="button" class="btn btn-sm lt-filter-toggle" data-lt-filter-toggle><?= icon('filter', 14) ?> Filters<?= $s['filters'] ? ' <span class="pill pill-accent">' . count($s['filters']) . '</span>' : '' ?></button><?php endif; ?>
       <?php foreach ($this->opts['filters'] as $k => $f): $cur = $s['filters'][$k] ?? ''; ?>
         <?php if (($f['type'] ?? 'select') === 'text'): ?>
           <input class="input lt-filter<?= $cur !== '' ? ' is-set' : '' ?>" name="f[<?= e($k) ?>]" value="<?= e($cur) ?>" placeholder="<?= e($f['label']) ?>" aria-label="<?= e($f['label']) ?>"<?= !empty($f['list']) ? ' list="lt-' . e($this->id . '-' . $k) . '"' : '' ?>>

@@ -14,6 +14,14 @@ $tabDef = $tabs[$tab] ?? null;
              data-index="<?= e(json_encode(Settings::index(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>" data-base="<?= e(admin_url('settings')) ?>">
       <div class="settings-search-results" hidden></div>
     </div>
+    <select class="input settings-jump" aria-label="Go to settings section" onchange="if (this.value) location.href = this.value">
+      <option value="<?= e(admin_url('settings')) ?>"<?= $tab === '' ? ' selected' : '' ?>>Overview</option>
+      <?php foreach ($tabs as $tk => $t): if (!admin_can_settings($tk)) continue; ?>
+        <optgroup label="<?= e($t['label']) ?>">
+          <?php foreach ($t['sections'] as $sk => $sct): ?><option value="<?= e(admin_url("settings/$tk/$sk")) ?>"<?= $tk === $tab && $sk === $section ? ' selected' : '' ?>><?= e($sct['label']) ?></option><?php endforeach; ?>
+        </optgroup>
+      <?php endforeach; ?>
+    </select>
     <a class="settings-nav-home<?= $tab === '' ? ' active' : '' ?>" href="<?= e(admin_url('settings')) ?>"><?= icon('grid', 15) ?> Overview</a>
     <?php foreach ($tabs as $tk => $t): if (!admin_can_settings($tk)) continue; $open = $tk === $tab; ?>
       <details class="settings-nav-group"<?= $open ? ' open' : '' ?>>

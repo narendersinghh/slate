@@ -1119,3 +1119,26 @@ ol.steps li { padding-left: 4px; }
 details.disclosure > summary { cursor: pointer; list-style: none; border-bottom: 0; }
 details.disclosure > summary::-webkit-details-marker { display: none; }
 details.disclosure[open] > summary { border-bottom: 1px solid var(--border); }
+
+/* Phones: compact filters and settings jump menu */
+.settings-jump, .lt-filter-toggle { display: none; }
+@media (max-width: 1000px) {
+  .settings-jump { display: block; width: 100%; }
+  .settings-nav-home, .settings-nav-group { display: none; }
+  .settings-nav { flex-direction: column; }
+}
+@media (max-width: 860px) {
+  .lt-filter-toggle { display: inline-flex; }
+  .lt-filters .lt-filter { display: none; }
+  .lt-filters.show-filters .lt-filter { display: block; flex: 1 1 45%; max-width: none; }
+  .lt-search { flex: 1 1 60%; }
+  .row-actions { gap: 10px; flex-wrap: wrap; }
+  .lt-top .tabs-pill { overflow-x: auto; flex-wrap: nowrap; max-width: 100%; scrollbar-width: none; }
+  .lt-top .tabs-pill a { white-space: nowrap; }
+}
+@media (max-width: 860px) {
+  .lt-filters .lt-search { flex: 1 1 0; min-width: 0; }
+  .lt-table td.col-primary { min-width: 170px; }
+}
+.lt, .lt-toolbar, .lt-toolbar > * { min-width: 0; max-width: 100%; }
+.lt-top .tabs-pill { min-width: 0; }

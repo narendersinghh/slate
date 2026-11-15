@@ -172,3 +172,33 @@ test('visual builder: design with AI, edit with AI', async ({ page }) => {
   expect(out).toContain('Edited by AI');
   expect(out).not.toContain('<script>alert');
 });
+
+test('visual builder: template logic stays intact as a locked block', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await page.goto(`${BASE}/admin/login`);
+  await page.fill('input[name=login]', USER);
+  await page.fill('input[name=password]', PASS);
+  await page.click('button[type=submit]');
+  await page.goto(`${BASE}/admin/content/page/new`);
+  await page.fill('input[name=title]', 'Logic page ' + Date.now());
+  const loop = '{{#query type="post" limit="2"}}<article class="pb-loop-item"><a href="{{url}}">{{title}}</a></article>{{/query}}';
+  await page.evaluate((code) => {
+    const html = '<p>Intro text</p>' + code + '<p>Outro</p>';
+    const area = document.querySelector('[data-main-editor] [contenteditable]');
+    if (area) area.innerHTML = html;
+    const ta = document.querySelector('textarea[name=content]');
+    if (ta) ta.value = html;
+  }, loop);
+  await page.click('button[name=then][value=builder]');
+  await page.waitForFunction(() => window.pbEditor && window.pbEditor.getWrapper());
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.pbEditor.getWrapper().find('[data-slate-code]').length)).toBe(1);
+  await page.screenshot({ path: `${SHOTS}/5-locked-code.png` });
+  await page.click('[data-pb-save=publish]');
+  await expect(page.locator('[data-pb-state]')).toContainText('Saved', { timeout: 15_000 });
+  const viewUrl = await page.locator('.dropdown-menu a[target=_blank]').first().getAttribute('href');
+  const out = await (await page.request.get(new URL(viewUrl, BASE).toString())).text();
+  expect(out).toContain('Intro text');
+  expect(out).toContain('class="pb-loop-item"');   // the loop ran for visitors
+  expect(out).not.toContain('{{#query');           // and its tags were rendered, not printed
+});

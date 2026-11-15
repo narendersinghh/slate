@@ -63,10 +63,73 @@
     { id: 'dyn-title', label: 'Page title', category: 'Dynamic', media: I.tag, content: '<h1>{{title}}</h1>' },
     { id: 'dyn-content', label: 'Excerpt', category: 'Dynamic', media: I.text, content: '<p>{{excerpt}}</p>' },
     { id: 'dyn-form', label: 'Form', category: 'Dynamic', media: I.form, content: '<div class="pb-form">{{form:contact}}</div>' },
-    { id: 'dyn-posts', label: 'Latest posts', category: 'Dynamic', media: I.list, content: '<div class="pb-query">{{#query type="post" limit="3"}}<article style="margin-bottom:24px"><h3><a href="{{url}}">{{title}}</a></h3><p>{{excerpt}}</p></article>{{/query}}</div>' },
+    { id: 'dyn-posts', label: 'Latest posts', category: 'Dynamic', media: I.list, content: { type: 'slate-code', code: '{{#query type="post" limit="3"}}<article style="margin-bottom:24px"><h3><a href="{{url}}">{{title}}</a></h3><p>{{excerpt}}</p></article>{{/query}}' } },
   ];
   (PB.saved || []).forEach((b) => blocks.push({ id: 'saved-' + b.id, label: b.label, category: 'Saved blocks', media: I.star,
     content: (b.css ? '<style>' + b.css + '</style>' : '') + b.html, attributes: { 'data-saved-id': b.id } }));
+
+
+  // ------------------------------------------------------------------ locked template code
+  // Template logic ({{#query}}…{{/query}}, {{#if}}…, {{#each}}…) is kept verbatim in a sealed block: shown as a
+  // labelled box in the canvas, movable, edited as code (double-click), saved back exactly as written.
+  const b64e = (s) => btoa(unescape(encodeURIComponent(s)));
+  const b64d = (s) => { try { return decodeURIComponent(escape(atob(s))); } catch (e) { return ''; } };
+  /** Wrap every outermost {{#name …}}…{{/name}} block in a <slate-code> placeholder before GrapesJS parses the HTML. */
+  function lockTemplateLogic(html) {
+    if (!html || html.indexOf('{{#') === -1) return html || '';
+    const re = /\{\{\s*([#\/])\s*([\w:.-]+)[^}]*\}\}/g;
+    let out = '', depth = 0, start = -1, last = 0, m;
+    while ((m = re.exec(html))) {
+      if (m[1] === '#') {
+        if (depth === 0) { start = m.index; }
+        depth++;
+      } else if (depth > 0) {
+        depth--;
+        if (depth === 0) {
+          const end = m.index + m[0].length;
+          out += html.slice(last, start) + '<slate-code data-code="' + b64e(html.slice(start, end)) + '"></slate-code>';
+          last = end;
+        }
+      }
+    }
+    return out + html.slice(last);
+  }
+  const codeLabel = (code) => {
+    const m = code.match(/\{\{\s*#\s*([\w:.-]+)([^}]*)\}\}/);
+    const what = m ? ({ query: 'List of content', each: 'Repeat', if: 'Show only if', unless: 'Show unless' }[m[1]] || m[1]) : 'Template code';
+    return what + (m && m[2].trim() ? ' · ' + m[2].trim() : '');
+  };
+  function slateCodePlugin(editor) {
+  editor.DomComponents.addType('slate-code', {
+    isComponent: (el) => (el.tagName === 'SLATE-CODE' ? { type: 'slate-code', code: b64d(el.getAttribute('data-code') || '') } : false),
+    model: {
+      defaults: { tagName: 'div', droppable: false, editable: false, stylable: false, code: '', attributes: { 'data-slate-code': '1' }, traits: [] },
+      toHTML() { return this.get('code'); },
+    },
+    view: {
+      events: { dblclick: 'editCode' },
+      onRender() { this.paint(); },
+      init() { this.listenTo(this.model, 'change:code', this.paint); },
+      paint() {
+        const code = this.model.get('code') || '';
+        this.el.innerHTML = '<div style="font:600 12px system-ui,sans-serif;letter-spacing:.02em;margin-bottom:6px">⧉ ' + esc(codeLabel(code)) +
+          '</div><pre style="margin:0;white-space:pre-wrap;font:12px ui-monospace,monospace;opacity:.75;max-height:140px;overflow:hidden">' + esc(code.slice(0, 600)) + '</pre>' +
+          '<div style="font:11px system-ui,sans-serif;opacity:.6;margin-top:6px">Filled in with real content for visitors · double-click to edit</div>';
+        this.el.style.cssText = 'border:1.5px dashed rgba(242,107,45,.7);background:rgba(242,107,45,.06);border-radius:8px;padding:12px 14px;margin:8px 0;color:inherit';
+      },
+      editCode() {
+        const body = document.createElement('div');
+        body.innerHTML = '<textarea class="input code" rows="16" spellcheck="false" style="width:100%"></textarea><p class="muted small">Template tags: {{title}}, {{url}}, {{excerpt}}, {{field:name}}, {{#query type="post" limit="3"}}…{{/query}}, {{#if field:x}}…{{/if}}.</p>';
+        const ta = qs('textarea', body);
+        ta.value = this.model.get('code');
+        const foot = document.createElement('div');
+        foot.innerHTML = '<button type="button" class="btn" data-close>Cancel</button> <button type="button" class="btn btn-primary" data-apply>Apply</button>';
+        const m = modal({ title: 'Edit template code', body, foot, size: 'lg' });
+        qs('[data-apply]', foot).addEventListener('click', () => { this.model.set('code', ta.value); m.close(); markDirty(); });
+      },
+    },
+  });
+  }
 
   // ------------------------------------------------------------------ editor
   const devices = [
@@ -76,6 +139,7 @@
   ];
   const palette = PB.colors.map((c) => c.value);
   const editor = grapesjs.init({
+    plugins: [slateCodePlugin],
     container: '#pb-editor',
     height: '100%',
     width: 'auto',
@@ -97,7 +161,7 @@
     canvas: { styles: PB.styles },
     assetManager: { upload: false, custom: true },
     projectData: PB.project || undefined,
-    components: PB.project ? undefined : (PB.html || ''),
+    components: PB.project ? undefined : lockTemplateLogic(PB.html || ''),
     protectedCss: '',
     baseCss: '* ::-webkit-scrollbar{width:8px;height:8px}* ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18);border-radius:8px}',
   });
@@ -305,7 +369,7 @@
   // content (editable, class-based styles), added as one undoable step.
   const placeholderImg = (alt) => ph(800, 500);
   function prepareAiHtml(html) {
-    return html.replace(/<img\b([^>]*?)\ssrc=""/g, (m, a) => '<img' + a + ' src="' + placeholderImg() + '"');
+    return lockTemplateLogic(html).replace(/<img\b([^>]*?)\ssrc=""/g, (m, a) => '<img' + a + ' src="' + placeholderImg() + '"');
   }
   async function runAi(mode, prompt, btn, out) {
     const sel = editor.getSelected();
@@ -422,7 +486,7 @@
     foot.innerHTML = '<button type="button" class="btn" data-close>Cancel</button> <button type="button" class="btn btn-primary" data-apply>Apply</button>';
     const m = modal({ title: 'Edit HTML & CSS', body, foot, size: 'lg' });
     qs('[data-apply]', foot).addEventListener('click', () => {
-      editor.setComponents(qs('[data-html]', body).value);
+      editor.setComponents(lockTemplateLogic(qs('[data-html]', body).value));
       editor.setStyle(qs('[data-css]', body).value);
       addChrome();
       m.close();

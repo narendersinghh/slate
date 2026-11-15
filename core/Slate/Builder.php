@@ -77,7 +77,7 @@ final class Builder
         // The content as it was before the first visual design: "Use classic editor" brings it back exactly.
         $classic = $prev ? (string)($prev['classic'] ?? '') : (string)$post['content'];
         $data = ['mode' => 'builder', 'layout' => $layout, 'html' => $html, 'css' => $css, 'project' => $project, 'classic' => $classic, 'v' => 1];
-        $change = ['fields' => ['_builder' => $data], 'content' => $html];
+        $change = ['fields' => ['_builder' => $data], 'content' => self::contentText($html)];
         Revisions::snapshot($post, $change);
         Posts::save($change, $postId);
         return null;
@@ -119,10 +119,20 @@ final class Builder
             // Keep whatever was edited in the classic editor meanwhile, so switching back again restores it.
             $b['mode'] = 'builder';
             $b['classic'] = (string)$post['content'];
-            $change = ['fields' => ['_builder' => $b], 'content' => (string)$b['html']];
+            $change = ['fields' => ['_builder' => $b], 'content' => self::contentText((string)$b['html'])];
         }
         Revisions::snapshot($post, $change);
         Posts::save($change, $postId);
+    }
+
+    /**
+     * The item's stored content for a visual design: the same HTML without template logic, so search, excerpts,
+     * meta descriptions, feeds and the API see the page's own words (visitors get the full design).
+     */
+    public static function contentText(string $html): string
+    {
+        $html = (string)preg_replace('/\{\{\s*#\s*([\w:.-]+)[^}]*\}\}.*?\{\{\s*\/\s*\1\s*\}\}/s', '', $html);
+        return trim((string)preg_replace('/\{\{[^}]*\}\}/', '', $html));
     }
 
     /** Template logic that a visual editor could disturb (loops, conditions, tags inside attributes). */

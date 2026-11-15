@@ -1146,3 +1146,11 @@ details.disclosure[open] > summary { border-bottom: 1px solid var(--border); }
 .split > form.card { position: sticky; top: calc(var(--topbar-h) + 16px); }
 .progress { height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
 .progress > span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .3s ease; }
+
+/* Visual builder entry points in the classic editor */
+.builder-switch { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; flex-wrap: wrap; }
+.builder-note { display: flex; align-items: center; gap: 14px; padding: 18px; flex-wrap: wrap; }
+.builder-note p { margin: 2px 0 0; font-size: 13px; }
+.builder-note > div:nth-child(2) { flex: 1; min-width: 220px; }
+.builder-note-icon { width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); }
+.builder-note-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

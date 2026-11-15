@@ -9,7 +9,7 @@ ServerSignature Off
 
     # Block direct access to sensitive files and folders. Blocked paths answer 404 (not 403),
     # so scanners cannot even tell that they exist.
-    RewriteRule ^(config\.php|config\.sample\.php|composer\.(json|lock)|\.git.*|.*\.sqlite|.*\.log|.*\.md)$ - [R=404,L,NC]
+    RewriteRule ^(config\.php|config\.sample\.php|composer\.(json|lock)|package(-lock)?\.json|playwright\.config\.\w+|\.git.*|.*\.sqlite|.*\.log|.*\.md)$ - [R=404,L,NC]
     RewriteRule (^|/)\.(?!well-known/) - [R=404,L,NC]
     RewriteRule (^|/)(module|theme)\.json$ - [R=404,L,NC]
     RewriteCond %{REQUEST_URI} !/content/uploads/
@@ -19,7 +19,7 @@ ServerSignature Off
     RewriteRule ^content/.*\.(sqlite|log|zip)$ - [R=404,L,NC]
     RewriteRule ^themes/.*\.(php\d?|phtml|phar|inc)$ - [R=404,L,NC]
     RewriteRule ^(wp-content|wp-includes)/.*\.(php\d?|phtml|phar)$ - [R=404,L,NC]
-    RewriteRule ^bin(/.*)?$ - [R=404,L,NC]
+    RewriteRule ^(bin|scripts|tests|node_modules)(/.*)?$ - [R=404,L,NC]
     RewriteRule ^admin/(views|install\.php|routes\.php|api\.php)(/.*)?$ - [R=404,L,NC]
 
     # Serve existing static files directly

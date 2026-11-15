@@ -1,0 +1,15 @@
+{
+  "name": "slate-cms-dev",
+  "private": true,
+  "description": "Development dependencies only. Slate runs without Node; vendored browser files live in admin/assets/vendor/ and are refreshed with `npm run vendor`.",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "test:builder": "playwright test tests/builder.spec.mjs"
+  },
+  "dependencies": {
+    "grapesjs": "0.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1"
+  }
+}

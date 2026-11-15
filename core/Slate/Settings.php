@@ -67,6 +67,14 @@ final class Settings
             ]],
 
             'content' => ['label' => 'Content & media', 'icon' => 'image', 'description' => 'Revisions, image optimisation and uploads.', 'sections' => [
+                'builder' => ['label' => 'Visual builder', 'fields' => [
+                    ['key' => 'builder_enabled', 'type' => 'toggle', 'label' => 'Visual page builder', 'default' => true,
+                        'help' => 'Design pages by drag and drop. Visitors get plain HTML and CSS (no builder scripts), page-cached like any page. Each item can still use the classic editor.'],
+                    ['key' => 'builder_types', 'type' => 'checkboxes', 'label' => 'Available for', 'default' => [], 'options' => 'post_types', 'show_if' => 'builder_enabled=1',
+                        'help' => 'Leave all unticked to allow it for every content type with an editor.'],
+                    ['key' => 'builder_default_layout', 'type' => 'select', 'label' => 'New designs start', 'default' => 'theme', 'show_if' => 'builder_enabled=1',
+                        'options' => ['theme' => 'Inside the site header & footer', 'blank' => 'On a blank page']],
+                ]],
                 'writing' => ['label' => 'Writing & revisions', 'fields' => [
                     ['key' => 'revisions_keep', 'type' => 'number', 'label' => 'Revisions kept per item', 'default' => 25, 'min' => 0, 'max' => 500,
                         'help' => 'Every save in the editor keeps the previous version so it can be compared and restored. 0 turns revisions off.'],

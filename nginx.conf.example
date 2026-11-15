@@ -18,6 +18,8 @@ server {
     location ~* ^/admin/(views|install\.php|routes\.php|api\.php) { return 404; }
     location ^~ /content/cache/   { return 404; }
     location ^~ /bin/ { return 404; }
+    location ~ ^/(scripts|tests|node_modules)/ { return 404; }
+    location ~ ^/(package(-lock)?\.json|playwright\.config\.\w+)$ { return 404; }
     location ^~ /content/backups/ { return 404; }
 
     # Long cache for static assets

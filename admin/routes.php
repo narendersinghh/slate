@@ -268,6 +268,79 @@ function admin_dispatch(string $path): void
         Session::flash('success', number_format($n) . ' item' . ($n === 1 ? '' : 's') . ' updated.');
         back();
     });
+    // ---------- Visual builder ----------
+    $r->get('/content/{type}/{id:\d+}/builder', static function (string $type, string $id) {
+        Auth::require('edit_posts');
+        $def = ContentModel::type($type) ?? admin_404();
+        $p = Posts::find((int)$id) ?? admin_404();
+        if ($p['type'] !== $type || !admin_can_edit($p)) {
+            admin_404();
+        }
+        if (!\Slate\Builder::forType($type)) {
+            Session::flash('error', 'The visual builder is switched off for ' . strtolower($def['plural']) . ' (Settings → Content & media → Visual builder).');
+            redirect(admin_url("content/$type/$id"));
+        }
+        $b = \Slate\Builder::data($p);
+        if ($b && ($b['mode'] ?? 'builder') !== 'builder') {
+            \Slate\Builder::setMode((int)$id, 'builder');
+        }
+        admin_view('builder', ['post' => $p, 'type' => $def, 'builder' => $b], false);
+    });
+    $r->post('/content/{type}/{id:\d+}/builder', static function (string $type, string $id) {
+        Auth::require('edit_posts');
+        $p = Posts::find((int)$id) ?? admin_404();
+        if ($p['type'] !== $type || !admin_can_edit($p) || !\Slate\Builder::forType($type)) {
+            json_response(['ok' => false, 'error' => 'Not allowed.'], 403);
+        }
+        $in = json_input();
+        if ($err = \Slate\Builder::save((int)$id, $in)) {
+            json_response(['ok' => false, 'error' => $err], 422);
+        }
+        $status = (string)($in['status'] ?? '');
+        if ($status === 'publish' && Auth::can('publish_posts')) {
+            Posts::save(['status' => 'publish'], (int)$id);
+        } elseif ($status === 'pending' && $p['status'] === 'draft') {
+            Posts::save(['status' => 'pending'], (int)$id);
+        }
+        $now = Posts::find((int)$id);
+        PageCache::purgeContent($now);
+        log_activity('builder_saved', $now['title']);
+        json_response(['ok' => true, 'status' => $now['status'], 'message' => match (true) {
+            $status === 'publish' && $now['status'] === 'publish' => 'Published.',
+            $status === 'pending' => 'Submitted for review.',
+            default => 'Saved.',
+        }]);
+    });
+    $r->post('/content/{type}/{id:\d+}/builder/mode', static function (string $type, string $id) {
+        Auth::require('edit_posts');
+        $p = Posts::find((int)$id) ?? admin_404();
+        if ($p['type'] !== $type || !admin_can_edit($p)) {
+            admin_404();
+        }
+        $mode = (string)(json_input()['mode'] ?? input('mode', 'classic'));
+        \Slate\Builder::setMode((int)$id, $mode);
+        PageCache::purgeContent(Posts::find((int)$id));
+        if (is_ajax()) {
+            json_response(['ok' => true]);
+        }
+        Session::flash('success', $mode === 'classic' ? 'Now using the classic editor. The visual design is kept.' : 'Now using the visual design.');
+        redirect(admin_url("content/$type/$id"));
+    });
+    $r->post('/builder/blocks', static function () {
+        Auth::require('edit_posts');
+        $in = json_input();
+        if ($err = \Slate\Builder::saveBlock((string)($in['label'] ?? ''), (string)($in['html'] ?? ''), (string)($in['css'] ?? ''))) {
+            json_response(['ok' => false, 'error' => $err], 422);
+        }
+        $all = \Slate\Builder::savedBlocks();
+        json_response(['ok' => true, 'id' => end($all)['id']]);
+    });
+    $r->post('/builder/blocks/{id:[a-f0-9]+}/delete', static function (string $id) {
+        Auth::require('edit_posts');
+        \Slate\Builder::deleteBlock($id);
+        is_ajax() ? json_response(['ok' => true]) : back();
+    });
+
     // Quick edit from the list (title, slug, status, publish date).
     $r->post('/content/{type}/{id:\d+}/quick', static function (string $type, string $id) {
         Auth::require('edit_posts');
@@ -1695,6 +1768,9 @@ function admin_save_post(string $type): void
             'message' => $def['singular'] . ' ' . ($post['status'] === 'publish' ? 'published' : 'saved') . '.']);
     }
     Session::flash('success', $def['singular'] . ' saved.');
+    if (input('then') === 'builder' && \Slate\Builder::forType($type)) {
+        redirect(admin_url("content/$type/$newId/builder"));
+    }
     redirect(admin_url("content/$type/$newId"));
 }
 

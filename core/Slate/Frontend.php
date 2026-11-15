@@ -296,7 +296,10 @@ final class Frontend
         $vars = (array)Hooks::filter('frontend_vars', $vars, $kind);
         self::$data = array_merge(self::$data, $vars, ['kind' => $kind]);
         $tpl = self::template($kind, $vars);
-        if ($tpl) {
+        if ($kind === 'single' && isset($vars['post']) && Builder::active($vars['post'])) {
+            // Designed in the visual builder: its own layout wins over theme files and Templates.
+            $html = Builder::renderPage($vars['post'], self::templateContext($kind, $vars));
+        } elseif ($tpl) {
             $html = Templates::renderPage($tpl, self::templateContext($kind, $vars));
         } else {
             ob_start();

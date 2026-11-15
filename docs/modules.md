@@ -89,6 +89,8 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `the_content` | filter | `string $html, array $post` → html |
 | `html_output` | filter | full page HTML → html |
 | `permalink`, `term_link` | filter | url of a post / term |
+| `posts_query_args` | filter | change `Posts::query()` arguments (e.g. default filters) |
+| `posts_query_sql` | filter | `[$where, $params, $joins], $args` → add SQL conditions/joins to every `Posts::query()` |
 | `post_types`, `taxonomies` | filter | add content types and taxonomies in code |
 | `field_groups` | filter | add custom-field groups in code |
 | `post_before_save` | filter | post data before it is written |
@@ -119,7 +121,9 @@ DB::all('SELECT * FROM {{posts}} WHERE type = :t', ['t' => 'product']);
 DB::row(...); DB::val(...); DB::insert(...); DB::update(...); DB::transaction(fn() => ...);
 
 Options::get('my_shop_settings', []);  Options::set('my_shop_settings', $v);
-Posts::query(['type' => 'product', 'status' => 'publish', 'limit' => 12, 'page' => 1, 'orderby' => 'title', 'order' => 'asc']);
+Posts::query(['type' => 'product', 'status' => 'publish', 'limit' => 12, 'page' => 1, 'orderby' => 'title', 'order' => 'asc',
+    'fields' => ['color' => 'red', 'lang' => null]]);   // custom-field equality; null = not set
+DB::jsonField('p.fields', 'color');   // SQL expression for a custom field (MySQL + SQLite)
 Posts::find($id); Posts::findBySlug('product', 'blue-shirt'); Posts::save($data, $id);
 Terms::all('category'); Media::url($mediaId, 'medium');
 Auth::user(); Auth::can('edit_posts'); Http::json('POST', $url, $headers, $payload); Ai::complete($prompt);

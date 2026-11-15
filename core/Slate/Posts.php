@@ -64,11 +64,12 @@ final class Posts
 
     /**
      * @param array{type?:string|array, status?:string|array|null, limit?:int, page?:int, orderby?:string, order?:string,
-     *   search?:string, term?:int|array, taxonomy?:string, parent?:int, author?:int, ids?:array, exclude?:array, with_terms?:bool, count?:bool} $args
+     *   search?:string, term?:int|array, taxonomy?:string, parent?:int, author?:int, ids?:array, exclude?:array, fields?:array, with_terms?:bool, count?:bool} $args
      * @return array{items:array, total:int, pages:int, page:int}
      */
     public static function query(array $args = []): array
     {
+        $args = (array)Hooks::filter('posts_query_args', $args);
         $where = [];
         $params = [];
         $joins = '';
@@ -125,6 +126,27 @@ final class Posts
             $joins .= " INNER JOIN {{term_relationships}} tr ON tr.post_id = p.id AND tr.term_id IN ($in)";
             $params += $p;
         }
+
+        // Custom-field equality: 'fields' => ['color' => 'red', 'size' => ['s', 'm'], 'lang' => null (= not set)].
+        foreach ((array)($args['fields'] ?? []) as $name => $value) {
+            if (!is_string($name) || !preg_match('/^[A-Za-z0-9_]+$/', $name)) {
+                continue;
+            }
+            $col = DB::jsonField('p.fields', $name);
+            if ($value === null) {
+                $where[] = "$col IS NULL";
+                continue;
+            }
+            $ph = [];
+            foreach (array_values(array_unique(array_map('strval', (array)$value))) as $i => $v) {
+                $key = 'fv' . count($params) . '_' . $i;
+                $ph[] = ':' . $key;
+                $params[$key] = $v;
+            }
+            $where[] = $ph ? "$col IN (" . implode(',', $ph) . ')' : '1 = 0';
+        }
+        // Modules can add conditions/joins (e.g. language filtering): return [$where, $params, $joins].
+        [$where, $params, $joins] = Hooks::filter('posts_query_sql', [$where, $params, $joins], $args);
 
         $orderby = in_array($args['orderby'] ?? '', self::ORDERBY, true) ? $args['orderby'] : 'published_at';
         $order = strtoupper($args['order'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';

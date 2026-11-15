@@ -46,6 +46,15 @@ final class DB
         }
     }
 
+    /** SQL expression reading a top-level key of a JSON column as text (MySQL/MariaDB and SQLite). $name must be [A-Za-z0-9_]. */
+    public static function jsonField(string $column, string $name): string
+    {
+        $name = preg_replace('/[^A-Za-z0-9_]/', '', $name);
+        return self::$driver === 'sqlite'
+            ? "json_extract($column, '$.\"$name\"')"
+            : "JSON_UNQUOTE(JSON_EXTRACT($column, '$.\"$name\"'))";
+    }
+
     public static function connected(): bool
     {
         return self::$pdo !== null;

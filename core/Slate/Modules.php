@@ -91,6 +91,7 @@ final class Modules
             'autoload' => array_filter((array)($meta['autoload'] ?? []), 'is_string'),
             'source' => (string)($meta['source'] ?? ''),
             'settings' => (string)($meta['settings'] ?? ''),
+            'icon' => preg_match('/^[a-z0-9-]{1,40}$/', (string)($meta['icon'] ?? '')) ? (string)$meta['icon'] : '',
             'tags' => array_values(array_filter((array)($meta['tags'] ?? []), 'is_string')),
             'valid' => is_file($dir . '/module.php'),
         ];
@@ -545,17 +546,85 @@ final class Modules
     private static array $pages = [];
 
     /**
-     * @param string        $section "build" (sidebar Build group) or "content" (after the content types)
+     * Add a dashboard page. Pages are grouped under their module in the sidebar's "Modules" section.
+     *
+     * @param string        $section "main" (default; listed under the module), "settings" (the module's settings page,
+     *                               shown last as "Settings") or "hidden" (reachable by URL only). The old values
+     *                               "build" and "content" mean "main".
      * @param callable|null $badge   returns a number shown next to the label (e.g. unread items), 0 = none
      */
     public static function adminPage(string $label, string $slug, callable $render, string $cap = 'manage_settings', string $icon = 'puzzle',
-        string $section = 'build', ?callable $badge = null): void
+        string $section = 'main', ?callable $badge = null): void
     {
-        self::$pages[$slug] = compact('label', 'slug', 'render', 'cap', 'icon', 'section', 'badge');
+        $section = in_array($section, ['settings', 'hidden'], true) ? $section : 'main';
+        $module = self::$loading ?? self::callerModule();
+        self::$pages[$slug] = compact('label', 'slug', 'render', 'cap', 'icon', 'section', 'badge', 'module');
+    }
+
+    /**
+     * Declarative settings for a module, rendered by the standard settings screen (Settings → Modules → <name>) and
+     * linked as "Settings" in the module's sidebar group. Same field format as core settings:
+     *   Modules::settings([['key' => 'shop_currency', 'type' => 'select', 'label' => 'Currency', 'options' => [...], 'default' => 'USD'], ...]);
+     * Optional: 'label' (defaults to the module name), 'help' (intro text), 'render' => callable printing extra HTML below the fields.
+     */
+    public static function settings(array $fields, array $opts = []): void
+    {
+        $module = self::$loading ?? self::callerModule();
+        if (!$module) {
+            return;
+        }
+        self::$settings[$module] = ['fields' => $fields, 'label' => (string)($opts['label'] ?? (self::all()[$module]['name'] ?? $module)),
+            'intro' => (string)($opts['help'] ?? ''), 'callback' => $opts['render'] ?? null, 'cap' => (string)($opts['cap'] ?? 'manage_settings')];
+    }
+
+    private static array $settings = [];
+
+    /** @return array<string, array> module slug => settings definition */
+    public static function settingsSections(): array
+    {
+        return self::$settings;
     }
 
     public static function adminPages(): array
     {
         return self::$pages;
+    }
+
+    /**
+     * Sidebar groups: one per module that has pages or settings, in module-name order.
+     * @return array<string, array{name:string, icon:string, pages:array, settings:?string}>
+     */
+    public static function adminGroups(): array
+    {
+        $groups = [];
+        $all = self::all();
+        foreach (self::$pages as $p) {
+            $m = $p['module'] ?? '' ?: 'other';
+            $groups[$m] ??= ['name' => $all[$m]['name'] ?? 'Other', 'icon' => ($all[$m]['icon'] ?? '') ?: $p['icon'], 'pages' => [], 'settings' => null];
+            if ($p['section'] === 'settings') {
+                $groups[$m]['settings'] = $p;
+            } elseif ($p['section'] === 'main') {
+                $groups[$m]['pages'][] = $p;
+            }
+        }
+        foreach (self::$settings as $m => $s) {
+            $groups[$m] ??= ['name' => $all[$m]['name'] ?? $m, 'icon' => ($all[$m]['icon'] ?? '') ?: 'puzzle', 'pages' => [], 'settings' => null];
+            $groups[$m]['settings'] ??= ['label' => 'Settings', 'url' => 'settings/modules/' . $m, 'cap' => $s['cap'], 'icon' => 'settings', 'slug' => ''];
+        }
+        uasort($groups, static fn($a, $b) => strcasecmp($a['name'], $b['name']));
+        return $groups;
+    }
+
+    /** Which module's file called us (pages registered from an init hook rather than while loading). */
+    private static function callerModule(): ?string
+    {
+        $root = rtrim(str_replace('\\', '/', SLATE_MODULES), '/') . '/';
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8) as $f) {
+            $file = str_replace('\\', '/', (string)($f['file'] ?? ''));
+            if (str_starts_with($file, $root)) {
+                return explode('/', substr($file, strlen($root)), 2)[0];
+            }
+        }
+        return null;
     }
 }

@@ -22,25 +22,38 @@ Slate is built so that the usual ways CMS sites get hacked are closed by default
 
 ## Hide the dashboard completely
 
-1. **Custom address** — Settings → Security → Login protection → *Admin URL slug* (or `php bin/slate admin:url my-studio-x7`).
-   `/admin` then returns 404.
-2. **Separate admin domain** (strongest) — the dashboard only answers on a private host name; on the public domain it
-   does not exist at all, not even the login page.
-   - In your hosting panel, add a subdomain or extra domain (e.g. `cms-4f7q.yourdomain.com`) whose folder is the
-     **same Slate folder** as the site. (Hostinger: Domains → Subdomains → *Custom folder* → the site's `public_html`.)
-   - Run `php bin/slate admin:host cms-4f7q.yourdomain.com` (or add `'admin_host' => 'cms-4f7q.yourdomain.com'` to
-     `config.php`). Undo with `php bin/slate admin:host off`.
+A custom dashboard URL alone only hides the login from bots that try `/admin`. For real separation, run the
+dashboard on its own (sub)domain: Settings → Security → **Dashboard access** walks you through it.
+
+1. **Custom address** — *Dashboard access → Admin URL slug* (or `php bin/slate admin:url my-studio-x7`). `/admin`
+   then returns 404.
+2. **Private dashboard domain** (strongest) — the dashboard only answers on a host name of its own, e.g.
+   `cms.yourdomain.com`, while visitors use `yourdomain.com`. On the public domain the dashboard, its login page and
+   its files do not exist (plain 404), and your sign-in cookie is never sent to the public site.
+   1. Create the subdomain in your hosting panel (Hostinger: *Domains → Subdomains*; cPanel: *Domains*). If the panel
+      lets you pick its folder, pick **this site's folder** (the dashboard shows the exact path).
+   2. If the panel always gives the subdomain its own empty folder, download the **bridge kit** on the same screen and
+      upload its two files (`index.php`, `.htaccess`) into that folder. The bridge runs this same installation for
+      that host only (any other host gets a 404) and serves the dashboard's files itself.
+   3. Turn on SSL for the subdomain.
+   4. Click **Check connection**: Slate requests a one-time secret from the new host and only offers the switch when
+      the answer proves it reached *this* site. **Switch** writes `admin_host` to `config.php` and signs you in on the
+      new host with a single-use, two-minute link (cookies cannot follow you between domains).
+   - CLI equivalent: `php bin/slate admin:host cms.yourdomain.com`; undo with `php bin/slate admin:host off` or the
+     *Move dashboard back* button.
    - On the admin host the public site is only shown to signed-in team members (preview and on-page editing there).
-   - Use a name nobody can guess and never link to it. Certificate transparency logs list issued certificates, so prefer
-     a wildcard certificate (`*.yourdomain.com`) for the admin host if your host offers one.
-3. **IP allow-list** (optional) — `php bin/slate admin:ips "203.0.113.7 198.51.100.0/24"`; `off` removes it.
+   - Prefer a name nobody can guess and never link to it. Certificate transparency logs list issued certificates, so a
+     wildcard certificate (`*.yourdomain.com`) hides the name best if your host offers one.
+3. **IP allow-list** (optional) — *Dashboard access → IP allow-list* or `php bin/slate admin:ips "203.0.113.7 198.51.100.0/24"`
+   (`off` removes it). Slate refuses a list that would lock out the address you are using.
 
 What keeps working with a separate admin domain: password resets and alert emails link to the admin host; previews and
 "View" links stay on the admin host, where the whole site is browsable with on-page editing; passkeys are bound to the
 parent domain (`example.com` for `cms.example.com`), so they survive host changes (override with `'passkey_rp_id'`);
 the dashboard's own scripts and styles (`admin/assets`) are hidden on the public host automatically (Apache/LiteSpeed —
-on nginx add `location ^~ /admin/ { if ($host != "cms.example.com") { return 404; } }`). The REST API and webhooks keep
-working on the public domain.
+on nginx add `location ^~ /admin/ { if ($host != "cms.example.com") { return 404; } }`). The REST API, webhooks, the
+page cache and scheduled tasks keep working on the public domain. Team members simply bookmark the admin host;
+visitors never see a difference.
 
 Locked out? All three settings can be changed from SSH (`bin/slate`) or by editing `config.php` — never only in the database.
 

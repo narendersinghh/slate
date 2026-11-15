@@ -59,6 +59,16 @@ function admin_dispatch(string $path): void
     $r = new Router();
 
     // ---------- Auth ----------
+    // One-time sign-in when the dashboard moves to another domain (cookies cannot follow).
+    $r->get('/handoff/{token:[a-f0-9]+}', static function (string $token) {
+        $res = \Slate\AdminAccess::redeemHandoff($token);
+        if (!$res) {
+            redirect(admin_url('login'));
+        }
+        Auth::loginUser($res[0]);
+        Session::flash('success', 'You are signed in at ' . \Slate\AdminAccess::currentHost() . '.');
+        redirect(admin_url($res[1]));
+    });
     $r->get('/login', static function () {
         if (Auth::user()) {
             redirect(admin_url());
@@ -178,7 +188,7 @@ function admin_dispatch(string $path): void
             $seoIssues[] = ['warn', "{$media['noalt']} images are missing alt text.", admin_url('media?filter=noalt')];
         }
         if (!Options::get('gsc_verification')) {
-            $seoIssues[] = ['info', 'Google Search Console is not verified yet.', admin_url('settings/integrations/google')];
+            $seoIssues[] = ['info', 'Google Search Console is not verified yet.', admin_url('settings/integrations/verification')];
         }
         $update = Auth::can('manage_updates') && Options::get('update_auto_check', true) ? (Options::get('update_info') ?: null) : null;
         $activity = DB::all('SELECT a.*, u.display_name FROM {{activity_log}} a LEFT JOIN {{users}} u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 8');
@@ -189,28 +199,52 @@ function admin_dispatch(string $path): void
     $r->get('/content/{type}', static function (string $type) {
         Auth::require('edit_posts');
         $def = ContentModel::type($type) ?? admin_404();
-        $status = (string)($_GET['status'] ?? 'all');
-        $args = ['type' => $type, 'status' => $status === 'all' ? 'any' : $status, 'page' => (int)($_GET['p'] ?? 1), 'limit' => 25, 'with_terms' => true,
-            'search' => (string)($_GET['q'] ?? ''), 'orderby' => (string)($_GET['orderby'] ?? ($def['hierarchical'] ? 'menu_order' : 'published_at')),
-            'order' => (string)($_GET['order'] ?? ($def['hierarchical'] ? 'ASC' : 'DESC'))];
-        if (!Auth::can('edit_others_posts')) {
-            $args['author'] = Auth::id();
-        }
-        if (!empty($_GET['term'])) {
-            $args['term'] = [(int)$_GET['term']];
+        $table = admin_content_table($def);
+        $args = admin_content_list_args($def, $table->state());
+        if ($table->exporting()) {
+            $table->exportCsv((static function () use ($args) {
+                for ($page = 1; $page <= 200; $page++) {
+                    $res = Posts::query(['page' => $page, 'limit' => 500, 'count' => false] + $args);
+                    yield from $res['items'];
+                    if (count($res['items']) < 500) {
+                        return;
+                    }
+                }
+            })(), $type . '-' . gmdate('Y-m-d') . '.csv');
         }
         $result = Posts::query($args);
-        $authors = array_column(DB::all('SELECT id, display_name FROM {{users}}'), 'display_name', 'id');
-        admin_view('content-list', ['type' => $def, 'result' => $result, 'counts' => Posts::counts($type), 'status' => $status, 'authors' => $authors,
-            'title' => $def['plural']]);
+        admin_view('content-list', ['type' => $def, 'table' => $table, 'result' => $result, 'title' => $def['plural']]);
     });
     $r->get('/content/{type}/new', static fn(string $type) => admin_edit_post($type, null));
     $r->get('/content/{type}/{id:\d+}', static fn(string $type, string $id) => admin_edit_post($type, (int)$id));
     $r->post('/content/{type}/save', static fn(string $type) => admin_save_post($type));
     $r->post('/content/{type}/bulk', static function (string $type) {
         Auth::require('edit_posts');
-        $ids = array_map('intval', (array)input('ids', []));
+        $def = ContentModel::type($type) ?? admin_404();
+        if (input('all_matching')) {
+            // Every row that matches the current search/filters, not just this page (up to 5,000).
+            parse_str((string)input('query'), $get);
+            $saved = $_GET;
+            $_GET = $get;
+            $args = admin_content_list_args($def, admin_content_table($def)->state());
+            $_GET = $saved;
+            $ids = [];
+            for ($page = 1; $page <= 10 && count($ids) < 5000; $page++) {
+                $res = Posts::query(['page' => $page, 'limit' => 500, 'count' => false, 'with_terms' => false] + $args);
+                $ids = array_merge($ids, array_column($res['items'], 'id'));
+                if (count($res['items']) < 500) {
+                    break;
+                }
+            }
+        } else {
+            $ids = array_map('intval', (array)input('ids', []));
+        }
         $action = (string)input('action');
+        $value = (string)(input('bulk_value')[$action] ?? '');
+        if (in_array($action, ['term_add', 'term_remove', 'author', 'seo_index'], true) && $value === '') {
+            Session::flash('error', 'Choose a value from the list first.');
+            back();
+        }
         $n = 0;
         foreach ($ids as $id) {
             $p = Posts::find($id);
@@ -223,13 +257,43 @@ function admin_dispatch(string $path): void
                 'restore' => DB::update('posts', ['status' => 'draft'], ['id' => $id]),
                 'publish' => Auth::can('publish_posts') ? Posts::save(['status' => 'publish'], $id) : null,
                 'draft' => Posts::save(['status' => 'draft'], $id),
+                'author' => Auth::can('edit_others_posts') ? DB::update('posts', ['author_id' => (int)$value, 'updated_at' => now()], ['id' => $id]) : null,
+                'term_add', 'term_remove' => admin_bulk_term($id, $action, (int)$value),
+                'seo_index' => in_array($value, ['index', 'noindex'], true) ? Posts::save(['seo' => ['robots_index' => $value === 'noindex' ? 'noindex' : 'default']], $id) : null,
                 default => null,
             };
             $n++;
         }
         PageCache::clear();
-        Session::flash('success', "$n item(s) updated.");
+        Session::flash('success', number_format($n) . ' item' . ($n === 1 ? '' : 's') . ' updated.');
         back();
+    });
+    // Quick edit from the list (title, slug, status, publish date).
+    $r->post('/content/{type}/{id:\d+}/quick', static function (string $type, string $id) {
+        Auth::require('edit_posts');
+        $p = Posts::find((int)$id) ?? admin_404();
+        if ($p['type'] !== $type || !admin_can_edit($p)) {
+            admin_404();
+        }
+        $status = (string)input('status', $p['status']);
+        if ($status === 'publish' && $p['status'] !== 'publish' && !Auth::can('publish_posts')) {
+            $status = 'pending';
+        }
+        $data = ['title' => trim((string)input('title', $p['title'])), 'slug' => trim((string)input('slug', $p['slug'])), 'status' => $status];
+        $date = trim((string)input('published_at', ''));
+        if ($date !== '' && ($ts = strtotime($date)) !== false) {
+            $data['published_at'] = gmdate('Y-m-d H:i:s', $ts - (new \DateTimeZone((string)Options::get('timezone', 'UTC')))->getOffset(new \DateTime('@' . $ts)));
+        }
+        Posts::save($data, (int)$id);
+        Session::flash('success', 'Saved “' . $data['title'] . '”.');
+        back();
+    });
+    // Column chooser / density / page size, remembered per user.
+    $r->post('/ui/table', static function () {
+        Auth::require('access_admin');
+        $in = json_input() ?: $_POST;
+        \Slate\ListTable::storePrefs((string)($in['id'] ?? ''), array_intersect_key((array)$in, array_flip(['cols', 'density', 'per', 'reset'])));
+        json_response(['ok' => true]);
     });
     $r->post('/content/{type}/{id:\d+}/duplicate', static function (string $type, string $id) {
         Auth::require('edit_posts');
@@ -291,8 +355,51 @@ function admin_dispatch(string $path): void
     // ---------- Users ----------
     $r->get('/users', static function () {
         Auth::require('manage_users');
-        $users = DB::all('SELECT u.*, (SELECT COUNT(*) FROM {{posts}} p WHERE p.author_id = u.id) posts FROM {{users}} u ORDER BY u.id');
-        admin_view('users', ['users' => $users, 'title' => 'Users']);
+        $users = DB::all("SELECT u.*, (SELECT COUNT(*) FROM {{posts}} p WHERE p.author_id = u.id AND p.status <> 'trash') posts,
+            (SELECT COUNT(*) FROM {{passkeys}} k WHERE k.user_id = u.id) passkeys FROM {{users}} u ORDER BY u.id");
+        $table = admin_users_table($users);
+        $s = $table->state();
+        $rows = array_values(array_filter($users, static function (array $u) use ($s): bool {
+            if ($s['view'] === 'suspended' ? $u['status'] === 'active' : ($s['view'] !== 'all' && $s['view'] !== '' && $u['role'] !== $s['view'])) {
+                return false;
+            }
+            if (($s['filters']['security'] ?? '') === 'none' && ($u['totp_secret'] || $u['passkeys'])) {
+                return false;
+            }
+            if (($s['filters']['security'] ?? '') === 'protected' && !$u['totp_secret'] && !$u['passkeys']) {
+                return false;
+            }
+            $q = mb_strtolower($s['q']);
+            return $q === '' || str_contains(mb_strtolower($u['username'] . ' ' . $u['display_name'] . ' ' . $u['email']), $q);
+        }));
+        $key = ['name' => 'display_name', 'role' => 'role', 'posts' => 'posts', 'last_login' => 'last_login', 'created' => 'created_at', 'id' => 'id'][$s['sort']] ?? 'id';
+        usort($rows, static fn($a, $b) => ($s['dir'] === 'asc' ? 1 : -1) * (is_numeric($a[$key]) && is_numeric($b[$key]) ? $a[$key] <=> $b[$key] : strnatcasecmp((string)$a[$key], (string)$b[$key])));
+        if ($table->exporting()) {
+            $table->exportCsv($rows, 'users-' . gmdate('Y-m-d') . '.csv');
+        }
+        admin_view('users', ['table' => $table, 'rows' => array_slice($rows, $s['offset'], $s['per']), 'total' => count($rows), 'title' => 'Users']);
+    });
+    $r->post('/users/bulk', static function () {
+        Auth::require('manage_users');
+        $ids = array_map('intval', (array)input('ids', []));
+        $action = (string)input('action');
+        $value = (string)(input('bulk_value')[$action] ?? '');
+        $n = 0;
+        foreach ($ids as $id) {
+            if ($id === Auth::id()) {
+                continue; // never change your own role or lock yourself out from a bulk action
+            }
+            $done = match ($action) {
+                'role' => isset(Roles::all()[$value]) ? DB::update('users', ['role' => $value], ['id' => $id]) : 0,
+                'suspend' => DB::update('users', ['status' => 'suspended'], ['id' => $id]),
+                'activate' => DB::update('users', ['status' => 'active'], ['id' => $id]),
+                default => 0,
+            };
+            $n += $done ? 1 : 0;
+        }
+        log_activity('users_bulk', "$action ($n)");
+        Session::flash('success', $n . ' user' . ($n === 1 ? '' : 's') . ' updated.' . (in_array(Auth::id(), $ids, true) ? ' Your own account was left unchanged.' : ''));
+        back();
     });
     $r->get('/users/new', static function () {
         Auth::require('manage_users');
@@ -351,7 +458,7 @@ function admin_dispatch(string $path): void
         $ok = \Slate\Mailer::send($to, 'Test email from ' . Options::get('site_title', 'Slate'),
             '<p>This is a test email from <strong>' . e((string)Options::get('site_title', 'Slate')) . '</strong>.</p><p>If you can read this, email delivery works.</p>');
         Session::flash($ok ? 'success' : 'error', $ok ? "Test email sent to $to. Check the inbox (and spam folder)." : 'Sending failed: ' . \Slate\Mailer::lastError());
-        redirect(admin_url('settings/general/email'));
+        redirect(admin_url('settings/email/delivery'));
     });
     $r->post('/system/backups/create', static function () {
         Auth::require('manage_updates');
@@ -927,18 +1034,48 @@ function admin_dispatch(string $path): void
     // ---------- Settings ----------
     $r->get('/settings', static function () {
         Auth::require('access_admin');
-        foreach (Settings::tabs() as $tab => $t) {
-            if (admin_can_settings($tab)) {
-                redirect(admin_url("settings/$tab/" . array_key_first($t['sections'])));
+        if (!Auth::can('manage_settings')) {
+            foreach (Settings::tabs() as $tab => $t) {
+                if (admin_can_settings($tab)) {
+                    redirect(admin_url("settings/$tab/" . array_key_first($t['sections'])));
+                }
             }
+            admin_404();
         }
-        admin_404();
+        admin_view('settings', ['tab' => '', 'section' => '', 'def' => [], 'title' => 'Settings']);
+    });
+    // Quick switches (dashboard / settings overview). Only these keys; each maps "switch on" to the safe, normal state.
+    $r->post('/settings/quick', static function () {
+        Auth::require('manage_settings');
+        $key = (string)input('key');
+        $on = filter_var(input('on'), FILTER_VALIDATE_BOOLEAN);
+        $map = ['seo_noindex_site' => !$on, 'maintenance_mode' => !$on, 'cache_pages' => $on];
+        if (!array_key_exists($key, $map)) {
+            json_response(['ok' => false, 'error' => 'Unknown setting.'], 400);
+        }
+        Options::set($key, $map[$key]);
+        if ($key === 'cache_pages') {
+            PageCache::writeFlag();
+        }
+        PageCache::clear();
+        log_activity('settings_saved', "quick:$key=" . ($map[$key] ? '1' : '0'));
+        json_response(['ok' => true, 'message' => match ($key) {
+            'seo_noindex_site' => $on ? 'Search engines may index the site again.' : 'The whole site is now hidden from search engines.',
+            'maintenance_mode' => $on ? 'The site is online for everyone.' : 'Maintenance mode is on — visitors see a notice.',
+            default => $on ? 'Page cache is on.' : 'Page cache is off.',
+        }]);
     });
     $r->get('/settings/{tab}', static function (string $tab) {
+        if (isset(Settings::MOVED[$tab])) {
+            redirect(admin_url('settings/' . Settings::MOVED[$tab]), 301);
+        }
         $t = Settings::tabs()[$tab] ?? admin_404();
         redirect(admin_url("settings/$tab/" . array_key_first($t['sections'])));
     });
     $r->get('/settings/{tab}/{section}', static function (string $tab, string $section) {
+        if (isset(Settings::MOVED["$tab/$section"])) {
+            redirect(admin_url('settings/' . Settings::MOVED["$tab/$section"]), 301);
+        }
         admin_require_settings($tab);
         $def = Settings::section($tab, $section) ?? admin_404();
         admin_view('settings', ['tab' => $tab, 'section' => $section, 'def' => $def, 'title' => 'Settings']);
@@ -970,6 +1107,81 @@ function admin_dispatch(string $path): void
         }
         redirect(admin_url("settings/$tab/$section"));
     });
+    // ---------- Dashboard access: private domain + IP allow-list ----------
+    $r->post('/system/admin-host/check', static function () {
+        Auth::require('manage_settings');
+        [$ok, $msg] = \Slate\AdminAccess::probe((string)input('host'));
+        json_response(['ok' => $ok, 'message' => $msg]);
+    });
+    $r->post('/system/admin-host/enable', static function () {
+        Auth::require('manage_settings');
+        $host = strtolower(trim(preg_replace('#^https?://|/.*$#i', '', (string)input('host'))));
+        [$ok, $msg] = \Slate\AdminAccess::probe($host);
+        if (!$ok) {
+            Session::flash('error', $msg);
+            redirect(admin_url('settings/security/access'));
+        }
+        if ($err = \Slate\AdminAccess::setConfig('admin_host', $host)) {
+            Session::flash('error', $err);
+            redirect(admin_url('settings/security/access'));
+        }
+        log_activity('admin_host_changed', $host);
+        redirect(\Slate\AdminAccess::handoffUrl($host, Auth::id(), 'settings/security/access'));
+    });
+    $r->post('/system/admin-host/disable', static function () {
+        Auth::require('manage_settings');
+        if ($err = \Slate\AdminAccess::setConfig('admin_host', null)) {
+            Session::flash('error', $err);
+            redirect(admin_url('settings/security/access'));
+        }
+        log_activity('admin_host_changed', '(none)');
+        $main = (string)parse_url(site_url(), PHP_URL_HOST);
+        redirect(\Slate\AdminAccess::handoffUrl($main, Auth::id(), 'settings/security/access'));
+    });
+    $r->get('/system/admin-host/bridge', static function () {
+        Auth::require('manage_settings');
+        $host = strtolower(trim(preg_replace('#^https?://|/.*$#i', '', (string)($_GET['host'] ?? ''))));
+        if (!preg_match('/^[a-z0-9.-]{4,253}$/', $host) || !class_exists('ZipArchive')) {
+            admin_404();
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'slb');
+        $zip = new \ZipArchive();
+        $zip->open($tmp, \ZipArchive::OVERWRITE);
+        foreach (\Slate\AdminAccess::bridgeFiles($host) as $name => $body) {
+            $zip->addFromString($name, $body);
+        }
+        $zip->close();
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="slate-bridge-' . preg_replace('/[^a-z0-9.-]/', '', $host) . '.zip"');
+        header('Content-Length: ' . filesize($tmp));
+        readfile($tmp);
+        @unlink($tmp);
+        exit;
+    });
+    $r->post('/system/admin-ips', static function () {
+        Auth::require('manage_settings');
+        $list = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string)input('ips')) ?: [])));
+        foreach ($list as $rule) {
+            [$ip] = explode('/', $rule, 2);
+            if (@inet_pton($ip) === false) {
+                Session::flash('error', "\"$rule\" is not an IP address or range.");
+                redirect(admin_url('settings/security/access'));
+            }
+        }
+        $me = Auth::ip();
+        if ($list && !array_filter($list, static fn($r) => \Slate\AdminAccess::match($me, $r))) {
+            Session::flash('error', "Your own address ($me) is not in the list, so saving it would lock you out. Add it first.");
+            redirect(admin_url('settings/security/access'));
+        }
+        if ($err = \Slate\AdminAccess::setConfig('admin_ips', $list ?: null)) {
+            Session::flash('error', $err);
+        } else {
+            log_activity('admin_ips_changed', implode(' ', $list) ?: '(any)');
+            Session::flash('success', $list ? 'Only the listed addresses can reach the dashboard now.' : 'The dashboard can be reached from any address.');
+        }
+        redirect(admin_url('settings/security/access'));
+    });
+
     $r->post('/system/cache/clear', static function () {
         Auth::require('manage_settings');
         PageCache::clear();
@@ -1013,6 +1225,263 @@ function admin_404(): never
     }
     admin_view('error', ['title' => 'Not found', 'message' => 'That page does not exist.']);
     exit;
+}
+
+/** The list table for a content type: columns for taxonomies, custom fields, author, SEO and dates. */
+function admin_content_table(array $def): \Slate\ListTable
+{
+    $slug = $def['slug'];
+    $base = admin_url("content/$slug");
+    $taxes = ContentModel::taxonomiesFor($slug);
+    $supports = (array)($def['supports'] ?? []);
+    $authors = array_column(DB::all('SELECT id, display_name FROM {{users}} ORDER BY display_name'), 'display_name', 'id');
+    $statuses = Posts::STATUSES;
+    $cols = [];
+    $cols['title'] = ['label' => 'Title', 'primary' => true, 'sort' => 'title', 'render' => static function (array $p) use ($base, $supports, $statuses): string {
+        $thumb = '';
+        if (in_array('thumbnail', $supports, true)) {
+            $m = $p['featured_media_id'] ? Media::find((int)$p['featured_media_id']) : null;
+            $thumb = '<span class="row-thumb">' . ($m ? '<img src="' . e(Media::url($m, 'thumb')) . '" alt="" loading="lazy">' : icon('image', 14)) . '</span>';
+        }
+        $html = '<div class="row-main">' . $thumb . '<div><a class="row-title" href="' . e($base . '/' . $p['id']) . '">'
+            . ($p['parent_id'] ? '<span class="muted">— </span>' : '') . e($p['title'] ?: '(no title)') . '</a>';
+        if ($p['status'] !== 'publish') {
+            $html .= ' <span class="status status-' . e($p['status']) . '">' . e($statuses[$p['status']] ?? $p['status']) . '</span>';
+        }
+        if (\Slate\Seo::isFrontPage($p)) {
+            $html .= ' <span class="pill">Homepage</span>';
+        }
+        return $html . '</div></div>';
+    }, 'export' => static fn(array $p) => (string)$p['title']];
+    $cols['status'] = ['label' => 'Status', 'default' => false, 'sort' => 'status', 'render' => static fn(array $p) => '<span class="status status-' . e($p['status']) . '">' . e($statuses[$p['status']] ?? $p['status']) . '</span>'];
+    $i = 0;
+    foreach ($taxes as $tx => $tdef) {
+        $cols["tax_$tx"] = ['label' => $tdef['plural'], 'default' => $i++ < 3, 'render' => static function (array $p) use ($tx): string {
+            $names = array_column($p['terms'][$tx] ?? [], 'name');
+            return $names ? e(implode(', ', $names)) : '<span class="muted">—</span>';
+        }];
+    }
+    foreach (ContentModel::fieldsFor('post', $slug) as $name => $f) {
+        if (in_array($f['type'] ?? '', ['repeater', 'group', 'gallery', 'wysiwyg', 'code', 'flexible', 'message', 'tab'], true)) {
+            continue;
+        }
+        $cols["field_$name"] = ['label' => $f['label'] ?? $name, 'default' => false, 'sort' => "field:$name", 'render' => static function (array $p) use ($name, $f): string {
+            $v = $p['fields'][$name] ?? null;
+            if ($v === null || $v === '' || $v === []) {
+                return '<span class="muted">—</span>';
+            }
+            if (($f['type'] ?? '') === 'image' && is_numeric($v) && ($m = Media::find((int)$v))) {
+                return '<img class="cell-img" src="' . e(Media::url($m, 'thumb')) . '" alt="" loading="lazy">';
+            }
+            if (is_bool($v) || ($f['type'] ?? '') === 'toggle') {
+                return $v ? 'Yes' : 'No';
+            }
+            if (is_array($v)) {
+                $v = implode(', ', array_map(static fn($x) => is_scalar($x) ? (string)$x : json_encode($x), $v));
+            }
+            return e(str_limit((string)$v, 80));
+        }, 'export' => static fn(array $p) => is_array($p['fields'][$name] ?? null) ? json_encode($p['fields'][$name], JSON_UNESCAPED_UNICODE) : (string)($p['fields'][$name] ?? '')];
+    }
+    if (in_array('author', $supports, true)) {
+        $cols['author'] = ['label' => 'Author', 'sort' => 'author_id', 'render' => static fn(array $p) => e($authors[$p['author_id']] ?? '—'), 'export' => static fn(array $p) => (string)($authors[$p['author_id']] ?? '')];
+    }
+    $cols['seo'] = ['label' => 'SEO', 'render' => static function (array $p): string {
+        $score = (int)!empty($p['seo']['title']) + (int)!empty($p['seo']['description']) + (int)!empty($p['featured_media_id']);
+        $noindex = ($p['seo']['robots_index'] ?? '') === 'noindex';
+        $dots = '';
+        for ($i = 0; $i < 3; $i++) {
+            $dots .= '<i class="' . ($i < $score ? 'on' : '') . '"></i>';
+        }
+        return '<span class="seo-dots" title="' . $score . '/3: meta title, description, image">' . $dots . '</span>' . ($noindex ? ' <span class="pill pill-warn" title="Hidden from search engines">noindex</span>' : '');
+    }, 'export' => static fn(array $p) => (($p['seo']['robots_index'] ?? '') === 'noindex' ? 'noindex ' : '') . ((int)!empty($p['seo']['title']) + (int)!empty($p['seo']['description']) + (int)!empty($p['featured_media_id'])) . '/3'];
+    $cols['date'] = ['label' => 'Date', 'sort' => 'published_at', 'render' => static fn(array $p) => '<span class="cell-date"><small class="muted">' . ($p['status'] === 'publish' ? 'Published' : 'Modified') . '</small>' . e(local_date($p['status'] === 'publish' ? $p['published_at'] : $p['updated_at'])) . '</span>',
+        'export' => static fn(array $p) => (string)($p['published_at'] ?? '')];
+    $cols['updated'] = ['label' => 'Last modified', 'default' => false, 'sort' => 'updated_at', 'render' => static fn(array $p) => e(local_date($p['updated_at'])) . ' <small class="muted">' . e(time_ago($p['updated_at'])) . '</small>', 'export' => static fn(array $p) => (string)$p['updated_at']];
+    $cols['created'] = ['label' => 'Created', 'default' => false, 'sort' => 'created_at', 'render' => static fn(array $p) => e(local_date($p['created_at'])), 'export' => static fn(array $p) => (string)$p['created_at']];
+    $cols['slug'] = ['label' => 'Slug', 'default' => false, 'sort' => 'slug', 'render' => static fn(array $p) => '<code class="cell-code">' . e($p['slug']) . '</code>', 'export' => static fn(array $p) => (string)$p['slug']];
+    $cols['url'] = ['label' => 'URL', 'default' => false, 'render' => static fn(array $p) => '<a href="' . e(Posts::permalink($p)) . '" target="_blank" rel="noopener" class="cell-link">' . e(Posts::permalink($p)) . '</a>', 'export' => static fn(array $p) => Posts::permalink($p, true)];
+    $cols['id'] = ['label' => 'ID', 'default' => false, 'sort' => 'id', 'align' => 'right', 'render' => static fn(array $p) => (string)(int)$p['id']];
+
+    // Status views
+    $counts = Posts::counts($slug);
+    $views = ['all' => ['All', array_sum(array_diff_key($counts, ['trash' => 0]))]];
+    foreach ($statuses as $k => $label) {
+        if ($counts[$k] ?? 0) {
+            $views[$k] = [$label, $counts[$k]];
+        }
+    }
+    // Filters
+    $filters = [];
+    foreach ($taxes as $tx => $tdef) {
+        $n = (int)DB::val('SELECT COUNT(*) FROM {{terms}} WHERE taxonomy = :t', ['t' => $tx]);
+        if (!$n) {
+            continue;
+        }
+        if ($n <= 150) {
+            $filters["tax_$tx"] = ['label' => $tdef['plural'], 'options' => array_column(DB::all('SELECT id, name FROM {{terms}} WHERE taxonomy = :t ORDER BY name', ['t' => $tx]), 'name', 'id')];
+        } else {
+            $filters["tax_$tx"] = ['label' => $tdef['singular'] ?? $tdef['plural'], 'type' => 'text', 'list' => DB::col('SELECT name FROM {{terms}} WHERE taxonomy = :t ORDER BY count DESC, name LIMIT 1000', ['t' => $tx])];
+        }
+    }
+    if (in_array('author', $supports, true) && count($authors) > 1 && Auth::can('edit_others_posts')) {
+        $filters['author'] = ['label' => 'Authors', 'options' => $authors];
+    }
+    $months = DB::col("SELECT DISTINCT SUBSTR(COALESCE(published_at, created_at), 1, 7) m FROM {{posts}} WHERE type = :t AND status <> 'trash' ORDER BY m DESC LIMIT 48", ['t' => $slug]);
+    if (count($months) > 1) {
+        $opts = [];
+        foreach ($months as $m) {
+            $opts[$m] = date('F Y', (int)strtotime($m . '-01'));
+        }
+        $filters['month'] = ['label' => 'Dates', 'all' => 'All dates', 'options' => $opts];
+    }
+    $filters['indexing'] = ['label' => 'Search engines', 'all' => 'Any visibility', 'options' => ['index' => 'Visible to search engines', 'noindex' => 'Hidden (noindex)']];
+    // Bulk actions
+    $view = (string)($_GET['view'] ?? '');
+    if ($view === 'trash') {
+        $bulk = ['restore' => 'Restore'];
+        if (Auth::can('delete_posts')) {
+            $bulk['delete'] = ['label' => 'Delete permanently', 'danger' => true, 'confirm' => 'Permanently delete the selected items? This cannot be undone.'];
+        }
+    } else {
+        $bulk = [];
+        if (Auth::can('publish_posts')) {
+            $bulk['publish'] = 'Publish';
+        }
+        $bulk['draft'] = 'Move to draft';
+        $termOpts = [];
+        foreach ($taxes as $tx => $tdef) {
+            if (isset($filters["tax_$tx"]['options'])) {
+                foreach ($filters["tax_$tx"]['options'] as $tid => $name) {
+                    $termOpts[$tid] = $tdef['plural'] . ': ' . $name;
+                }
+            }
+        }
+        if ($termOpts) {
+            $bulk['term_add'] = ['label' => 'Add term', 'options' => $termOpts];
+            $bulk['term_remove'] = ['label' => 'Remove term', 'options' => $termOpts];
+        }
+        if (in_array('author', $supports, true) && count($authors) > 1 && Auth::can('edit_others_posts')) {
+            $bulk['author'] = ['label' => 'Change author', 'options' => $authors];
+        }
+        $bulk['seo_index'] = ['label' => 'Search engines', 'options' => ['index' => 'Allow indexing', 'noindex' => 'Hide (noindex)']];
+        $bulk['trash'] = ['label' => 'Move to trash', 'danger' => true];
+    }
+
+    return new \Slate\ListTable("content.$slug", $cols, [
+        'base' => $base, 'search' => 'Search ' . strtolower($def['plural']) . '…', 'views' => $views, 'filters' => $filters, 'bulk' => $bulk,
+        'bulk_action' => "$base/bulk", 'all_matching' => true, 'export' => true,
+        'sort' => $def['hierarchical'] ? 'menu_order' : 'published_at', 'dir' => $def['hierarchical'] ? 'asc' : 'desc',
+        'row_actions' => static function (array $p) use ($base): string {
+            $view = $p['status'] === 'publish';
+            return '<a href="' . e("$base/{$p['id']}") . '">Edit</a>'
+                . '<button type="button" class="link" data-quick-edit=\'' . e(json_encode(['id' => $p['id'], 'title' => $p['title'], 'slug' => $p['slug'], 'status' => $p['status'],
+                    'date' => $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : '', 'action' => "$base/{$p['id']}/quick"], JSON_UNESCAPED_UNICODE)) . '\'>Quick edit</button>'
+                . '<a href="' . e(Posts::permalink($p) . ($view ? '' : '?preview=' . $p['id'])) . '" target="_blank" rel="noopener">' . ($view ? 'View' : 'Preview') . '</a>'
+                . '<button type="submit" formaction="' . e("$base/{$p['id']}/duplicate") . '" class="link">Duplicate</button>';
+        },
+        'empty' => ['icon' => $def['icon'] ?? 'file', 'title' => 'No ' . strtolower($def['plural']) . ' yet', 'text' => 'Create your first one to get started.',
+            'html' => '<a class="btn btn-primary" href="' . e("$base/new") . '">' . icon('plus', 16) . ' Add ' . e(strtolower($def['singular'])) . '</a>'],
+    ]);
+}
+
+/** Users list table. */
+function admin_users_table(array $users): \Slate\ListTable
+{
+    $roles = Roles::all();
+    $views = ['all' => ['All', count($users)]];
+    foreach ($roles as $k => $r) {
+        $n = count(array_filter($users, static fn($u) => $u['role'] === $k));
+        if ($n) {
+            $views[$k] = [$r['label'], $n];
+        }
+    }
+    $sus = count(array_filter($users, static fn($u) => $u['status'] !== 'active'));
+    if ($sus) {
+        $views['suspended'] = ['Suspended', $sus];
+    }
+    $cols = [
+        'name' => ['label' => 'User', 'primary' => true, 'sort' => 'name', 'render' => static fn($u) => '<a class="user-cell" href="' . e(admin_url('users/' . $u['id'])) . '"><span class="avatar avatar-sm">'
+            . e(mb_strtoupper(mb_substr($u['display_name'] ?: $u['username'], 0, 1))) . '</span><span><strong>' . e($u['display_name'] ?: $u['username']) . '</strong><small class="muted">' . e($u['email']) . '</small></span></a>',
+            'export' => static fn($u) => (string)($u['display_name'] ?: $u['username'])],
+        'username' => ['label' => 'Username', 'default' => false, 'render' => static fn($u) => e($u['username'])],
+        'email' => ['label' => 'Email', 'default' => false, 'render' => static fn($u) => e($u['email'])],
+        'role' => ['label' => 'Role', 'sort' => 'role', 'render' => static fn($u) => '<span class="pill">' . e(Roles::label($u['role'])) . '</span>' . ($u['status'] !== 'active' ? ' <span class="status status-trash">Suspended</span>' : ''),
+            'export' => static fn($u) => Roles::label($u['role']) . ($u['status'] !== 'active' ? ' (suspended)' : '')],
+        'security' => ['label' => 'Sign-in security', 'render' => static fn($u) => $u['passkeys'] ? '<span class="pill pill-success">' . icon('key', 12) . ' Passkey</span>' . ($u['totp_secret'] ? ' <span class="pill pill-success">2FA</span>' : '')
+            : ($u['totp_secret'] ? '<span class="pill pill-success">' . icon('lock', 12) . ' 2FA</span>' : '<span class="muted">Password only</span>'),
+            'export' => static fn($u) => trim(($u['passkeys'] ? 'passkey ' : '') . ($u['totp_secret'] ? '2fa' : '')) ?: 'password'],
+        'posts' => ['label' => 'Content', 'sort' => 'posts', 'align' => 'right', 'render' => static fn($u) => number_format((int)$u['posts'])],
+        'last_login' => ['label' => 'Last sign-in', 'sort' => 'last_login', 'sort_dir' => 'desc', 'render' => static fn($u) => e(time_ago($u['last_login'])), 'export' => static fn($u) => (string)$u['last_login']],
+        'created' => ['label' => 'Joined', 'default' => false, 'sort' => 'created', 'render' => static fn($u) => e(local_date($u['created_at'] ?? null)), 'export' => static fn($u) => (string)($u['created_at'] ?? '')],
+        'id' => ['label' => 'ID', 'default' => false, 'sort' => 'id', 'align' => 'right', 'render' => static fn($u) => (string)(int)$u['id']],
+    ];
+    return new \Slate\ListTable('users', $cols, [
+        'base' => admin_url('users'), 'search' => 'Search name or email…', 'views' => $views, 'sort' => 'id', 'dir' => 'asc', 'export' => true,
+        'filters' => ['security' => ['label' => 'Sign-in security', 'all' => 'Any sign-in security', 'options' => ['protected' => 'Passkey or 2FA', 'none' => 'Password only']]],
+        'bulk' => ['role' => ['label' => 'Change role', 'options' => array_map(static fn($r) => $r['label'], $roles)], 'activate' => 'Reactivate',
+            'suspend' => ['label' => 'Suspend', 'danger' => true, 'confirm' => 'Suspend the selected users? They are signed out and cannot sign in until reactivated.']],
+        'bulk_action' => admin_url('users/bulk'),
+        'row_actions' => static fn($u) => '<a href="' . e(admin_url('users/' . $u['id'])) . '">Edit</a>',
+        'empty' => ['icon' => 'users', 'title' => 'No users'],
+    ]);
+}
+
+/** Posts::query() arguments for a content list from the table state. */
+function admin_content_list_args(array $def, array $s): array
+{
+    $view = $s['view'];
+    $args = ['type' => $def['slug'], 'status' => $view === 'all' || $view === '' ? 'any' : $view, 'page' => $s['page'], 'limit' => $s['per'],
+        'with_terms' => true, 'search' => $s['q'], 'orderby' => $s['sort'], 'order' => $s['dir']];
+    if (str_starts_with($s['sort'], 'field:')) {
+        $f = ContentModel::fieldsFor('post', $def['slug'])[substr($s['sort'], 6)] ?? [];
+        $args['numeric'] = ($f['type'] ?? '') === 'number';
+    }
+    if (!Auth::can('edit_others_posts')) {
+        $args['author'] = Auth::id();
+    } elseif (!empty($s['filters']['author'])) {
+        $args['author'] = (int)$s['filters']['author'];
+    }
+    if (!empty($s['filters']['month'])) {
+        $args['month'] = $s['filters']['month'];
+    }
+    if (in_array($s['filters']['indexing'] ?? '', ['index', 'noindex'], true)) {
+        $args['noindex'] = $s['filters']['indexing'] === 'noindex';
+    }
+    $terms = [];
+    foreach ($s['filters'] as $k => $v) {
+        if (str_starts_with($k, 'tax_')) {
+            $tx = substr($k, 4);
+            $terms[] = is_numeric($v) ? (int)$v : (int)(Terms::findBySlug($tx, slugify($v))['id'] ?? DB::val('SELECT id FROM {{terms}} WHERE taxonomy = :t AND name = :n', ['t' => $tx, 'n' => $v]) ?? 0);
+        }
+    }
+    if (!empty($_GET['term'])) {
+        $terms[] = (int)$_GET['term'];
+    }
+    if ($terms) {
+        // Every chosen term must match: intersect one taxonomy at a time.
+        $ids = null;
+        foreach ($terms as $tid) {
+            $set = array_map('intval', DB::col('SELECT post_id FROM {{term_relationships}} WHERE term_id = :t', ['t' => $tid]));
+            $ids = $ids === null ? $set : array_values(array_intersect($ids, $set));
+        }
+        $args['ids'] = $ids ?: [0];
+    }
+    return $args;
+}
+
+/** Add or remove one term on a post (bulk action). */
+function admin_bulk_term(int $postId, string $action, int $termId): void
+{
+    $t = Terms::find($termId);
+    if (!$t) {
+        return;
+    }
+    $current = array_map('intval', DB::col('SELECT tr.term_id FROM {{term_relationships}} tr INNER JOIN {{terms}} t ON t.id = tr.term_id WHERE tr.post_id = :p AND t.taxonomy = :tx',
+        ['p' => $postId, 'tx' => $t['taxonomy']]));
+    $next = $action === 'term_add' ? array_unique(array_merge($current, [$termId])) : array_values(array_diff($current, [$termId]));
+    if ($next !== $current) {
+        Terms::sync($postId, $t['taxonomy'], $next);
+    }
 }
 
 function admin_can_edit(array $post): bool

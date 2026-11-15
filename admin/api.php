@@ -182,6 +182,13 @@ function admin_api_routes(Router $r): void
                 }
             }
         }
+        foreach (\Slate\Modules::adminGroups() as $g) {
+            foreach ($g['pages'] as $mp) {
+                if (Auth::can($mp['cap']) && ($ql === '' || str_contains(mb_strtolower($g['name'] . ' ' . $mp['label']), $ql))) {
+                    $out[] = ['group' => 'Modules', 'label' => $g['name'] . ($mp['label'] !== $g['name'] ? ' → ' . $mp['label'] : ''), 'hint' => '', 'url' => admin_url('m/' . $mp['slug']), 'icon' => $mp['icon']];
+                }
+            }
+        }
         json_response(['ok' => true, 'items' => array_slice($out, 0, 30)]);
     });
 }

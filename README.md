@@ -136,10 +136,12 @@ modules/my-module/migrations/001-tables.php   (optional, run once)
 use Slate\Hooks; use Slate\Modules; use Slate\Router;
 Hooks::add('the_content', fn($html, $post) => $html . '<p>Thanks for reading</p>');
 Hooks::add('routes', fn(Router $r) => $r->get('/hello', fn() => print 'Hello'));
-Modules::adminPage('My module', 'my-module', fn() => print 'Settings UI');
+Modules::adminPage('My module', 'my-module', fn() => print 'Hello from the dashboard');
+Modules::settings([['key' => 'my_module_greeting', 'type' => 'text', 'label' => 'Greeting', 'default' => 'Hi']]);
 ```
 
-Full guide — manifest, hooks, APIs, migrations, registries, CLI: **[docs/modules.md](docs/modules.md)**.
+Full guide — manifest, hooks, APIs, migrations, registries, CLI: **[docs/modules.md](docs/modules.md)**. Dashboard UI kit
+(list tables, settings, page headers) so module screens match the core: **[docs/admin-ui.md](docs/admin-ui.md)**.
 
 Official modules (Forms, Site Migration, Auto CPT Generator) live in **[slate-modules](https://github.com/narendersinghh/slate-modules)**,
 which is also the default registry. Site-specific features belong in your own modules — kept on your server (no repository needed) or in a repository of your own, never in Slate itself.

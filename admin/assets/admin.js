@@ -450,4 +450,185 @@
       $$('.choice', box).forEach((c) => { c.hidden = q !== '' && !c.textContent.toLowerCase().includes(q); });
     });
   });
+
+  // ---------- Sidebar groups (expand without navigating) ----------
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-nav-toggle]');
+    if (!t) return;
+    e.preventDefault(); e.stopPropagation();
+    t.closest('.nav-group').classList.toggle('open');
+  });
+
+  // ---------- Quick settings switches (dashboard, settings overview) ----------
+  const postForm = (url, data) => {
+    const fd = new FormData();
+    Object.entries(data).forEach(([k, v]) => fd.append(k, v));
+    fd.append('_csrf', S.csrf);
+    return fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF-Token': S.csrf, 'X-Requested-With': 'XMLHttpRequest' } })
+      .then((r) => r.json().catch(() => ({ ok: false, error: 'Unexpected response (' + r.status + ')' })));
+  };
+  $$('[data-quick-settings]').forEach((box) => {
+    box.addEventListener('change', async (e) => {
+      const sw = e.target.closest('[data-quick]');
+      if (!sw) return;
+      sw.disabled = true;
+      try {
+        const d = await postForm(box.dataset.url, { key: sw.dataset.quick, on: sw.checked ? '1' : '0' });
+        if (!d.ok) throw new Error(d.error || 'Could not save.');
+        toast(d.message);
+        setTimeout(() => location.reload(), 800);
+      } catch (err) { sw.checked = !sw.checked; toast(err.message, 'error'); }
+      sw.disabled = false;
+    });
+  });
+
+  // ---------- Settings search ----------
+  $$('[data-settings-search]').forEach((inp) => {
+    const index = JSON.parse(inp.dataset.index || '[]');
+    const box = inp.parentElement.querySelector('.settings-search-results');
+    const show = () => {
+      const q = inp.value.trim().toLowerCase();
+      if (q.length < 2) { box.hidden = true; return; }
+      const words = q.split(/\s+/);
+      const hits = index.filter((r) => { const hay = (r[0] + ' ' + r[1] + ' ' + r[2] + ' ' + r[3]).toLowerCase(); return words.every((w) => hay.includes(w)); }).slice(0, 12);
+      box.innerHTML = hits.length
+        ? hits.map((r) => '<a href="' + esc(inp.dataset.base + '/' + r[4]) + '"><strong>' + esc(r[0]) + '</strong><small>' + esc(r[2] + (r[3] ? ' › ' + r[3] : '')) + '</small></a>').join('')
+        : '<div class="muted small">No setting matches “' + esc(inp.value) + '”.</div>';
+      box.hidden = false;
+    };
+    inp.addEventListener('input', debounce(show, 80));
+    inp.addEventListener('focus', show);
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { const a = $('a', box); if (a) { e.preventDefault(); location.href = a.href; } }
+      if (e.key === 'Escape') box.hidden = true;
+    });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.settings-search')) box.hidden = true; });
+  });
+
+  // ---------- List tables ----------
+  $$('[data-lt]').forEach((lt) => {
+    const id = lt.dataset.lt;
+    const save = (data) => fetch(lt.dataset.prefs, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': S.csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(Object.assign({ id }, data)) });
+    const table = $('.lt-table', lt);
+    const menu = $('[data-lt-colmenu]', lt);
+    const order = () => (menu ? $$('.lt-colitem', menu).map((l) => l.dataset.col) : []);
+    const visible = () => (menu ? $$('.lt-colitem input:checked', menu).map((i) => i.value) : []);
+    const persist = () => save({ cols: order().filter((k) => visible().includes(k)) });
+    const apply = () => {
+      if (!table) return;
+      const vis = visible();
+      const ord = order();
+      $$('tr', table).forEach((tr) => {
+        const cells = $$('[data-col]', tr);
+        cells.forEach((c) => { c.hidden = !vis.includes(c.dataset.col); });
+        ord.forEach((k) => { const c = cells.find((x) => x.dataset.col === k); if (c) tr.appendChild(c); });
+      });
+    };
+    if (menu) {
+      menu.addEventListener('click', (e) => e.stopPropagation());
+      menu.addEventListener('change', () => { apply(); persist(); });
+      let drag = null;
+      $$('.lt-colitem', menu).forEach((it) => {
+        it.addEventListener('dragstart', (e) => { drag = it; it.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+        it.addEventListener('dragend', () => { it.classList.remove('dragging'); drag = null; apply(); persist(); });
+        it.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (!drag || drag === it) return;
+          const r = it.getBoundingClientRect();
+          it.parentElement.insertBefore(drag, e.clientY > r.top + r.height / 2 ? it.nextSibling : it);
+        });
+      });
+    }
+    const reset = $('[data-lt-reset]', lt);
+    if (reset) reset.addEventListener('click', async () => { await save({ reset: 1 }); location.reload(); });
+    const dens = $('[data-lt-density]', lt);
+    if (dens) dens.addEventListener('click', () => {
+      const next = dens.dataset.ltDensity === 'compact' ? 'comfortable' : 'compact';
+      dens.dataset.ltDensity = next;
+      if (table) { table.classList.toggle('density-compact', next === 'compact'); table.classList.toggle('density-comfortable', next !== 'compact'); }
+      save({ density: next });
+    });
+    const per = $('[data-lt-per]', lt);
+    if (per) per.addEventListener('change', () => {
+      const u = new URL(location.href); u.searchParams.set('per', per.value); u.searchParams.delete('p'); location.href = u.toString();
+    });
+    $$('[data-autosubmit]', lt).forEach((sel) => sel.addEventListener('change', () => sel.form.submit()));
+    $$('.lt-filter[list]', lt).forEach((inp) => inp.addEventListener('change', () => inp.form.submit()));
+    const all = $('[data-bulk-all]', lt);
+    if (all) all.addEventListener('change', () => {
+      $$('input[name="ids[]"]', lt).forEach((c) => { c.checked = all.checked; });
+      const head = $('[data-check-all]', lt); if (head) head.checked = all.checked;
+      const cnt = $('.bulk-count', lt);
+      if (cnt && all.checked) setTimeout(() => { cnt.textContent = all.parentElement.textContent.replace('Select ', '').trim() + ' selected'; }, 0);
+    });
+  });
+
+  // ---------- Quick edit (content lists) ----------
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-quick-edit]');
+    if (!b) return;
+    e.preventDefault();
+    const tpl = $('#quick-edit-tpl');
+    if (!tpl) return;
+    const d = JSON.parse(b.dataset.quickEdit);
+    const form = tpl.content.firstElementChild.cloneNode(true);
+    form.action = d.action;
+    form.elements.title.value = d.title || '';
+    form.elements.slug.value = d.slug || '';
+    form.elements.status.value = d.status;
+    form.elements.published_at.value = d.date || '';
+    modal({ title: 'Quick edit', body: form, foot: null });
+    setTimeout(() => form.elements.title.focus(), 30);
+  });
+
+  // ---------- Private dashboard domain ----------
+  $$('[data-admin-host]').forEach((box) => {
+    const inp = $('input', box);
+    const wrap = box.parentElement;
+    const res = $('[data-admin-host-result]', wrap);
+    const sw = $('[data-admin-host-switch]', wrap);
+    const bridge = $('[data-admin-host-bridge]', box);
+    const host = () => inp.value.trim() || inp.placeholder;
+    const sync = () => { bridge.href = bridge.href.split('?')[0] + '?host=' + encodeURIComponent(host()); };
+    inp.addEventListener('input', () => { sync(); sw.hidden = true; res.hidden = true; });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('[data-admin-host-check]', box).click(); } });
+    sync();
+    $('[data-admin-host-check]', box).addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      res.hidden = false; res.className = 'alert'; res.textContent = 'Checking ' + host() + '…';
+      try {
+        const d = await postForm(box.dataset.check, { host: host() });
+        res.className = 'alert ' + (d.ok ? 'alert-success' : 'alert-error');
+        res.textContent = d.message || d.error;
+        sw.hidden = !d.ok;
+        $('input[name="host"]', sw).value = host();
+      } catch (err) { res.className = 'alert alert-error'; res.textContent = String(err); }
+      btn.disabled = false;
+    });
+  });
+
+  // ---------- Module lists: search + All/Active/Inactive/Updates ----------
+  (() => {
+    const q = $('[data-module-filter]');
+    const views = $('[data-module-view]');
+    if (!q && !views) return;
+    let view = 'all';
+    const run = () => {
+      const term = q ? q.value.trim().toLowerCase() : '';
+      $$('[data-module-card]').forEach((c) => {
+        const st = (c.dataset.state || '').split(' ');
+        c.hidden = (term !== '' && !c.dataset.moduleCard.includes(term)) || (view !== 'all' && !st.includes(view));
+      });
+    };
+    if (q) q.addEventListener('input', run);
+    if (views) views.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-view]');
+      if (!b) return;
+      view = b.dataset.view;
+      $$('[data-view]', views).forEach((x) => x.classList.toggle('active', x === b));
+      run();
+    });
+  })();
 })();

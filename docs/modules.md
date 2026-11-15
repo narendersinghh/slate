@@ -41,7 +41,8 @@ modules/my-shop/
 | `depends` | Other modules needed (`{"slug": "constraint"}` or `["slug"]`). Constraints: `*`, `1.2.0`, `>=1.2`, `^1.0`, `~1.4`, `1.*`. They are activated automatically and cannot be deactivated while you need them. |
 | `autoload` | PSR-4 map. Prefixes must start with `SlateModules\`. |
 | `source` | Where updates come from: a zip URL, a GitHub repository or a folder in one (`…/tree/main/my-shop`). Filled in automatically when installed from a URL. |
-| `settings` | Slug of the admin page the **Settings** button opens. |
+| `settings` | Slug of a custom settings page (only if you do not use `Modules::settings()`). |
+| `icon` | Icon shown in the sidebar and on the Modules screen (a name from `core/Slate/Icons.php`, e.g. `cart`). |
 
 ## module.php
 
@@ -66,10 +67,16 @@ Hooks::add('routes', function (Router $r): void {
     });
 });
 
-// Admin pages: label, slug (URL /admin/m/<slug>), render, capability, icon, section ("build" | "content"), badge
-Modules::adminPage('My Shop', 'my-shop', function (): void {
-    echo '<div class="card card-pad">Settings UI</div>';
-}, 'manage_settings', 'puzzle');
+// Admin pages: label, slug (URL /admin/m/<slug>), render, capability, icon, section ("main" | "settings" | "hidden"), badge.
+// They appear in the sidebar under Modules → <your module>. Build them with ListTable / AdminUi — see docs/admin-ui.md.
+Modules::adminPage('Orders', 'my-shop-orders', function (): void {
+    echo \Slate\AdminUi::header('Orders', 'Everything people bought.', 'cart');
+}, 'manage_settings', 'cart');
+
+// Settings: rendered by the standard settings screen (Settings → Modules → My Shop) and searchable.
+Modules::settings([
+    ['key' => 'my_shop_currency', 'type' => 'select', 'label' => 'Currency', 'default' => 'USD', 'options' => ['USD' => 'US dollar', 'EUR' => 'Euro']],
+]);
 
 // Lifecycle
 Hooks::add('module_activated_my-shop', fn() => null);

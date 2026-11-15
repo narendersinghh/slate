@@ -70,38 +70,59 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
       <p class="muted">Browse available modules or add your own.</p>
       <a class="btn btn-primary" href="<?= e(admin_url('modules/add')) ?>"><?= icon('plus', 16) ?> Add a module</a></div>
   <?php else: ?>
-  <div class="card-grid">
-    <?php foreach ($modules as $m): $slug = $m['slug']; $up = $updates[$slug] ?? null; $deps = $m['depends']; ?>
-    <div class="card module-card<?= $m['active'] ? ' is-active' : '' ?><?= isset($errors[$slug]) ? ' has-error' : '' ?>">
-      <div class="card-pad">
-        <div class="row-between">
-          <span class="type-icon"><?= icon('puzzle', 20) ?></span>
-          <form method="post" action="<?= e(admin_url("modules/$slug/toggle")) ?>">
-            <?= csrf_field() ?>
-            <button class="btn btn-sm <?= $m['active'] ? '' : 'btn-primary' ?>" type="submit"><?= $m['active'] ? 'Deactivate' : 'Activate' ?></button>
-          </form>
+  <?php
+    $groups = Modules::adminGroups();
+    $counts = ['all' => count($modules), 'active' => count(array_filter($modules, static fn($m) => $m['active'])), 'updates' => count($updates)];
+    $counts['inactive'] = $counts['all'] - $counts['active'];
+  ?>
+  <div class="lt-top module-filter">
+    <nav class="tabs-pill" aria-label="Show" data-module-view>
+      <button type="button" class="active" data-view="all">All <span><?= $counts['all'] ?></span></button>
+      <button type="button" data-view="active">Active <span><?= $counts['active'] ?></span></button>
+      <button type="button" data-view="inactive">Inactive <span><?= $counts['inactive'] ?></span></button>
+      <?php if ($counts['updates']): ?><button type="button" data-view="update">Updates <span><?= $counts['updates'] ?></span></button><?php endif; ?>
+    </nav>
+    <label class="lt-search"><?= icon('search', 15) ?><input class="input" type="search" placeholder="Search installed modules…" data-module-filter aria-label="Search modules"></label>
+  </div>
+  <div class="card module-list">
+    <?php foreach ($modules as $m): $slug = $m['slug']; $up = $updates[$slug] ?? null; $deps = $m['depends'];
+        $g = $groups[$slug] ?? null;
+        $open = $m['active'] && $g && $g['pages'] ? admin_url('m/' . $g['pages'][0]['slug']) : '';
+        $settingsUrl = '';
+        if ($m['active']) {
+            if (isset(Modules::settingsSections()[$slug])) $settingsUrl = admin_url('settings/modules/' . $slug);
+            elseif ($g && $g['settings']) $settingsUrl = isset($g['settings']['url']) ? admin_url($g['settings']['url']) : admin_url('m/' . $g['settings']['slug']);
+            elseif ($m['settings'] !== '' && isset(Modules::adminPages()[$m['settings']])) $settingsUrl = admin_url('m/' . $m['settings']);
+        } ?>
+    <div class="module-row<?= $m['active'] ? ' is-active' : '' ?><?= isset($errors[$slug]) ? ' has-error' : '' ?>"
+         data-module-card="<?= e(strtolower($m['name'] . ' ' . $m['description'] . ' ' . implode(' ', $m['tags']))) ?>" data-state="<?= $m['active'] ? 'active' : 'inactive' ?><?= $up ? ' update' : '' ?>">
+      <span class="module-icon"><?= icon($m['icon'] ?: 'puzzle', 18) ?></span>
+      <div class="module-main">
+        <div class="module-title"><strong><?= e($m['name']) ?></strong> <small class="muted">v<?= e($m['version']) ?></small>
+          <?php if ($m['active']): ?><span class="pill pill-success">Active</span><?php endif; ?>
+          <?php if (isset($errors[$slug])): ?><span class="pill pill-danger">Crashed</span><?php endif; ?>
+          <?php if ($up): ?><span class="pill pill-accent">Update <?= e($up['version']) ?></span><?php endif; ?>
         </div>
-        <h3><?= e($m['name']) ?> <small class="muted">v<?= e($m['version']) ?></small></h3>
-        <p class="muted"><?= e($m['description']) ?></p>
-        <?php if ($deps): ?><p class="module-deps"><small class="muted">Needs:</small>
-          <?php foreach ($deps as $d => $c): ?><span class="pill pill-soft"><?= e(($modules[$d]['name'] ?? $d) . ($c !== '*' ? " $c" : '')) ?></span><?php endforeach; ?></p><?php endif; ?>
-        <?php if ($up): ?>
-          <form method="post" action="<?= e(admin_url("modules/$slug/update")) ?>" class="module-update">
-            <?= csrf_field() ?><span><?= icon('download', 15) ?> Version <?= e($up['version']) ?> is available</span>
-            <button class="btn btn-sm btn-primary" type="submit" data-confirm="Update <?= e($m['name']) ?> to <?= e($up['version']) ?>? The current version is backed up first.">Update</button>
-          </form>
-        <?php endif; ?>
-        <div class="module-foot">
-          <small class="muted"><?= $m['author'] ? 'By ' . e($m['author']) : '' ?><?= $m['active'] ? ' · <span class="text-success">Active</span>' : '' ?></small>
+        <p class="muted module-desc"><?= e($m['description']) ?></p>
+        <div class="module-meta">
+          <?php if ($m['author']): ?><small class="muted">By <?= e($m['author']) ?></small><?php endif; ?>
+          <?php if ($deps): ?><small class="muted">· Needs</small> <?php foreach ($deps as $d => $c): ?><span class="pill pill-soft"><?= e(($modules[$d]['name'] ?? $d) . ($c !== '*' ? " $c" : '')) ?></span><?php endforeach; ?><?php endif; ?>
           <span class="module-links">
-            <?php if ($m['active'] && $m['settings'] !== '' && isset(Modules::adminPages()[$m['settings']])): ?>
-              <a href="<?= e(admin_url('m/' . $m['settings'])) ?>">Settings</a>
-            <?php endif; ?>
+            <?php if ($open): ?><a href="<?= e($open) ?>">Open</a><?php endif; ?>
+            <?php if ($settingsUrl): ?><a href="<?= e($settingsUrl) ?>">Settings</a><?php endif; ?>
             <a href="<?= e(admin_url("modules/$slug/check")) ?>">Details</a>
             <a href="<?= e(admin_url("modules/$slug/download")) ?>" title="Download as an installable .zip">Download</a>
             <?php if ($m['homepage'] !== ''): ?><a href="<?= e($m['homepage']) ?>" target="_blank" rel="noopener noreferrer">Website</a><?php endif; ?>
           </span>
         </div>
+      </div>
+      <div class="module-actions">
+        <?php if ($up): ?>
+          <form method="post" action="<?= e(admin_url("modules/$slug/update")) ?>"><?= csrf_field() ?>
+            <button class="btn btn-sm btn-primary" type="submit" data-confirm="Update <?= e($m['name']) ?> to <?= e($up['version']) ?>? The current version is backed up first."><?= icon('download', 14) ?> Update</button></form>
+        <?php endif; ?>
+        <form method="post" action="<?= e(admin_url("modules/$slug/toggle")) ?>"><?= csrf_field() ?>
+          <button class="btn btn-sm<?= $m['active'] ? ' btn-ghost' : '' ?>" type="submit"><?= $m['active'] ? 'Deactivate' : 'Activate' ?></button></form>
       </div>
     </div>
     <?php endforeach; ?>
@@ -149,12 +170,6 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
     </div>
     <?php endforeach; ?>
   </div>
-  <script>
-    document.querySelector('[data-module-filter]')?.addEventListener('input', (ev) => {
-      const q = ev.target.value.trim().toLowerCase();
-      document.querySelectorAll('[data-module-card]').forEach((c) => { c.hidden = q !== '' && !c.dataset.moduleCard.includes(q); });
-    });
-  </script>
   <?php endif; ?>
 
 <?php /* ================================================================ ADD NEW */ elseif ($tab === 'add'): $off = $locked !== '' ? ' disabled' : ''; ?>

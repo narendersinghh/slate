@@ -52,63 +52,97 @@ window.SLATE = <?= json_encode([
     <nav class="nav" aria-label="Main">
       <?= $navItem(admin_url(), 'grid', 'Dashboard', $is('/')) ?>
 
-      <?php if (Auth::can('edit_posts')): ?>
+      <?php if (Auth::can('edit_posts') || Auth::can('upload_media')): ?>
       <div class="nav-label">Content</div>
-      <?php foreach (ContentModel::types() as $slug => $t): if (empty($t['show_in_menu'])) continue;
-          $open = $is("/content/$slug") || array_filter(array_keys(ContentModel::taxonomiesFor($slug)), static fn($tx) => $is("/terms/$tx")); ?>
-        <div class="nav-group<?= $open ? ' open' : '' ?>">
-          <?= $navItem(admin_url("content/$slug"), $t['icon'] ?? 'file', $t['plural'], (bool)$open) ?>
-          <?php if ($open): ?>
+      <?php endif; ?>
+      <?php if (Auth::can('edit_posts')): foreach (ContentModel::types() as $slug => $t): if (empty($t['show_in_menu'])) continue;
+          $taxes = Auth::can('manage_terms') ? ContentModel::taxonomiesFor($slug) : [];
+          $open = $is("/content/$slug") || array_filter(array_keys($taxes), static fn($tx) => $is("/terms/$tx")); ?>
+        <div class="nav-group<?= $open ? ' open' : '' ?>" data-nav-group="type-<?= e($slug) ?>">
+          <?= $navItem(admin_url("content/$slug"), $t['icon'] ?? 'file', $t['plural'], (bool)$open, '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show ' . e(strtolower($t['plural'])) . ' menu">' . icon('chevron-down', 14) . '</button>') ?>
           <div class="nav-sub">
             <a href="<?= e(admin_url("content/$slug")) ?>" class="<?= $current === "/content/$slug" ? 'active' : '' ?>">All <?= e(strtolower($t['plural'])) ?></a>
             <a href="<?= e(admin_url("content/$slug/new")) ?>" class="<?= $current === "/content/$slug/new" ? 'active' : '' ?>">Add new</a>
-            <?php if (Auth::can('manage_terms')) foreach (ContentModel::taxonomiesFor($slug) as $tx => $tdef): ?>
+            <?php foreach ($taxes as $tx => $tdef): ?>
               <a href="<?= e(admin_url("terms/$tx")) ?>" class="<?= $is("/terms/$tx") ? 'active' : '' ?>"><?= e($tdef['plural']) ?></a>
             <?php endforeach; ?>
           </div>
-          <?php endif; ?>
         </div>
-      <?php endforeach; ?>
-      <?php endif; ?>
-
-      <?php foreach (Modules::adminPages() as $mp): if (($mp['section'] ?? 'build') !== 'content' || !Auth::can($mp['cap'])) continue;
-          $count = isset($mp['badge']) && is_callable($mp['badge']) ? (int)($mp['badge'])() : 0; ?>
-        <?= $navItem(admin_url('m/' . $mp['slug']), $mp['icon'], $mp['label'], $is('/m/' . $mp['slug']), $count > 0 ? '<span class="nav-count">' . ($count > 99 ? '99+' : $count) . '</span>' : '') ?>
-      <?php endforeach; ?>
+      <?php endforeach; endif; ?>
       <?php if (Auth::can('upload_media')): ?>
         <?= $navItem(admin_url('media'), 'image', 'Media', $is('/media')) ?>
       <?php endif; ?>
 
-      <?php if (Auth::can('manage_content_model') || Auth::can('manage_users') || Auth::can('manage_modules')): ?>
-      <div class="nav-label">Build</div>
+      <?php
+      // Modules: one entry per module, its pages (and settings) underneath.
+      $modGroups = [];
+      foreach (Modules::adminGroups() as $mslug => $g) {
+          $links = [];
+          $badge = 0;
+          foreach ($g['pages'] as $mp) {
+              if (!Auth::can($mp['cap'])) continue;
+              $n = isset($mp['badge']) && is_callable($mp['badge']) ? (int)($mp['badge'])() : 0;
+              $badge += $n;
+              $links[] = ['href' => admin_url('m/' . $mp['slug']), 'label' => $mp['label'], 'active' => $is('/m/' . $mp['slug']), 'badge' => $n, 'icon' => $mp['icon']];
+          }
+          if ($g['settings'] && Auth::can($g['settings']['cap'])) {
+              $sp = $g['settings'];
+              $href = isset($sp['url']) ? admin_url($sp['url']) : admin_url('m/' . $sp['slug']);
+              $links[] = ['href' => $href, 'label' => 'Settings', 'active' => isset($sp['url']) ? $is('/' . $sp['url']) : $is('/m/' . $sp['slug']), 'badge' => 0, 'icon' => 'settings'];
+          }
+          if ($links) {
+              $modGroups[$mslug] = $g + ['links' => $links, 'badge' => $badge];
+          }
+      }
+      $countHtml = static fn(int $n) => $n > 0 ? '<span class="nav-count">' . ($n > 99 ? '99+' : $n) . '</span>' : '';
+      if ($modGroups || Auth::can('manage_modules')): ?>
+      <div class="nav-label">Modules</div>
+      <?php foreach ($modGroups as $mslug => $g):
+          $active = (bool)array_filter($g['links'], static fn($l) => $l['active']);
+          if (count($g['links']) === 1): $l = $g['links'][0]; ?>
+            <?= $navItem($l['href'], $g['icon'], $g['name'], $active, $countHtml($l['badge'])) ?>
+          <?php else: ?>
+          <div class="nav-group<?= $active ? ' open' : '' ?>" data-nav-group="mod-<?= e($mslug) ?>">
+            <?= $navItem($g['links'][0]['href'], $g['icon'], $g['name'], $active, $countHtml($g['badge']) . '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show ' . e($g['name']) . ' menu">' . icon('chevron-down', 14) . '</button>') ?>
+            <div class="nav-sub">
+              <?php foreach ($g['links'] as $l): ?>
+                <a href="<?= e($l['href']) ?>" class="<?= $l['active'] ? 'active' : '' ?>"><?= e($l['label']) ?><?= $countHtml($l['badge']) ?></a>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <?php endif; ?>
+      <?php endforeach; ?>
+      <?php if (Auth::can('manage_modules')): ?>
+        <?= $navItem(admin_url('modules'), 'puzzle', 'Manage modules', $is('/modules')) ?>
       <?php endif; ?>
+      <?php endif; ?>
+
+      <?php if (Auth::can('manage_content_model') || Auth::can('manage_settings')): ?>
+      <div class="nav-label">Design</div>
       <?php if (Auth::can('manage_content_model')): ?>
-        <div class="nav-group<?= $is('/model') ? ' open' : '' ?>">
-          <?= $navItem(admin_url('model/types'), 'layers', 'Content model', $is('/model')) ?>
-          <?php if ($is('/model')): ?>
+        <?= $navItem(admin_url('templates'), 'code', 'Templates', $is('/templates')) ?>
+      <?php endif; ?>
+      <?php if (admin_can_settings('appearance')): ?>
+        <?= $navItem(admin_url('settings/appearance/menus'), 'menu', 'Menus', $is('/settings/appearance/menus')) ?>
+        <?= $navItem(admin_url('settings/appearance/design'), 'palette', 'Theme & styles', $is('/settings/appearance/design') || $is('/settings/appearance/theme')) ?>
+      <?php endif; ?>
+      <?php endif; ?>
+
+      <div class="nav-label">Administration</div>
+      <?php if (Auth::can('manage_content_model')): ?>
+        <div class="nav-group<?= $is('/model') ? ' open' : '' ?>" data-nav-group="model">
+          <?= $navItem(admin_url('model/types'), 'layers', 'Content model', $is('/model'), '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show content model menu">' . icon('chevron-down', 14) . '</button>') ?>
           <div class="nav-sub">
             <a href="<?= e(admin_url('model/types')) ?>" class="<?= $is('/model/types') ? 'active' : '' ?>">Post types</a>
             <a href="<?= e(admin_url('model/taxonomies')) ?>" class="<?= $is('/model/taxonomies') ? 'active' : '' ?>">Taxonomies</a>
             <a href="<?= e(admin_url('model/fields')) ?>" class="<?= $is('/model/fields') ? 'active' : '' ?>">Custom fields</a>
           </div>
-          <?php endif; ?>
         </div>
-      <?php endif; ?>
-      <?php if (Auth::can('manage_content_model')): ?>
-        <?= $navItem(admin_url('templates'), 'code', 'Templates', $is('/templates')) ?>
       <?php endif; ?>
       <?php if (Auth::can('manage_users')): ?>
         <?= $navItem(admin_url('users'), 'users', 'Users', $is('/users')) ?>
       <?php endif; ?>
-      <?php if (Auth::can('manage_modules')): ?>
-        <?= $navItem(admin_url('modules'), 'puzzle', 'Modules', $is('/modules')) ?>
-      <?php endif; ?>
-      <?php foreach (Modules::adminPages() as $mp): if (($mp['section'] ?? 'build') === 'content' || !Auth::can($mp['cap'])) continue; ?>
-        <?= $navItem(admin_url('m/' . $mp['slug']), $mp['icon'], $mp['label'], $is('/m/' . $mp['slug'])) ?>
-      <?php endforeach; ?>
-
-      <div class="nav-label">System</div>
-      <?= $navItem(admin_url('settings'), 'settings', 'Settings', $is('/settings'), $hasUpdate ? '<span class="badge-dot" title="Update available"></span>' : '') ?>
+      <?= $navItem(admin_url('settings'), 'settings', 'Settings', $is('/settings') && !$is('/settings/appearance/menus') && !$is('/settings/appearance/design') && !$is('/settings/appearance/theme') && !$is('/settings/modules'), $hasUpdate ? '<span class="badge-dot" title="Update available"></span>' : '') ?>
     </nav>
     <div class="sidebar-foot">
       <span>Slate <?= e(SLATE_VERSION) ?></span>

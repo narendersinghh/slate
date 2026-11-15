@@ -41,6 +41,12 @@ final class App
         Hooks::action('init');
 
         // 4. Route.
+        if (str_starts_with($path, AdminAccess::PROBE_PATH)) {
+            AdminAccess::answerProbe(substr($path, strlen(AdminAccess::PROBE_PATH)));
+            Frontend::notFound();
+            return;
+        }
+        AdminAccess::serveBridgeStatic($path);
         if ($path === Cron::webPath()) {
             Cron::handleWeb();
         }

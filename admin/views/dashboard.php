@@ -32,6 +32,13 @@ $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good ev
 </div>
 <?php endif; ?>
 
+<?php if (\Slate\Auth::can('manage_settings') || \Slate\Auth::can('manage_updates')): ?>
+<section class="dash-section">
+  <div class="dash-section-head"><h2>Site status</h2><a class="btn btn-ghost btn-sm" href="<?= e(admin_url('settings')) ?>">All settings <?= icon('arrow-up-right', 14) ?></a></div>
+  <?php require __DIR__ . '/partials/site-status.php'; ?>
+</section>
+<?php endif; ?>
+
 <div class="stat-grid">
   <?php foreach ($stats as $slug => $st): ?>
   <a class="stat" href="<?= e(admin_url("content/$slug")) ?>">

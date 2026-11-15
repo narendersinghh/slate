@@ -7,7 +7,7 @@ namespace Slate;
 final class Posts
 {
     public const STATUSES = ['publish' => 'Published', 'draft' => 'Draft', 'pending' => 'Pending review', 'private' => 'Private', 'scheduled' => 'Scheduled', 'trash' => 'Trash'];
-    private const ORDERBY = ['published_at', 'created_at', 'updated_at', 'title', 'menu_order', 'id'];
+    private const ORDERBY = ['published_at', 'created_at', 'updated_at', 'title', 'menu_order', 'id', 'slug', 'status', 'author_id'];
 
     private static array $cache = [];
 
@@ -145,11 +145,29 @@ final class Posts
             }
             $where[] = $ph ? "$col IN (" . implode(',', $ph) . ')' : '1 = 0';
         }
+        // Search-engine visibility set on the item: 'noindex' => true (hidden) / false (indexable).
+        if (isset($args['noindex'])) {
+            $col = DB::jsonField('p.seo', 'robots_index');
+            $where[] = $args['noindex'] ? "$col = 'noindex'" : "($col IS NULL OR $col <> 'noindex')";
+        }
+        // Month (YYYY-MM) of the publish date, or of creation for unpublished items.
+        if (!empty($args['month']) && preg_match('/^(\d{4})-(\d{2})$/', (string)$args['month'], $mm)) {
+            $where[] = 'COALESCE(p.published_at, p.created_at) >= :m_from AND COALESCE(p.published_at, p.created_at) < :m_to';
+            $params['m_from'] = "$mm[1]-$mm[2]-01 00:00:00";
+            $params['m_to'] = gmdate('Y-m-d H:i:s', (int)strtotime("$mm[1]-$mm[2]-01 +1 month UTC"));
+        }
         // Modules can add conditions/joins (e.g. language filtering): return [$where, $params, $joins].
         [$where, $params, $joins] = Hooks::filter('posts_query_sql', [$where, $params, $joins], $args);
 
-        $orderby = in_array($args['orderby'] ?? '', self::ORDERBY, true) ? $args['orderby'] : 'published_at';
         $order = strtoupper($args['order'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
+        // 'orderby' => 'field:price' sorts by a custom field (as text; numbers are compared numerically when 'numeric' is set).
+        if (is_string($args['orderby'] ?? null) && preg_match('/^field:([A-Za-z0-9_]+)$/', $args['orderby'], $fm)) {
+            $expr = DB::jsonField('p.fields', $fm[1]);
+            $orderSql = (!empty($args['numeric']) ? "CAST($expr AS DECIMAL(20,6))" : $expr) . " $order";
+        } else {
+            $orderby = in_array($args['orderby'] ?? '', self::ORDERBY, true) ? $args['orderby'] : 'published_at';
+            $orderSql = "p.$orderby $order";
+        }
         $limit = max(1, min(500, (int)($args['limit'] ?? Options::get('posts_per_page', 10))));
         $page = max(1, (int)($args['page'] ?? 1));
         $offset = ($page - 1) * $limit;
@@ -161,7 +179,7 @@ final class Posts
             $total = (int)DB::val("SELECT COUNT({$distinct}p.id) FROM {{posts}} p$joins WHERE $whereSql", $params);
         }
         $rows = DB::all(
-            "SELECT {$distinct}p.* FROM {{posts}} p$joins WHERE $whereSql ORDER BY p.$orderby $order, p.id DESC LIMIT $limit OFFSET $offset",
+            "SELECT {$distinct}p.* FROM {{posts}} p$joins WHERE $whereSql ORDER BY $orderSql, p.id DESC LIMIT $limit OFFSET $offset",
             $params
         );
         $items = array_map([self::class, 'hydrate'], $rows);

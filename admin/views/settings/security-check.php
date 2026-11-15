@@ -18,7 +18,7 @@ $add(Options::get('security_hsts') ? 'ok' : ($https ? 'warn' : 'info'), 'HSTS', 
 
 $slug = admin_slug();
 $add($slug === 'admin' ? 'warn' : 'ok', 'Dashboard address', $slug === 'admin'
-    ? 'The dashboard is at the default /admin, the first place bots look.' : 'The dashboard uses a custom address (/' . e($slug) . ').', admin_url('settings/security/login'));
+    ? 'The dashboard is at the default /admin, the first place bots look.' : 'The dashboard uses a custom address (/' . e($slug) . ').', admin_url('settings/security/access'));
 $host = AdminAccess::adminHost();
 $add($host ? 'ok' : 'info', 'Separate admin domain', $host
     ? 'The dashboard only answers on ' . e($host) . '; on the public domain it does not exist.'
@@ -49,7 +49,7 @@ $lastBackup = (int)Options::get('backup_last', 0);
 $add($lastBackup > time() - 8 * 86400 ? 'ok' : 'warn', 'Backups', $lastBackup ? 'Last backup ' . e(time_ago(gmdate('Y-m-d H:i:s', $lastBackup))) . '.' : 'No backup made yet. Turn on automatic backups.', admin_url('settings/system/backups'));
 $add((int)Options::get('cron_server_seen', 0) > time() - 3600 ? 'ok' : 'info', 'Scheduled tasks', (int)Options::get('cron_server_seen', 0) > time() - 3600
     ? 'A server cron runs tasks on time.' : 'Tasks run after visits. Add a server cron so checks and backups run on time.', admin_url('settings/system/cron'));
-$add(\Slate\Mailer::configured() ? 'ok' : 'info', 'Email', \Slate\Mailer::configured() ? 'A sender address on your domain is set.' : 'Set up email so security alerts and password resets are delivered reliably.', admin_url('settings/general/email'));
+$add(\Slate\Mailer::configured() ? 'ok' : 'info', 'Email', \Slate\Mailer::configured() ? 'A sender address on your domain is set.' : 'Set up email so security alerts and password resets are delivered reliably.', admin_url('settings/email/delivery'));
 
 if (\Slate\Api::enabled()) {
     $keys = (int)DB::val('SELECT COUNT(*) FROM {{api_keys}}');

@@ -19,7 +19,7 @@ final class Settings
             return self::$tabs;
         }
         $tabs = [
-            'general' => ['label' => 'General', 'icon' => 'sliders', 'sections' => [
+            'general' => ['label' => 'General', 'icon' => 'sliders', 'description' => 'Site name, homepage, links, language and registration.', 'sections' => [
                 'identity' => ['label' => 'Site identity', 'fields' => [
                     ['key' => 'site_title', 'type' => 'text', 'label' => 'Site title', 'default' => 'My Slate Site'],
                     ['key' => 'tagline', 'type' => 'text', 'label' => 'Tagline', 'default' => 'Just another Slate website'],
@@ -55,31 +55,43 @@ final class Settings
                     ['key' => 'time_format', 'type' => 'text', 'label' => 'Time format', 'default' => 'g:i a'],
                     ['key' => 'language', 'type' => 'text', 'label' => 'Site language (HTML lang)', 'default' => 'en'],
                 ]],
-                'writing' => ['label' => 'Writing & revisions', 'fields' => [
-                    ['key' => 'revisions_keep', 'type' => 'number', 'label' => 'Revisions kept per item', 'default' => 25, 'min' => 0, 'max' => 500,
-                        'help' => 'Every save in the editor keeps the previous version so it can be compared and restored. 0 turns revisions off.'],
-                ]],
-                'email' => ['label' => 'Email', 'render' => 'email', 'fields' => [
-                    ['key' => 'mail_from_name', 'type' => 'text', 'label' => 'From name', 'default' => '', 'help' => 'Defaults to the site title.'],
-                    ['key' => 'mail_from_email', 'type' => 'email', 'label' => 'From address', 'default' => '',
-                        'help' => 'An address on your own domain (e.g. no-reply@yourdomain.com), so mail is not marked as spam. Defaults to no-reply@ your site domain.'],
-                    ['key' => 'mail_transport', 'type' => 'select', 'label' => 'Send with', 'default' => 'auto',
-                        'options' => ['auto' => 'Automatic — SMTP when filled in below, otherwise this server', 'php' => 'This server only (PHP mail)', 'smtp' => 'SMTP only'],
-                        'help' => 'Works out of the box with your host\'s mail. Add an SMTP mailbox for the best delivery (fewer spam-folder landings).'],
-                    ['key' => 'smtp_host', 'type' => 'text', 'label' => 'SMTP host', 'default' => '', 'placeholder' => 'smtp.hostinger.com', 'show_if' => 'mail_transport!=php'],
-                    ['key' => 'smtp_port', 'type' => 'number', 'label' => 'Port', 'default' => 465, 'min' => 1, 'max' => 65535, 'show_if' => 'mail_transport!=php'],
-                    ['key' => 'smtp_encryption', 'type' => 'select', 'label' => 'Encryption', 'default' => 'ssl', 'show_if' => 'mail_transport!=php',
-                        'options' => ['ssl' => 'SSL/TLS (port 465)', 'tls' => 'STARTTLS (port 587)', 'none' => 'None (not recommended)']],
-                    ['key' => 'smtp_user', 'type' => 'text', 'label' => 'Username', 'default' => '', 'show_if' => 'mail_transport!=php'],
-                    ['key' => 'smtp_pass', 'type' => 'secret', 'label' => 'Password', 'default' => '', 'help' => 'Stored encrypted.', 'show_if' => 'mail_transport!=php'],
-                ]],
                 'users' => ['label' => 'Users & registration', 'fields' => [
                     ['key' => 'registration_enabled', 'type' => 'toggle', 'label' => 'Anyone can register', 'default' => false],
                     ['key' => 'default_role', 'type' => 'select', 'label' => 'New user default role', 'default' => 'subscriber', 'options' => 'roles'],
                 ]],
             ]],
 
-            'seo' => ['label' => 'SEO', 'icon' => 'search', 'sections' => [
+            'content' => ['label' => 'Content & media', 'icon' => 'image', 'description' => 'Revisions, image optimisation and uploads.', 'sections' => [
+                'writing' => ['label' => 'Writing & revisions', 'fields' => [
+                    ['key' => 'revisions_keep', 'type' => 'number', 'label' => 'Revisions kept per item', 'default' => 25, 'min' => 0, 'max' => 500,
+                        'help' => 'Every save in the editor keeps the previous version so it can be compared and restored. 0 turns revisions off.'],
+                ]],
+                'optimization' => ['label' => 'Image optimization', 'fields' => [
+                    ['key' => 'media_optimize', 'type' => 'toggle', 'label' => 'Automatically compress uploaded images', 'default' => true],
+                    ['key' => 'media_webp', 'type' => 'toggle', 'label' => 'Convert images to WebP', 'default' => true],
+                    ['key' => 'media_quality', 'type' => 'number', 'label' => 'Quality (%)', 'default' => 87, 'min' => 40, 'max' => 100],
+                    ['key' => 'media_max_edge', 'type' => 'number', 'label' => 'Maximum size of the longest edge (px)', 'default' => 1600, 'min' => 320, 'max' => 8000],
+                    ['key' => 'media_keep_transparency', 'type' => 'toggle', 'label' => 'Keep transparency (PNG/GIF/WebP)', 'default' => true],
+                    ['key' => 'media_thumb_size', 'type' => 'number', 'label' => 'Thumbnail size (px)', 'default' => 400, 'min' => 100, 'max' => 1000],
+                ]],
+                'uploads' => ['label' => 'Uploads', 'fields' => [
+                    ['key' => 'media_max_upload_mb', 'type' => 'number', 'label' => 'Maximum upload size (MB)', 'default' => 20, 'min' => 1, 'max' => 2048],
+                    ['key' => 'media_allowed', 'type' => 'text', 'label' => 'Allowed file extensions', 'default' => 'jpg,jpeg,png,gif,webp,avif,pdf,mp4,webm,mp3,wav,doc,docx,xls,xlsx,ppt,pptx,csv,txt,zip'],
+                    ['key' => 'media_rename_seo', 'type' => 'toggle', 'label' => 'Rename files to SEO-friendly slugs', 'default' => true, 'help' => '"My Photo (1).JPG" → my-photo-1.webp'],
+                    ['key' => 'media_lazy', 'type' => 'toggle', 'label' => 'Lazy-load images on the frontend', 'default' => true],
+                ]],
+            ]],
+
+            'appearance' => ['label' => 'Appearance', 'icon' => 'palette', 'description' => 'Theme, design system and menus.', 'sections' => [
+                'design' => ['label' => 'Styles (design system)', 'render' => 'design-system'],
+                'theme' => ['label' => 'Theme', 'fields' => [
+                    ['key' => 'theme', 'type' => 'select', 'label' => 'Active theme', 'default' => 'default', 'options' => 'themes'],
+                    ['key' => 'admin_bar_frontend', 'type' => 'toggle', 'label' => 'Show admin bar on the website when logged in', 'default' => true],
+                ]],
+                'menus' => ['label' => 'Menus', 'render' => 'menus'],
+            ]],
+
+            'seo' => ['label' => 'SEO', 'icon' => 'search', 'description' => 'Titles, indexing, sitemap, schema, social and redirects.', 'sections' => [
                 'titles' => ['label' => 'Titles & meta', 'fields' => [
                     ['key' => 'seo_separator', 'type' => 'select', 'label' => 'Title separator', 'default' => '–',
                         'options' => ['–' => '–', '-' => '-', '|' => '|', '•' => '•', '·' => '·', '»' => '»', '/' => '/']],
@@ -133,7 +145,46 @@ final class Settings
                 'redirects' => ['label' => 'Redirects', 'render' => 'redirects'],
             ]],
 
-            'integrations' => ['label' => 'Integrations', 'icon' => 'plug', 'sections' => [
+            'email' => ['label' => 'Email', 'icon' => 'mail', 'description' => 'Who emails come from and how they are delivered.', 'sections' => [
+                'delivery' => ['label' => 'Sender & delivery', 'render' => 'email', 'fields' => [
+                    ['key' => 'mail_from_name', 'type' => 'text', 'label' => 'From name', 'default' => '', 'help' => 'Defaults to the site title.'],
+                    ['key' => 'mail_from_email', 'type' => 'email', 'label' => 'From address', 'default' => '',
+                        'help' => 'An address on your own domain (e.g. no-reply@yourdomain.com), so mail is not marked as spam. Defaults to no-reply@ your site domain.'],
+                    ['key' => 'mail_transport', 'type' => 'select', 'label' => 'Send with', 'default' => 'auto',
+                        'options' => ['auto' => 'Automatic — SMTP when filled in below, otherwise this server', 'php' => 'This server only (PHP mail)', 'smtp' => 'SMTP only'],
+                        'help' => 'Works out of the box with your host\'s mail. Add an SMTP mailbox for the best delivery (fewer spam-folder landings).'],
+                    ['key' => 'smtp_host', 'type' => 'text', 'label' => 'SMTP host', 'default' => '', 'placeholder' => 'smtp.hostinger.com', 'show_if' => 'mail_transport!=php'],
+                    ['key' => 'smtp_port', 'type' => 'number', 'label' => 'Port', 'default' => 465, 'min' => 1, 'max' => 65535, 'show_if' => 'mail_transport!=php'],
+                    ['key' => 'smtp_encryption', 'type' => 'select', 'label' => 'Encryption', 'default' => 'ssl', 'show_if' => 'mail_transport!=php',
+                        'options' => ['ssl' => 'SSL/TLS (port 465)', 'tls' => 'STARTTLS (port 587)', 'none' => 'None (not recommended)']],
+                    ['key' => 'smtp_user', 'type' => 'text', 'label' => 'Username', 'default' => '', 'show_if' => 'mail_transport!=php'],
+                    ['key' => 'smtp_pass', 'type' => 'secret', 'label' => 'Password', 'default' => '', 'help' => 'Stored encrypted.', 'show_if' => 'mail_transport!=php'],
+                ]],
+            ]],
+
+            'integrations' => ['label' => 'Integrations', 'icon' => 'plug', 'description' => 'Analytics, verification, custom code, webhooks and the API.', 'sections' => [
+                'analytics' => ['label' => 'Analytics & tracking', 'fields' => [
+                    ['key' => 'gtm_id', 'type' => 'text', 'label' => 'Google Tag Manager container ID', 'placeholder' => 'GTM-XXXXXXX', 'default' => '', 'pattern' => '^GTM-[A-Z0-9]+$'],
+                    ['key' => 'ga4_id', 'type' => 'text', 'label' => 'Google Analytics 4 measurement ID', 'placeholder' => 'G-XXXXXXXXXX', 'default' => '', 'pattern' => '^G-[A-Z0-9]+$',
+                        'help' => 'Leave empty if GA4 is already loaded through Tag Manager.'],
+                    ['key' => 'meta_pixel_id', 'type' => 'text', 'label' => 'Meta (Facebook) Pixel ID', 'default' => '', 'pattern' => '^\d+$'],
+                    ['key' => 'clarity_id', 'type' => 'text', 'label' => 'Microsoft Clarity project ID', 'default' => '', 'pattern' => '^[a-z0-9]+$'],
+                    ['key' => 'linkedin_partner_id', 'type' => 'text', 'label' => 'LinkedIn Insight partner ID', 'default' => '', 'pattern' => '^\d+$'],
+                    ['key' => 'adsense_client', 'type' => 'text', 'label' => 'Google AdSense publisher ID', 'placeholder' => 'ca-pub-XXXXXXXX', 'default' => ''],
+                    ['key' => 'tracking_skip_logged_in', 'type' => 'toggle', 'label' => 'Do not load tracking for signed-in team members', 'default' => true],
+                ]],
+                'verification' => ['label' => 'Site verification', 'fields' => [
+                    ['type' => 'info', 'label' => 'How it works', 'help' => 'Paste only the content="…" value of the meta tag each service gives you.'],
+                    ['key' => 'gsc_verification', 'type' => 'text', 'label' => 'Google Search Console', 'placeholder' => 'content value of the meta tag', 'default' => ''],
+                    ['key' => 'bing_verification', 'type' => 'text', 'label' => 'Bing Webmaster Tools', 'default' => ''],
+                    ['key' => 'yandex_verification', 'type' => 'text', 'label' => 'Yandex Webmaster', 'default' => ''],
+                    ['key' => 'pinterest_verification', 'type' => 'text', 'label' => 'Pinterest', 'default' => ''],
+                ]],
+                'code' => ['label' => 'Custom code', 'fields' => [
+                    ['key' => 'code_head', 'type' => 'code', 'label' => 'Header code', 'help' => 'Printed inside <head>.', 'default' => '', 'rows' => 8],
+                    ['key' => 'code_body', 'type' => 'code', 'label' => 'Body code', 'help' => 'Printed right after <body> (e.g. GTM noscript).', 'default' => '', 'rows' => 6],
+                    ['key' => 'code_footer', 'type' => 'code', 'label' => 'Footer code', 'help' => 'Printed before </body>.', 'default' => '', 'rows' => 8],
+                ]],
                 'webhooks' => ['label' => 'Webhooks', 'render' => 'webhooks', 'fields' => [
                     ['key' => 'webhooks_allow_private', 'type' => 'toggle', 'label' => 'Allow webhooks to private network addresses', 'default' => false,
                         'help' => 'Off protects against requests to your own server or internal network (SSRF). Only turn on for self-hosted receivers on a private network.'],
@@ -145,56 +196,9 @@ final class Settings
                     ['key' => 'api_cors', 'type' => 'text', 'label' => 'Allowed origins (CORS)', 'default' => '', 'placeholder' => 'https://app.example.com',
                         'help' => 'Websites allowed to call the API from a browser, separated by spaces. * allows any. Empty: none.', 'show_if' => 'api_enabled=1'],
                 ]],
-                'google' => ['label' => 'Google', 'fields' => [
-                    ['key' => 'gtm_id', 'type' => 'text', 'label' => 'Google Tag Manager container ID', 'placeholder' => 'GTM-XXXXXXX', 'default' => '', 'pattern' => '^GTM-[A-Z0-9]+$'],
-                    ['key' => 'ga4_id', 'type' => 'text', 'label' => 'Google Analytics 4 measurement ID', 'placeholder' => 'G-XXXXXXXXXX', 'default' => '', 'pattern' => '^G-[A-Z0-9]+$',
-                        'help' => 'Leave empty if GA4 is already loaded through Tag Manager.'],
-                    ['key' => 'gsc_verification', 'type' => 'text', 'label' => 'Google Search Console verification', 'placeholder' => 'content value of the meta tag', 'default' => ''],
-                    ['key' => 'adsense_client', 'type' => 'text', 'label' => 'Google AdSense publisher ID', 'placeholder' => 'ca-pub-XXXXXXXX', 'default' => ''],
-                ]],
-                'other' => ['label' => 'Other services', 'fields' => [
-                    ['key' => 'bing_verification', 'type' => 'text', 'label' => 'Bing Webmaster verification', 'default' => ''],
-                    ['key' => 'yandex_verification', 'type' => 'text', 'label' => 'Yandex verification', 'default' => ''],
-                    ['key' => 'pinterest_verification', 'type' => 'text', 'label' => 'Pinterest verification', 'default' => ''],
-                    ['key' => 'meta_pixel_id', 'type' => 'text', 'label' => 'Meta (Facebook) Pixel ID', 'default' => '', 'pattern' => '^\d+$'],
-                    ['key' => 'clarity_id', 'type' => 'text', 'label' => 'Microsoft Clarity project ID', 'default' => '', 'pattern' => '^[a-z0-9]+$'],
-                    ['key' => 'linkedin_partner_id', 'type' => 'text', 'label' => 'LinkedIn Insight partner ID', 'default' => '', 'pattern' => '^\d+$'],
-                ]],
-                'code' => ['label' => 'Custom code', 'fields' => [
-                    ['key' => 'code_head', 'type' => 'code', 'label' => 'Header code', 'help' => 'Printed inside <head>.', 'default' => '', 'rows' => 8],
-                    ['key' => 'code_body', 'type' => 'code', 'label' => 'Body code', 'help' => 'Printed right after <body> (e.g. GTM noscript).', 'default' => '', 'rows' => 6],
-                    ['key' => 'code_footer', 'type' => 'code', 'label' => 'Footer code', 'help' => 'Printed before </body>.', 'default' => '', 'rows' => 8],
-                    ['key' => 'tracking_skip_logged_in', 'type' => 'toggle', 'label' => 'Do not load tracking for logged-in team members', 'default' => true],
-                ]],
             ]],
 
-            'media' => ['label' => 'Media', 'icon' => 'image', 'sections' => [
-                'optimization' => ['label' => 'Image optimization', 'fields' => [
-                    ['key' => 'media_optimize', 'type' => 'toggle', 'label' => 'Automatically compress uploaded images', 'default' => true],
-                    ['key' => 'media_webp', 'type' => 'toggle', 'label' => 'Convert images to WebP', 'default' => true],
-                    ['key' => 'media_quality', 'type' => 'number', 'label' => 'Quality (%)', 'default' => 87, 'min' => 40, 'max' => 100],
-                    ['key' => 'media_max_edge', 'type' => 'number', 'label' => 'Maximum size of the longest edge (px)', 'default' => 1600, 'min' => 320, 'max' => 8000],
-                    ['key' => 'media_keep_transparency', 'type' => 'toggle', 'label' => 'Keep transparency (PNG/GIF/WebP)', 'default' => true],
-                    ['key' => 'media_thumb_size', 'type' => 'number', 'label' => 'Thumbnail size (px)', 'default' => 400, 'min' => 100, 'max' => 1000],
-                ]],
-                'uploads' => ['label' => 'Uploads', 'fields' => [
-                    ['key' => 'media_max_upload_mb', 'type' => 'number', 'label' => 'Maximum upload size (MB)', 'default' => 20, 'min' => 1, 'max' => 2048],
-                    ['key' => 'media_allowed', 'type' => 'text', 'label' => 'Allowed file extensions', 'default' => 'jpg,jpeg,png,gif,webp,avif,pdf,mp4,webm,mp3,wav,doc,docx,xls,xlsx,ppt,pptx,csv,txt,zip'],
-                    ['key' => 'media_rename_seo', 'type' => 'toggle', 'label' => 'Rename files to SEO-friendly slugs', 'default' => true, 'help' => '"My Photo (1).JPG" → my-photo-1.webp'],
-                    ['key' => 'media_lazy', 'type' => 'toggle', 'label' => 'Lazy-load images on the frontend', 'default' => true],
-                ]],
-            ]],
-
-            'appearance' => ['label' => 'Appearance', 'icon' => 'palette', 'sections' => [
-                'design' => ['label' => 'Design system', 'render' => 'design-system'],
-                'theme' => ['label' => 'Theme', 'fields' => [
-                    ['key' => 'theme', 'type' => 'select', 'label' => 'Active theme', 'default' => 'default', 'options' => 'themes'],
-                    ['key' => 'admin_bar_frontend', 'type' => 'toggle', 'label' => 'Show admin bar on the website when logged in', 'default' => true],
-                ]],
-                'menus' => ['label' => 'Menus', 'render' => 'menus'],
-            ]],
-
-            'performance' => ['label' => 'Performance', 'icon' => 'zap', 'sections' => [
+            'performance' => ['label' => 'Performance', 'icon' => 'zap', 'description' => 'Page cache and HTML output.', 'sections' => [
                 'cache' => ['label' => 'Page cache', 'render' => 'cache', 'fields' => [
                     ['key' => 'cache_pages', 'type' => 'toggle', 'label' => 'Full-page cache for visitors', 'help' => 'Optional. Pages are still built dynamically; the cache keeps the result for visitors (zero database queries) and refreshes automatically when content changes. Turn off for fully live sites.', 'default' => true],
                     ['key' => 'cache_ttl', 'type' => 'number', 'label' => 'Cache lifetime (minutes)', 'default' => 720, 'min' => 1, 'max' => 43200],
@@ -214,10 +218,9 @@ final class Settings
                 ]],
             ]],
 
-            'security' => ['label' => 'Security', 'icon' => 'shield', 'sections' => [
-                'login' => ['label' => 'Login protection', 'fields' => [
-                    ['key' => 'security_admin_slug', 'type' => 'text', 'label' => 'Admin URL slug', 'default' => 'admin', 'pattern' => '^[a-z0-9-]{3,40}$',
-                        'help' => 'Change to hide the login page from bots, e.g. "studio" → /studio/login. Bookmark it!'],
+            'security' => ['label' => 'Security', 'icon' => 'shield', 'description' => 'Sign-in protection, dashboard address, headers and the activity log.', 'sections' => [
+                'check' => ['label' => 'Overview', 'render' => 'security-check'],
+                'login' => ['label' => 'Sign-in & sessions', 'fields' => [
                     ['key' => 'security_max_attempts', 'type' => 'number', 'label' => 'Failed attempts before lockout', 'default' => 5, 'min' => 3, 'max' => 50],
                     ['key' => 'security_lockout_minutes', 'type' => 'number', 'label' => 'Lockout duration (minutes)', 'default' => 15, 'min' => 1, 'max' => 1440],
                     ['key' => 'security_session_hours', 'type' => 'number', 'label' => 'Session idle timeout (hours)', 'default' => 12, 'min' => 1, 'max' => 720],
@@ -225,7 +228,10 @@ final class Settings
                     ['key' => 'security_require_2fa', 'type' => 'toggle', 'label' => 'Require two-factor auth for administrators', 'default' => false],
                     ['key' => 'security_login_alerts', 'type' => 'toggle', 'label' => 'Email administrators when they sign in from a new address', 'default' => true],
                 ]],
-                'check' => ['label' => 'Security check', 'render' => 'security-check'],
+                'access' => ['label' => 'Dashboard access', 'render' => 'admin-access', 'render_first' => true, 'fields' => [
+                    ['key' => 'security_admin_slug', 'type' => 'text', 'label' => 'Admin URL slug', 'default' => 'admin', 'pattern' => '^[a-z0-9-]{3,40}$',
+                        'help' => 'Change to hide the login page from bots, e.g. "studio" → /studio/login. Bookmark it!'],
+                ]],
                 'headers' => ['label' => 'HTTP security headers', 'fields' => [
                     ['key' => 'security_headers', 'type' => 'toggle', 'label' => 'Send security headers', 'help' => 'X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy and the Content-Security-Policy below.', 'default' => true],
                     ['key' => 'security_csp', 'type' => 'textarea', 'label' => 'Content-Security-Policy', 'rows' => 3, 'default' => \Slate\PageCache::DEFAULT_CSP,
@@ -238,7 +244,7 @@ final class Settings
                 ]],
             ]],
 
-            'ai' => ['label' => 'AI', 'icon' => 'sparkles', 'sections' => [
+            'ai' => ['label' => 'AI assistant', 'icon' => 'sparkles', 'description' => 'AI writing assistant provider and brand voice.', 'sections' => [
                 'provider' => ['label' => 'Provider', 'render' => 'ai-provider', 'fields' => [
                     ['key' => 'ai_enabled', 'type' => 'toggle', 'label' => 'Enable AI assistant', 'default' => false],
                     ['key' => 'ai_provider', 'type' => 'select', 'label' => 'Provider preset', 'default' => 'anthropic', 'options' => 'ai_providers'],
@@ -255,7 +261,7 @@ final class Settings
                 ]],
             ]],
 
-            'system' => ['label' => 'System', 'icon' => 'cpu', 'sections' => [
+            'system' => ['label' => 'System', 'icon' => 'cpu', 'description' => 'Updates, backups, scheduled tasks and maintenance.', 'sections' => [
                 'updates' => ['label' => 'Updates', 'render' => 'updates', 'fields' => [
                     ['key' => 'update_repo', 'type' => 'text', 'label' => 'GitHub repository', 'default' => 'narendersinghh/slate', 'pattern' => '^[\w.-]+/[\w.-]+$'],
                     ['key' => 'update_channel', 'type' => 'select', 'label' => 'Release channel', 'default' => 'stable',
@@ -281,7 +287,44 @@ final class Settings
                 'info' => ['label' => 'System info', 'render' => 'sysinfo'],
             ]],
         ];
-        return self::$tabs = Hooks::filter('settings_tabs', $tabs);
+        $tabs = Hooks::filter('settings_tabs', $tabs);
+        // Settings declared by modules (Modules::settings()) get their own category.
+        $mods = [];
+        foreach (Modules::settingsSections() as $slug => $m) {
+            $mods[$slug] = ['label' => $m['label'], 'fields' => $m['fields'], 'intro' => $m['intro'], 'callback' => $m['callback'], 'cap' => $m['cap']];
+        }
+        if ($mods) {
+            uasort($mods, static fn($a, $b) => strcasecmp($a['label'], $b['label']));
+            $tabs['modules'] = ['label' => 'Modules', 'icon' => 'puzzle', 'description' => 'Settings of installed modules.', 'sections' => $mods];
+        }
+        return self::$tabs = $tabs;
+    }
+
+    /** Old settings addresses (before 0.13) that moved. */
+    public const MOVED = [
+        'general/writing' => 'content/writing', 'general/email' => 'email/delivery', 'media/optimization' => 'content/optimization',
+        'media/uploads' => 'content/uploads', 'integrations/google' => 'integrations/analytics', 'integrations/other' => 'integrations/verification',
+        'media' => 'content/optimization', 'email' => 'email/delivery',
+    ];
+
+    /**
+     * Flat index of every setting (for the search box): [label, help, tab label, section label, url-path].
+     * @return array<int, array{0:string,1:string,2:string,3:string,4:string}>
+     */
+    public static function index(): array
+    {
+        $out = [];
+        foreach (self::tabs() as $tk => $t) {
+            foreach ($t['sections'] as $sk => $sec) {
+                $out[] = [$sec['label'], $t['description'] ?? '', $t['label'], '', "$tk/$sk"];
+                foreach ($sec['fields'] ?? [] as $f) {
+                    if (!empty($f['label']) && ($f['type'] ?? '') !== 'info') {
+                        $out[] = [$f['label'], (string)($f['help'] ?? ''), $t['label'], $sec['label'], "$tk/$sk"];
+                    }
+                }
+            }
+        }
+        return $out;
     }
 
     public static function defaults(): array

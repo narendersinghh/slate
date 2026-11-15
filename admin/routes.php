@@ -644,6 +644,21 @@ function admin_dispatch(string $path): void
         }
         $moduleDone(['ok' => $ok, 'error' => 'Could not restore that backup.'], 'Previous version restored.', admin_url("modules/$slug/check"));
     });
+    $r->get('/modules/{slug}/download', static function (string $slug) use ($slugOr404) {
+        Auth::require('manage_modules');
+        $file = ModuleInstaller::export($slugOr404($slug));
+        if (!$file) {
+            Session::flash('error', 'Could not package the module (the PHP zip extension is required).');
+            redirect(admin_url("modules/$slug/check"));
+        }
+        log_activity('module_exported', $slug);
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="' . basename($file) . '"');
+        header('Content-Length: ' . filesize($file));
+        readfile($file);
+        \Slate\Updater::rrmdir(dirname($file));
+        exit;
+    });
     $r->post('/modules/{slug}/dismiss', static function (string $slug) {
         Auth::require('manage_modules');
         Modules::clearError($slug);

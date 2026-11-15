@@ -1,7 +1,0 @@
-{
-  "name": "Site Migration",
-  "description": "Move an existing website to Slate: content, post types, taxonomies, custom fields, media (auto-optimized), SEO, menus, settings and URLs with automatic redirects, plus an exact mirror of the design. Also keeps old links, asset URLs and form endpoints of the previous site working.",
-  "version": "1.1.0",
-  "author": "Slate",
-  "requires": "0.1.0"
-}

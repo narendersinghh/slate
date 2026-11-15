@@ -24,7 +24,7 @@ Logo: a faceted origami songbird perched on a chalk line on a slate. Colours: br
 
 ## Forms
 
-Activate the **Forms** module, then **Content → Forms → Add new**: add one row per field, set the button text, messages and who gets
+Install the **Forms** module (**Modules → Available**, from [slate-modules](https://github.com/narendersinghh/slate-modules)), then **Content → Forms → Add new**: add one row per field, set the button text, messages and who gets
 the email. Place it with the **☑ Form** button in any rich-text editor, a *Form* custom field, `{{form:contact}}` in Templates or
 `[form slug="contact"]` anywhere in content. Entries land in **Submissions** (filter, mark read/spam, reply, export CSV).
 
@@ -38,13 +38,13 @@ template that already shows every custom field. Preview it, then switch it **Act
 
 ## Migrating a WordPress site
 
-1. **Modules** → activate **Auto CPT Generator** and **WordPress Importer**.
+1. **Modules → Available** → install and activate **Site Migration** (it brings **Auto CPT Generator** along).
 2. In WordPress: **Users → Profile → Application Passwords** → create one named “Slate”.
 3. In Slate: **WordPress import** → enter the site URL, admin username and the application password → **Analyse site**.
 4. Review what was detected, keep the options on (including *Mirror the design*) → **Start import**. Keep the tab open; it runs in resumable batches.
 5. Check the site, then point the domain at Slate. Old URLs keep working (identical paths or 301 redirects).
 
-Or over SSH, from the Slate folder (prompts for the application password, never stored in shell history):
+Or over SSH, from the Slate folder, once the module is installed (prompts for the application password, never stored in shell history):
 
 ```bash
 php bin/slate import:wordpress --url=https://example.com --user=your-wp-admin
@@ -90,7 +90,7 @@ index.php            Front controller
 core/                Framework (Slate\* classes), helpers, template API
 admin/               Dashboard: routes, JSON API, views, assets (vanilla JS/CSS, no build step)
 themes/default/      Default theme (templates/, partials/, assets/, theme.json, functions.php)
-modules/             Modules (plugins) — hello-world example included
+modules/             Installed modules (not tracked in this repository) — hello-world example included
 docs/                Developer guides (docs/modules.md)
 content/             Uploads, cache, backups, SQLite DB (never touched by updates)
 ```
@@ -135,6 +135,9 @@ Modules::adminPage('My module', 'my-module', fn() => print 'Settings UI');
 ```
 
 Full guide — manifest, hooks, APIs, migrations, registries, CLI: **[docs/modules.md](docs/modules.md)**.
+
+Official modules (Forms, Site Migration, Auto CPT Generator) live in **[slate-modules](https://github.com/narendersinghh/slate-modules)**,
+which is also the default registry. Site-specific features belong in your own modules — kept on your server (no repository needed) or in a repository of your own, never in Slate itself.
 
 ## Releasing updates
 

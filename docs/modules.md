@@ -98,6 +98,7 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `template_tag`, `template_lookup`, `template_block` | filter | add `{{tags}}`, conditions and `{{#blocks}}` to Templates |
 | `design_system_css` | filter | CSS variables of the design system |
 | `modules_loaded` | action | every active module is loaded |
+| `cli_commands` | filter | `['name' => ['Help text', fn(array $opts, string $arg, callable $out, callable $fail)]]`: add `php bin/slate <name>` commands |
 
 ### Core APIs
 
@@ -170,5 +171,9 @@ Write SQL that works on MySQL/MariaDB; when you need SQLite support too, check `
 }
 ```
 
+- **Keep it on your server only**: a site-specific module needs no repository. It lives in `modules/<slug>/` on the
+  site (included in your hosting backups), and **Download** on the Modules page (or `php bin/slate module:export <slug>`)
+  packages it as a zip you can install on any other Slate site.
+
 Command line: `php bin/slate module:list | module:make <slug> | module:install <url|zip> | module:activate <slug> |
-module:deactivate <slug> | module:update <slug> | module:check <slug>`.
+module:deactivate <slug> | module:update <slug> | module:check <slug> | module:export <slug> | module:delete <slug>`.

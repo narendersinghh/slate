@@ -18,3 +18,7 @@
 /content/wpm/
 /content/assets/
 /content/safe-mode
+
+# Installed modules live outside the core repository (see docs/modules.md); only the example ships with Slate.
+/modules/*
+!/modules/hello-world/

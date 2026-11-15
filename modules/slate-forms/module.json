@@ -1,7 +1,0 @@
-{
-  "name": "Forms",
-  "description": "Build forms in the dashboard (Content → Forms), place them anywhere with the Form widget in the editor, a Form custom field, the {{form:slug}} template tag or [form slug=\"…\"], and manage every submission in one inbox with email notifications, spam filtering and CSV export.",
-  "version": "1.0.0",
-  "author": "Slate",
-  "requires": "0.3.0"
-}

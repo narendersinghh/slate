@@ -98,6 +98,7 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
               <a href="<?= e(admin_url('m/' . $m['settings'])) ?>">Settings</a>
             <?php endif; ?>
             <a href="<?= e(admin_url("modules/$slug/check")) ?>">Details</a>
+            <a href="<?= e(admin_url("modules/$slug/download")) ?>" title="Download as an installable .zip">Download</a>
             <?php if ($m['homepage'] !== ''): ?><a href="<?= e($m['homepage']) ?>" target="_blank" rel="noopener noreferrer">Website</a><?php endif; ?>
           </span>
         </div>
@@ -239,8 +240,11 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
   <div class="card">
     <div class="card-head">
       <h2><?= icon('puzzle', 18) ?> <?= e($m['name']) ?> <small class="muted">v<?= e($m['version']) ?></small></h2>
+      <div class="row-between">
+      <a class="btn" href="<?= e(admin_url("modules/$slug/download")) ?>"><?= icon('download', 15) ?> Download .zip</a>
       <form method="post" action="<?= e(admin_url("modules/$slug/toggle")) ?>"><?= csrf_field() ?><input type="hidden" name="back" value="check">
         <button class="btn <?= $m['active'] ? '' : 'btn-primary' ?>"<?= $scan['errors'] && !$m['active'] ? ' disabled' : '' ?>><?= $m['active'] ? 'Deactivate' : 'Activate' ?></button></form>
+      </div>
     </div>
     <div class="card-pad stack-sm">
       <p><?= e($m['description']) ?></p>

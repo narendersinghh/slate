@@ -559,26 +559,12 @@ final class ModuleInstaller
     /** Zip an installed module to content/backups/modules/. Keeps the newest 5 per module. */
     public static function backup(string $slug): ?string
     {
-        $dir = SLATE_MODULES . "/$slug";
-        if (!is_dir($dir) || !class_exists('ZipArchive')) {
-            return null;
-        }
         if (!is_dir(self::BACKUPS) && !@mkdir(self::BACKUPS, 0755, true)) {
             return null;
         }
         $v = preg_replace('/[^\w.-]/', '', Modules::manifest($slug)['version']);
         $file = self::BACKUPS . "/$slug-$v-" . gmdate('Ymd-His') . '.zip';
-        $zip = new \ZipArchive();
-        if ($zip->open($file, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-            return null;
-        }
-        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
-        foreach ($it as $f) {
-            if ($f->isFile()) {
-                $zip->addFile($f->getPathname(), $slug . '/' . str_replace('\\', '/', substr($f->getPathname(), strlen($dir) + 1)));
-            }
-        }
-        if (!$zip->close()) {
+        if (!self::zipModule($slug, $file)) {
             return null;
         }
         $all = glob(self::BACKUPS . "/$slug-*.zip") ?: [];
@@ -587,6 +573,40 @@ final class ModuleInstaller
             @unlink($old);
         }
         return $file;
+    }
+
+    /**
+     * Package an installed module as an installable zip (<slug>/module.json …) for reuse on another site.
+     * Returns the temporary file path; the caller deletes it after sending.
+     */
+    public static function export(string $slug): ?string
+    {
+        if (!Modules::get($slug)) {
+            return null;
+        }
+        $v = preg_replace('/[^\w.-]/', '', Modules::manifest($slug)['version']);
+        $dir = self::workDir();
+        $file = "$dir/$slug-$v.zip";
+        return self::zipModule($slug, $file) ? $file : null;
+    }
+
+    private static function zipModule(string $slug, string $file): bool
+    {
+        $dir = SLATE_MODULES . "/$slug";
+        if (!Modules::validSlug($slug) || !is_dir($dir) || !class_exists('ZipArchive')) {
+            return false;
+        }
+        $zip = new \ZipArchive();
+        if ($zip->open($file, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return false;
+        }
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $f) {
+            if ($f->isFile() && !in_array($f->getFilename(), ['.DS_Store', 'Thumbs.db'], true)) {
+                $zip->addFile($f->getPathname(), $slug . '/' . str_replace('\\', '/', substr($f->getPathname(), strlen($dir) + 1)));
+            }
+        }
+        return $zip->close();
     }
 
     /** Put a backup zip back in place of the module folder. */

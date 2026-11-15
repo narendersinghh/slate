@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — Modules live outside the core
+- Forms, Site Migration and Auto CPT Generator moved to [slate-modules](https://github.com/narendersinghh/slate-modules),
+  which is also the default registry: install them from **Modules → Available**. Slate itself ships only the
+  `hello-world` example; installed modules are no longer tracked by the core repository, so `git pull` never touches them.
+- Site Migration declares its dependency on Auto CPT Generator.
+- `cli_commands` hook: modules add `php bin/slate` commands. `import:wordpress` now comes from the Site Migration module.
+- Unknown CLI commands report an error instead of silently printing help.
+- **Download** any installed module as an installable zip (Modules → Download, or `php bin/slate module:export <slug>`),
+  so site-specific modules can stay on the server and still be reused elsewhere.
+
 ## 0.6.0 — Open module system
 - **Install modules from anywhere**: upload a zip, paste a GitHub repository or a folder inside one
   (`…/tree/main/my-module`, private repositories with a token), any zip URL, or one click from **registries** —

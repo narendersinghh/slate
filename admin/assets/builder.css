@@ -100,3 +100,11 @@ html, body.pb-app { height: 100%; overflow: hidden; }
 }
 .gjs-block svg { fill: none !important; stroke: currentColor; }
 .gjs-block__media svg { width: 26px; height: 26px; }
+
+/* AI panel */
+.pb-ai textarea { font-size: 14px; }
+.pb-ai-examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); border-radius: 99px; padding: 5px 11px; font: 12.5px var(--font); cursor: pointer; text-align: left; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.pb-ai-modes label.is-disabled { opacity: .5; cursor: not-allowed; }
+.pb-bar .btn-ai { gap: 6px; }

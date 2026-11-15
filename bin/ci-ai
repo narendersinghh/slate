@@ -1,0 +1,19 @@
+<?php
+// Point a CI/test site's AI settings at the fake provider (bin/mock-ai). Usage: php bin/ci-ai http://127.0.0.1:8097/v1
+declare(strict_types=1);
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require dirname(__DIR__) . '/core/bootstrap.php';
+if (!defined('SLATE_CONFIG')) {
+    fwrite(STDERR, "Not installed.\n");
+    exit(1);
+}
+\Slate\DB::connect(SLATE_CONFIG['db']);
+\Slate\Options::load();
+\Slate\Options::set('ai_enabled', true);
+\Slate\Options::set('ai_provider', 'anthropic');
+\Slate\Options::set('ai_base_url', $argv[1] ?? 'http://127.0.0.1:8097/v1');
+\Slate\Options::set('ai_model', 'claude-opus-5-5');
+\Slate\Options::set('ai_api_key', \Slate\Crypto::encrypt('test-key'));
+echo "AI points at the mock provider.\n";

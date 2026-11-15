@@ -1,0 +1,33 @@
+<?php
+// Fake AI provider for tests (Claude Messages API and OpenAI-compatible chat). Never used by a real site.
+//   php -S 127.0.0.1:8097 bin/mock-ai
+// Then point Settings → AI at http://127.0.0.1:8097/v1 (provider "anthropic" or "custom").
+declare(strict_types=1);
+
+$in = json_decode((string)file_get_contents('php://input'), true) ?: [];
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$prompt = '';
+foreach ((array)($in['messages'] ?? []) as $m) {
+    if (($m['role'] ?? '') === 'user') {
+        $prompt = is_string($m['content']) ? $m['content'] : json_encode($m['content']);
+    }
+}
+if (str_contains($prompt, 'Rewrite this part')) {
+    $html = '<div class="edited-by-ai" style="display:flex;gap:16px;flex-wrap:wrap"><p style="flex:1 1 200px">Edited by AI: shorter and clearer.</p></div>';
+} elseif (str_contains($prompt, 'Design ONE new section')) {
+    $html = '<section class="section"><div class="container"><h2>What our clients say</h2><blockquote style="margin:0">"Fast, friendly and on time."</blockquote></div></section>';
+} else {
+    $html = "```html\n" . '<section class="section" style="text-align:center"><div class="container"><p class="eyebrow">Free consultation</p><h1>Grow your business with a clear plan</h1>'
+        . '<p style="max-width:620px;margin:16px auto 24px">A 30-minute call to find your next three steps.</p><a class="btn" href="#book" onclick="alert(1)">Book a call</a></div></section>'
+        . '<section class="section"><div class="container" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px">'
+        . '<div><h3>Listen</h3><p>We learn how you work today.</p></div><div><h3>Plan</h3><p>You get a short written plan.</p></div>'
+        . '<div><img src="" alt="Team meeting" data-ai-image="people planning at a table" style="width:100%;height:auto"></div></div></section>'
+        . '<script>alert("x")</script>' . "\n```";
+}
+header('Content-Type: application/json');
+if (str_ends_with((string)$path, '/messages')) {
+    echo json_encode(['id' => 'msg_mock', 'type' => 'message', 'role' => 'assistant', 'model' => $in['model'] ?? 'mock',
+        'content' => [['type' => 'text', 'text' => $html]], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]]);
+} else {
+    echo json_encode(['id' => 'chatcmpl-mock', 'object' => 'chat.completion', 'choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => $html], 'finish_reason' => 'stop']]]);
+}

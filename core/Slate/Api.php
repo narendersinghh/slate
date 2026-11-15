@@ -71,28 +71,47 @@ final class Api
 
     private static function authenticate(): void
     {
-        $h = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-        $token = preg_match('/^Bearer\s+(\S+)$/i', $h, $m) ? $m[1] : (string)($_SERVER['HTTP_X_API_KEY'] ?? '');
+        $token = self::bearerToken();
         if ($token === '') {
             return;
         }
+        $res = self::verifyToken($token);
+        if (isset($res['error'])) {
+            self::error(...$res['error']);
+        }
+        Auth::actAs($res['user']);
+        self::$key = $res['key'];
+    }
+
+    /** The API key sent with this request ("Authorization: Bearer …" or "X-Api-Key"), or ''. */
+    public static function bearerToken(): string
+    {
+        $h = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        return preg_match('/^Bearer\s+(\S+)$/i', $h, $m) ? $m[1] : (string)($_SERVER['HTTP_X_API_KEY'] ?? '');
+    }
+
+    /**
+     * Check an API key (shared by the REST API and the MCP server): lockout, hash, active user, last-used stamp.
+     * @return array{key:array, user:array}|array{error:array{0:int, 1:string, 2:string}} error = [http status, code, message]
+     */
+    public static function verifyToken(string $token): array
+    {
         if (Auth::isLockedOut()) {
-            self::error(429, 'locked_out', 'Too many failed attempts. Try again later.');
+            return ['error' => [429, 'locked_out', 'Too many failed attempts. Try again later.']];
         }
         $key = self::findKey($token);
         if (!$key) {
             DB::insert('login_attempts', ['ip' => Auth::ip(), 'username' => 'api-key', 'attempted_at' => now()]);
-            self::error(401, 'invalid_key', 'Invalid API key.');
+            return ['error' => [401, 'invalid_key', 'Invalid API key.']];
         }
         $user = DB::row('SELECT * FROM {{users}} WHERE id = :id', ['id' => $key['user_id']]);
         if (!$user || $user['status'] !== 'active') {
-            self::error(401, 'invalid_key', 'The user of this key is not active.');
+            return ['error' => [401, 'invalid_key', 'The user of this key is not active.']];
         }
-        Auth::actAs($user);
-        self::$key = $key;
         if (!$key['last_used'] || strtotime($key['last_used'] . ' UTC') < time() - 300) {
             DB::update('api_keys', ['last_used' => now()], ['id' => $key['id']]);
         }
+        return ['key' => $key, 'user' => $user];
     }
 
     private static function findKey(string $token): ?array
@@ -365,8 +384,8 @@ final class Api
             'alt' => (string)$m['alt'], 'title' => (string)$m['title'], 'caption' => (string)($m['caption'] ?? '')];
     }
 
-    /** Turn request JSON into Posts::save() data, with the same checks as the editor. */
-    private static function writable(string $type, array $in, ?array $existing): array
+    /** Turn request JSON into Posts::save() data, with the same checks as the editor (also used by the MCP server). */
+    public static function writable(string $type, array $in, ?array $existing): array
     {
         $unfiltered = Auth::can('unfiltered_html');
         $data = [];

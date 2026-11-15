@@ -326,6 +326,18 @@ function admin_dispatch(string $path): void
         Session::flash('success', $mode === 'classic' ? 'Now using the classic editor. The visual design is kept.' : 'Now using the visual design.');
         redirect(admin_url("content/$type/$id"));
     });
+    $r->post('/builder/ai', static function () {
+        Auth::require('edit_posts');
+        Auth::require('use_ai');
+        @set_time_limit(300);
+        $in = json_input();
+        $mode = in_array($in['mode'] ?? '', ['page', 'section', 'edit'], true) ? $in['mode'] : 'page';
+        $res = \Slate\Builder::ai($mode, (string)($in['prompt'] ?? ''), (string)($in['html'] ?? ''), ['title' => (string)($in['title'] ?? '')]);
+        if ($res['ok']) {
+            log_activity('builder_ai', $mode . ': ' . mb_substr((string)($in['prompt'] ?? ''), 0, 120));
+        }
+        json_response($res, $res['ok'] ? 200 : 422);
+    });
     $r->post('/builder/blocks', static function () {
         Auth::require('edit_posts');
         $in = json_input();

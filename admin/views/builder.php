@@ -30,6 +30,9 @@ $config = [
     'saved' => Builder::savedBlocks(),
     'title' => $post['title'],
     'chrome' => Builder::chrome($post),
+    'ai' => \Slate\Ai::enabled() && \Slate\Auth::can('use_ai'),
+    'aiUrl' => admin_url('builder/ai'),
+    'aiSettings' => admin_url('settings/ai/provider'),
 ];
 ?><!doctype html>
 <html lang="en" data-theme="<?= e($_COOKIE['slate_theme'] ?? 'auto') ?>">
@@ -68,6 +71,7 @@ window.PB = <?= json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
     <button type="button" class="icon-btn" data-cmd="preview" title="Preview"><?= icon('eye', 17) ?></button>
   </div>
   <div class="pb-bar-right">
+    <button type="button" class="btn btn-sm btn-ai" data-cmd="ai" title="Design with AI"><?= icon('sparkles', 15) ?> AI</button>
     <select class="input input-sm" data-pb-layout title="Page layout" aria-label="Page layout">
       <option value="theme">With site header & footer</option>
       <option value="blank">Blank page (design everything)</option>

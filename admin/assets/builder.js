@@ -144,15 +144,23 @@
   const styleable = (c) => c && !c.is('wrapper') && !c.is('textnode') && c.get('stylable') !== false;
   function classify(c) {
     if (!styleable(c)) return;
-    const st = c.getStyle ? c.getStyle() : {};
-    const has = st && Object.keys(st).length;
-    if (!has) return;
-    let cls = c.getClasses()[0];
-    if (!cls || !/^pb-/.test(cls)) { cls = rnd(); c.addClass(cls); }
-    editor.Css.setRule('.' + cls, Object.assign({}, editor.Css.getRule('.' + cls)?.getStyle() || {}, st));
-    c.setStyle({});
+    // Only styles tied to this element (inline or its #id rule) move to a class; class rules are left alone.
+    const idRule = editor.Css.getIdRule(c.getId());
+    const st = Object.assign({}, c.get('style') || {}, idRule ? idRule.getStyle() : {});
+    if (!Object.keys(st).length) return;
+    let cls = c.getClasses().find((k) => /^pb-/.test(k));
+    if (!cls) { cls = rnd(); c.addClass(cls); }
+    const rule = editor.Css.getRule('.' + cls);
+    editor.Css.setRule('.' + cls, Object.assign({}, rule ? rule.getStyle() : {}, st));
+    if (idRule) editor.Css.remove(idRule);
+    c.set('style', {});
   }
-  const classifyTree = (c) => { classify(c); c.components().forEach(classifyTree); };
+  const classifyTree = (c) => {
+    // Bookkeeping, not an edit: keep it out of the undo history so one undo removes what was added.
+    const um = editor.UndoManager;
+    um.stop();
+    try { (function walk(x) { classify(x); x.components().forEach(walk); })(c); } finally { um.start(); }
+  };
   editor.on('component:add', (c) => {
     if (!loaded || c.getAttributes()['data-pb-chrome']) return;
     classifyTree(c);
@@ -269,6 +277,7 @@
     else if (cmd === 'clear') { if (confirm('Remove everything from this page? You can still undo, or leave without saving.')) { editor.setComponents(''); editor.setStyle(''); addChrome(); } }
     else if (cmd === 'classic') switchClassic();
     else if (cmd === 'save-block') saveBlock();
+    else if (cmd === 'ai') openAi();
   });
   editor.on('stop:preview', () => document.body.classList.remove('pb-previewing'));
   document.addEventListener('keydown', (e) => {
@@ -288,6 +297,114 @@
     const q = e.target.value.trim().toLowerCase();
     const all = editor.Blocks.getAll();
     editor.Blocks.render(q ? all.filter((bl) => (bl.get('label') + ' ' + bl.get('category')?.id).toLowerCase().includes(q)) : all.models);
+  });
+
+
+  // ------------------------------------------------------------------ AI
+  // Describe a page or a section, or select an element and say what to change. The result is ordinary builder
+  // content (editable, class-based styles), added as one undoable step.
+  const placeholderImg = (alt) => ph(800, 500);
+  function prepareAiHtml(html) {
+    return html.replace(/<img\b([^>]*?)\ssrc=""/g, (m, a) => '<img' + a + ' src="' + placeholderImg() + '"');
+  }
+  async function runAi(mode, prompt, btn, out) {
+    const sel = editor.getSelected();
+    const payload = { mode, prompt, title: PB.title };
+    if (mode === 'edit') payload.html = sel ? sel.toHTML() : '';
+    if (mode === 'section') payload.html = withoutChrome(() => bodyHtml());
+    btn.disabled = true;
+    out.className = 'alert';
+    out.hidden = false;
+    out.textContent = mode === 'page' ? 'Designing your page… this can take up to a minute.' : 'Working on it…';
+    try {
+      const res = await post(PB.aiUrl, payload);
+      if (!res.ok) throw new Error(res.error || 'The AI could not answer.');
+      const html = prepareAiHtml(res.html);
+      if (mode === 'page') {
+        // Record the swap itself (one undo step); the header/footer preview is re-added outside the history.
+        const um = editor.UndoManager;
+        um.stop(); removeChrome(); um.start();
+        const w = editor.getWrapper();
+        w.components().reset();
+        w.append(html);
+        addChrome();
+      } else if (mode === 'edit' && sel) {
+        const added = sel.replaceWith(html);
+        const first = Array.isArray(added) ? added[0] : added;
+        if (first) editor.select(first);
+      } else {
+        const w = editor.getWrapper();
+        const foot = w.components().find((c) => c.getAttributes()['data-pb-chrome'] === 'footer');
+        const added = w.append(html, foot ? { at: w.components().indexOf(foot) } : {});
+        if (added && added[0]) { editor.select(added[0]); added[0].getEl()?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      }
+      classifyTree(editor.getWrapper());
+      markDirty();
+      return true;
+    } catch (err) {
+      out.className = 'alert alert-error';
+      out.textContent = err.message + (/set up/i.test(err.message) ? '' : '');
+      return false;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  function openAi() {
+    if (!PB.ai) {
+      const m = modal({ title: 'Design with AI', body: '<p>Connect an AI provider (Claude, OpenAI, Gemini, a local model…) to design pages and sections by describing them.</p>',
+        foot: '<button type="button" class="btn" data-close>Not now</button> <a class="btn btn-primary" href="' + esc(PB.aiSettings) + '">Set up AI</a>' });
+      return m;
+    }
+    const sel = editor.getSelected();
+    const hasSel = !!(sel && !sel.is('wrapper'));
+    const empty = withoutChrome(() => editor.getWrapper().components().length === 0);
+    const body = document.createElement('div');
+    body.className = 'stack pb-ai';
+    body.innerHTML = `
+      <div class="seg pb-ai-modes" role="radiogroup" aria-label="What should the AI do">
+        <label><input type="radio" name="pb-ai-mode" value="page"${!hasSel && empty ? ' checked' : ''}> Whole page</label>
+        <label><input type="radio" name="pb-ai-mode" value="section"${!hasSel && !empty ? ' checked' : ''}> Add a section</label>
+        <label${hasSel ? '' : ' class="is-disabled" title="Select an element on the page first"'}><input type="radio" name="pb-ai-mode" value="edit"${hasSel ? ' checked' : ''}${hasSel ? '' : ' disabled'}> Change selected</label>
+      </div>
+      <textarea class="input" rows="5" data-ai-prompt placeholder=""></textarea>
+      <div class="pb-ai-examples" data-ai-examples></div>
+      <p class="muted small">The result is normal, editable content in your site's colours and fonts. One undo (Ctrl/⌘ Z) removes it. Nothing is published until you click Publish.</p>
+      <div data-ai-out hidden></div>`;
+    const ta = qs('[data-ai-prompt]', body);
+    const ex = qs('[data-ai-examples]', body);
+    const examples = {
+      page: ['A landing page for a free 30-minute consultation, for small business owners', 'An About page: our story, values, team and a contact call to action', 'A services page with pricing for three packages and an FAQ'],
+      section: ['Three customer testimonials with names and roles', 'A pricing table with three plans, the middle one highlighted', 'An FAQ with five common questions', 'A newsletter signup band'],
+      edit: ['Make this shorter and more confident', 'Turn this into three columns', 'Use the primary colour as background with white text', 'Translate to Hindi'],
+    };
+    const paint = () => {
+      const mode = qs('input[name=pb-ai-mode]:checked', body)?.value || 'page';
+      ta.placeholder = mode === 'page' ? 'Describe the page: who it is for, what it should say, the main action…' : mode === 'section' ? 'Describe the section to add…' : 'Say what to change in the selected element…';
+      ex.innerHTML = examples[mode].map((t) => `<button type="button" class="chip">${esc(t)}</button>`).join('');
+    };
+    body.addEventListener('change', paint);
+    ex.addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (b) { ta.value = b.textContent; ta.focus(); } });
+    paint();
+    const foot = document.createElement('div');
+    foot.innerHTML = '<button type="button" class="btn" data-close>Close</button> <button type="button" class="btn btn-primary btn-ai" data-ai-go>✦ Generate</button>';
+    const m = modal({ title: 'Design with AI', body, foot });
+    setTimeout(() => ta.focus(), 30);
+    const go = qs('[data-ai-go]', foot);
+    const run = async () => {
+      const mode = qs('input[name=pb-ai-mode]:checked', body)?.value || 'page';
+      if (mode === 'page' && !empty && !confirm('Replace everything on this page with a new AI design? You can undo it.')) return;
+      if (await runAi(mode, ta.value.trim(), go, qs('[data-ai-out]', body))) { m.close(); toast('Done. Everything is editable; Ctrl/⌘ Z undoes it.'); }
+    };
+    go.addEventListener('click', run);
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) run(); });
+  }
+  // Toolbar of a selected element: "Edit with AI"
+  editor.on('component:selected', (c) => {
+    if (!PB.ai || !c || c.is('wrapper') || c.getAttributes()['data-pb-chrome']) return;
+    const tb = c.get('toolbar') || [];
+    if (!tb.some((t) => t.id === 'pb-ai')) {
+      c.set('toolbar', [{ id: 'pb-ai', label: '<span style="font-weight:700;font-size:13px">✦</span>', attributes: { title: 'Edit with AI' }, command: () => openAi() }, ...tb]);
+    }
   });
 
   // ------------------------------------------------------------------ code view

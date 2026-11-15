@@ -83,6 +83,26 @@ final class Builder
         return null;
     }
 
+    /**
+     * Save a design written as plain HTML + CSS (AI agents over MCP, imports). It opens in the builder as editable parts.
+     * Returns null or an error message.
+     */
+    public static function saveHtml(int $postId, string $html, string $css, string $layout = 'theme'): ?string
+    {
+        if (!Auth::can('unfiltered_html')) {
+            $html = Sanitizer::html($html);
+        }
+        $css = self::cleanCss($css);
+        return self::save($postId, ['html' => $html, 'css' => $css, 'layout' => $layout, 'project' => self::projectFromHtml($html, $css)]);
+    }
+
+    /** A minimal GrapesJS project around HTML + CSS: the editor parses both into components and style rules on load. */
+    public static function projectFromHtml(string $html, string $css): array
+    {
+        return ['assets' => [], 'styles' => [], 'symbols' => [], 'dataSources' => [],
+            'pages' => [['frames' => [['component' => ['type' => 'wrapper', 'components' => $html], 'styles' => $css]]]]];
+    }
+
     /** Switch an item between the classic editor and its visual design (the design is kept either way). */
     public static function setMode(int $postId, string $mode): void
     {
@@ -183,6 +203,67 @@ final class Builder
         }
         $after = preg_replace('#^\s*</main>#i', '', (string)$after);
         return ['header' => $clean($before), 'footer' => $clean((string)$after), 'main' => trim($main)];
+    }
+
+    /**
+     * Ask the AI for builder-ready HTML. $mode: 'page' (a whole page), 'section' (one new section) or 'edit'
+     * (rewrite $current following the instruction). Returns ['ok' => bool, 'html' => string, 'error' => ?string].
+     */
+    public static function ai(string $mode, string $instruction, string $current = '', array $context = []): array
+    {
+        if (!Ai::enabled()) {
+            return ['ok' => false, 'error' => 'AI is not set up yet. Add a provider and key in Settings → AI assistant.'];
+        }
+        $instruction = trim(mb_substr($instruction, 0, 4000));
+        if ($instruction === '') {
+            return ['ok' => false, 'error' => 'Describe what you want.'];
+        }
+        $ds = DesignSystem::get();
+        $colors = implode(', ', array_map(static fn($c) => ($c['name'] ?? $c['id']) . ' = var(--color-' . $c['id'] . ')', $ds['colors']));
+        $forms = array_column(DB::all("SELECT slug, title FROM {{posts}} WHERE type = 'form' AND status = 'publish' LIMIT 20"), 'title', 'slug');
+        $formList = $forms ? implode(', ', array_map(static fn($k, $v) => "{{form:$k}} ($v)", array_keys($forms), $forms)) : 'none yet';
+        $system = <<<TXT
+You design web pages for a website built with Slate CMS. You write the HTML that goes into its visual page builder, where people keep editing it.
+
+Output rules:
+- Reply with one HTML fragment only: no Markdown, no code fences, no <html>, <head> or <body>, no explanations.
+- Build the page from sections: <section class="section"><div class="container">…</div></section>.
+- Use the site's design system instead of fixed colours and fonts: colours {$colors}; fonts var(--font-heading) and var(--font-body);
+  radius var(--radius); spacing var(--section-space). Ready classes: container, section, btn (primary button), btn-outline,
+  eyebrow (small label above a heading), text-<colour id>, bg-<colour id>. Headings h1-h3 are already styled.
+- Layout with inline style attributes (display:flex/grid, gap, padding, max-width, text-align). Make every layout work on
+  phones: wrap rows (flex-wrap:wrap with flex:1 1 260px children) or use grid with repeat(auto-fit,minmax(240px,1fr)).
+- Images: <img src="" alt="what the picture shows" data-ai-image="short description of the ideal photo" style="width:100%;height:auto;border-radius:var(--radius)">.
+  Never invent image URLs; the editor swaps in real pictures from the media library.
+- Real, specific copy (never lorem ipsum), short sentences, in the language of the request. Never use em dashes.
+- No <script>, no <style>, no event attributes, no iframes, no external fonts or CSS.
+- Dynamic content Slate fills in for visitors (use only when it fits): {{title}} (page title), {{excerpt}}, forms: {$formList},
+  latest posts: {{#query type="post" limit="3"}}<article><h3><a href="{{url}}">{{title}}</a></h3><p>{{excerpt}}</p></article>{{/query}}.
+TXT;
+        $site = Options::get('site_title') . ' (' . Options::get('tagline') . ')';
+        $page = trim((string)($context['title'] ?? ''));
+        $prompt = match ($mode) {
+            'edit' => "Rewrite this part of the page \"$page\" on the website $site.\nInstruction: $instruction\n\nCurrent HTML:\n$current\n\nReturn only the replacement HTML for this part.",
+            'section' => "Design ONE new section for the page \"$page\" on the website $site.\nWhat it should contain: $instruction" . ($current !== '' ? "\n\nThe page so far, for context (do not repeat it):\n" . mb_substr($current, 0, 6000) : ''),
+            default => "Design a complete page \"$page\" for the website $site.\nBrief: $instruction\nUse 4 to 8 sections that tell a clear story, ending with a call to action.",
+        };
+        $r = Ai::complete($prompt, $system, ['max_tokens' => 14000, 'min_tokens' => 8000, 'effort' => $mode === 'edit' ? 'low' : 'medium', 'timeout' => 240]);
+        if (!$r['ok']) {
+            return ['ok' => false, 'error' => $r['error']];
+        }
+        return ['ok' => true, 'html' => self::cleanAiHtml((string)$r['text'])];
+    }
+
+    /** AI output: strip fences, scripts, event handlers, javascript: URLs and document wrappers; keep inline layout styles. */
+    public static function cleanAiHtml(string $html): string
+    {
+        $html = trim(preg_replace('/^```[a-z]*\s*|\s*```$/i', '', trim($html)));
+        $html = preg_replace(['#<script\b.*?</script>#is', '#<(iframe|object|embed|link|meta|base|style)\b[^>]*>(.*?</\1>)?#is',
+            '#\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#i', '#(href|src)\s*=\s*(["\'])\s*javascript:[^"\']*\2#i'], ['', '', '', '$1="#"'], $html);
+        if (preg_match('#<body[^>]*>(.*)</body>#is', (string)$html, $m)) {
+            $html = $m[1];
+        }
+        return trim((string)preg_replace('#</?(html|head|body)\b[^>]*>#i', '', (string)$html));
     }
 
     /** Stylesheets the canvas loads so the design looks like the real site. */

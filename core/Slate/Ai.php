@@ -10,7 +10,7 @@ namespace Slate;
 final class Ai
 {
     public const PRESETS = [
-        'anthropic' => ['label' => 'Anthropic Claude', 'format' => 'anthropic', 'base' => 'https://api.anthropic.com/v1', 'model' => 'claude-sonnet-5-5',
+        'anthropic' => ['label' => 'Anthropic Claude', 'format' => 'anthropic', 'base' => 'https://api.anthropic.com/v1', 'model' => 'claude-opus-5-5',
             'models' => ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'], 'keys' => 'https://console.anthropic.com/settings/keys'],
         'openai' => ['label' => 'OpenAI', 'format' => 'openai', 'base' => 'https://api.openai.com/v1', 'model' => 'gpt-5-mini',
             'models' => ['gpt-5', 'gpt-5-mini', 'gpt-5-nano'], 'keys' => 'https://platform.openai.com/api-keys'],
@@ -99,13 +99,25 @@ final class Ai
         $temperature = (float)($opts['temperature'] ?? Options::get('ai_temperature', 0.7));
 
         if ($preset['format'] === 'anthropic') {
-            $r = Http::json('POST', $base . '/messages', ['x-api-key: ' . $key, 'anthropic-version: 2023-06-01'], [
-                'model' => $model,
-                'max_tokens' => $maxTokens,
-                'system' => $system,
+            // Current Claude models choose their own reasoning depth (effort) and reject sampling parameters such as
+            // temperature. Opus 5.5 / Fable models get server-side refusal fallbacks so a declined request still answers.
+            $body = ['model' => $model, 'max_tokens' => max($maxTokens, (int)($opts['min_tokens'] ?? 0)), 'system' => $system,
                 'messages' => [['role' => 'user', 'content' => $prompt]],
-                'temperature' => min(1.0, $temperature),
-            ], 120);
+                'output_config' => ['effort' => (string)($opts['effort'] ?? 'medium')]];
+            $headers = ['x-api-key: ' . $key, 'anthropic-version: 2023-06-01'];
+            if (preg_match('/^claude-(opus-5|fable-5|sonnet-5-5)/', $model)) {
+                $headers[] = 'anthropic-beta: server-side-fallback-2026-07-01';
+                $body['fallbacks'] = 'default';
+            }
+            if (!preg_match('/^claude-(opus|sonnet|haiku|fable|mythos)-[5-9]/', $model) && !preg_match('/^claude-opus-4-[78]/', $model)) {
+                // Older Claude models: no effort control, sampling still allowed.
+                unset($body['output_config']);
+                $body['temperature'] = min(1.0, $temperature);
+            }
+            $r = Http::json('POST', $base . '/messages', $headers, $body, (int)($opts['timeout'] ?? 180));
+            if (($r['json']['stop_reason'] ?? '') === 'refusal') {
+                return ['ok' => false, 'error' => 'The AI declined this request. Try rephrasing it.'];
+            }
             if ($r['error'] || $r['status'] >= 400) {
                 return ['ok' => false, 'error' => self::errorMessage($r)];
             }

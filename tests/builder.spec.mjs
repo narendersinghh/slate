@@ -123,3 +123,52 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
 
   expect(errors).toEqual([]);
 });
+
+// AI design: needs the fake provider (php -S 127.0.0.1:8097 bin/mock-ai; php bin/ci-ai http://127.0.0.1:8097/v1).
+test('visual builder: design with AI, edit with AI', async ({ page }) => {
+  test.skip(!process.env.SLATE_MOCK_AI, 'set SLATE_MOCK_AI=1 when the fake AI provider runs');
+  await page.goto(`${BASE}/admin/login`);
+  await page.fill('input[name=login]', USER);
+  await page.fill('input[name=password]', PASS);
+  await page.click('button[type=submit]');
+  await page.goto(`${BASE}/admin/content/page/new`);
+  await page.fill('input[name=title]', 'AI page ' + Date.now());
+  await page.click('button[name=then][value=builder]');
+  await page.waitForFunction(() => window.pbEditor && window.pbEditor.getWrapper());
+  await page.waitForTimeout(600);
+
+  // Whole page from a brief
+  await page.click('[data-cmd=ai]');
+  await page.fill('[data-ai-prompt]', 'A landing page for a free consultation');
+  await page.click('[data-ai-go]');
+  await page.waitForFunction(() => window.pbEditor.getWrapper().find('h1').filter((c) => !c.closest('[data-pb-chrome]')).length === 1, null, { timeout: 30_000 });
+  const html = await page.evaluate(() => window.pbEditor.getHtml());
+  expect(html).not.toContain('<script');
+  expect(html).not.toContain('onclick');
+  expect(html).not.toMatch(/src=""/);           // empty image src replaced by a placeholder
+  const css = await page.evaluate(() => window.pbEditor.getCss());
+  expect(css).toMatch(/\.pb-[a-z0-9]+\{[^}]*grid-template-columns/); // inline layout became class rules
+  await page.screenshot({ path: `${SHOTS}/4-ai-page.png` });
+
+  // Undo removes the whole AI design in one step
+  await page.click('[data-cmd=undo]');
+  expect(await page.evaluate(() => window.pbEditor.getWrapper().find('h1').filter((c) => !c.closest('[data-pb-chrome]')).length)).toBe(0);
+  await page.click('[data-cmd=redo]');
+
+  // Change a selected element with AI
+  await page.evaluate(() => { const ed = window.pbEditor; ed.select(ed.getWrapper().find('h3').filter((c) => !c.closest('[data-pb-chrome]'))[0].parent()); });
+  await page.click('[data-cmd=ai]');
+  await expect(page.locator('input[name=pb-ai-mode][value=edit]')).toBeChecked();
+  await page.fill('[data-ai-prompt]', 'Make this shorter');
+  await page.click('[data-ai-go]');
+  await page.waitForFunction(() => window.pbEditor.getHtml().includes('Edited by AI'), null, { timeout: 30_000 });
+
+  // Save and check the visitor page
+  await page.click('[data-pb-save=publish]');
+  await expect(page.locator('[data-pb-state]')).toContainText('Saved', { timeout: 15_000 });
+  const viewUrl = await page.locator('.dropdown-menu a[target=_blank]').first().getAttribute('href');
+  const out = await (await page.request.get(new URL(viewUrl, BASE).toString())).text();
+  expect(out).toContain('Grow your business with a clear plan');
+  expect(out).toContain('Edited by AI');
+  expect(out).not.toContain('<script>alert');
+});

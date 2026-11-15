@@ -64,7 +64,7 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
           <div class="builder-note-actions">
             <a class="btn btn-primary" href="<?= e(admin_url("content/$slug/{$p['id']}/builder")) ?>"><?= icon('edit', 15) ?> Open visual builder</a>
             <button class="btn btn-ghost btn-sm" type="submit" formaction="<?= e(admin_url("content/$slug/{$p['id']}/builder/mode")) ?>" name="mode" value="classic" formnovalidate
-                    data-confirm="Use the classic editor for this item? The visual design is kept and you can switch back.">Use classic editor</button>
+                    data-confirm="Use the classic editor for this item? Its content goes back to how it was before the visual design; the design is kept and you can switch back.">Use classic editor</button>
           </div>
         </div>
         <textarea name="content" hidden><?= e($p['content']) ?></textarea>
@@ -72,7 +72,8 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
         <?php if ($canBuild): ?>
         <div class="builder-switch">
           <?php if ($post): ?>
-            <a class="btn btn-sm" href="<?= e(admin_url("content/$slug/{$p['id']}/builder")) ?>"><?= icon('layers', 15) ?> <?= $hasDesign ? 'Back to the visual design' : 'Design with the visual builder' ?></a>
+            <a class="btn btn-sm" href="<?= e(admin_url("content/$slug/{$p['id']}/builder")) ?>"<?= !$hasDesign && \Slate\Builder::hasTemplateLogic((string)$p['content'])
+                ? ' data-confirm="This content contains template logic (loops, conditions or tags inside attributes). The visual builder shows it as text and may not keep it exactly. A revision is saved first and &quot;Use classic editor&quot; restores the current version. Continue?"' : '' ?>><?= icon('layers', 15) ?> <?= $hasDesign ? 'Back to the visual design' : 'Design with the visual builder' ?></a>
           <?php else: ?>
             <button class="btn btn-sm" type="submit" name="then" value="builder" formaction="<?= e(admin_url("content/$slug/save")) ?>" formnovalidate><?= icon('layers', 15) ?> Design with the visual builder</button>
           <?php endif; ?>

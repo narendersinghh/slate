@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1: Builder safeguards
+- Converting an item to a visual design saves a revision first and remembers the original content; "Use classic
+  editor" restores it exactly (the design is kept for later).
+- Content with template logic asks for confirmation before converting.
+- The canvas shows a locked preview of the site's real header and footer (never saved into the page).
+- A drop the builder does not take can no longer make the browser navigate.
+
 ## 0.14.0: Visual page builder
 - **Visual builder** (GrapesJS 0.23.8, vendored, BSD-3): drag and drop, full style manager, desktop/tablet/mobile
   breakpoints, layers, undo/redo, HTML/CSS code view, saved reusable blocks, section starters (hero, features, CTA,

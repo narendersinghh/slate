@@ -29,6 +29,7 @@ $config = [
     'fonts' => array_values(array_unique(array_filter([$ds['fonts']['heading'] ?? '', $ds['fonts']['body'] ?? '']))),
     'saved' => Builder::savedBlocks(),
     'title' => $post['title'],
+    'chrome' => Builder::chrome($post),
 ];
 ?><!doctype html>
 <html lang="en" data-theme="<?= e($_COOKIE['slate_theme'] ?? 'auto') ?>">

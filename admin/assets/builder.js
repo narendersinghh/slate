@@ -113,6 +113,16 @@
     doc.head.insertBefore(st, doc.head.firstChild);
   }
   editor.on('canvas:frame:load', injectDs);
+  // A drop the builder does not take (e.g. on the locked header preview) must never make the browser open what was dragged.
+  const guardDrop = () => {
+    const w = editor.Canvas.getWindow();
+    if (!w || w.__pbGuard) return;
+    w.__pbGuard = true;
+    w.addEventListener('drop', (e) => e.preventDefault());
+    w.addEventListener('dragover', (e) => e.preventDefault());
+  };
+  editor.on('canvas:frame:load', guardDrop);
+  editor.on('load', guardDrop);
   editor.on('load', injectDs);
 
   editor.on('load', () => {
@@ -143,7 +153,20 @@
     c.setStyle({});
   }
   const classifyTree = (c) => { classify(c); c.components().forEach(classifyTree); };
-  editor.on('component:add', (c) => { if (loaded) classifyTree(c); });
+  editor.on('component:add', (c) => {
+    if (!loaded || c.getAttributes()['data-pb-chrome']) return;
+    classifyTree(c);
+    // Keep the footer preview last and the header first, whatever is dropped where.
+    const w = editor.getWrapper();
+    const parts = w.components();
+    if (c.parent() === w) {
+      const head = parts.find((x) => x.getAttributes()['data-pb-chrome'] === 'header');
+      const foot = parts.find((x) => x.getAttributes()['data-pb-chrome'] === 'footer');
+      const idx = parts.indexOf(c);
+      if (foot && idx > parts.indexOf(foot)) setTimeout(() => { c.move(w, { at: parts.indexOf(foot) }); }, 0);
+      else if (head && idx < parts.indexOf(head)) setTimeout(() => { c.move(w, { at: parts.indexOf(head) + 1 }); }, 0);
+    }
+  });
   editor.on('load', () => classifyTree(editor.getWrapper()));
   editor.on('component:selected', (c) => {
     qs('[data-pb-noselect]').hidden = true;
@@ -196,6 +219,33 @@
     if (c && block && block.get('activate') && c.get('type') === 'image') editor.runCommand('open-assets', { target: c });
   });
 
+  // ------------------------------------------------------------------ site header & footer preview
+  // Read-only copies of the real header/footer around the design (layout "With site header & footer"). They are
+  // never part of the saved page: they are taken out before reading HTML, CSS or project data.
+  const LOCK = { selectable: false, hoverable: false, draggable: false, droppable: false, removable: false, copyable: false,
+    layerable: false, highlightable: false, editable: false, badgable: false,
+    propagate: ['selectable', 'hoverable', 'draggable', 'droppable', 'removable', 'copyable', 'layerable', 'highlightable', 'editable', 'badgable'] };
+  const chromeParts = () => editor.getWrapper().components().filter((c) => c.getAttributes()['data-pb-chrome']);
+  function removeChrome() { chromeParts().forEach((c) => c.remove({ temporary: true })); }
+  function addChrome() {
+    removeChrome();
+    if (layoutSel.value !== 'theme' || !PB.chrome || (!PB.chrome.header && !PB.chrome.footer)) return;
+    const um = editor.UndoManager;
+    um.stop();
+    const w = editor.getWrapper();
+    if (PB.chrome.header) w.append(Object.assign({ tagName: 'div', attributes: { 'data-pb-chrome': 'header' }, components: PB.chrome.header }, LOCK), { at: 0 });
+    if (PB.chrome.footer) w.append(Object.assign({ tagName: 'div', attributes: { 'data-pb-chrome': 'footer' }, components: PB.chrome.footer }, LOCK));
+    um.start();
+  }
+  /** Run fn with the preview parts taken out (for saving and code view). */
+  function withoutChrome(fn) {
+    const um = editor.UndoManager;
+    um.stop();
+    const had = chromeParts().length > 0;
+    removeChrome();
+    try { return fn(); } finally { if (had) addChrome(); um.start(); }
+  }
+
   // ------------------------------------------------------------------ toolbar
   $$('[data-device]').forEach((b) => b.addEventListener('click', () => {
     editor.setDevice(b.dataset.device);
@@ -203,7 +253,8 @@
   }));
   const layoutSel = qs('[data-pb-layout]');
   layoutSel.value = PB.layout;
-  layoutSel.addEventListener('change', () => markDirty());
+  layoutSel.addEventListener('change', () => { addChrome(); markDirty(); });
+  editor.on('load', () => { addChrome(); editor.UndoManager.clear(); });
 
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-cmd]');
@@ -215,7 +266,7 @@
     else if (cmd === 'outline') { const on = editor.Commands.isActive('sw-visibility'); on ? editor.stopCommand('sw-visibility') : editor.runCommand('sw-visibility'); b.classList.toggle('is-on', !on); }
     else if (cmd === 'preview') { editor.runCommand('preview'); document.body.classList.add('pb-previewing'); }
     else if (cmd === 'code') openCode();
-    else if (cmd === 'clear') { if (confirm('Remove everything from this page? You can still undo, or leave without saving.')) { editor.setComponents(''); editor.setStyle(''); } }
+    else if (cmd === 'clear') { if (confirm('Remove everything from this page? You can still undo, or leave without saving.')) { editor.setComponents(''); editor.setStyle(''); addChrome(); } }
     else if (cmd === 'classic') switchClassic();
     else if (cmd === 'save-block') saveBlock();
   });
@@ -246,14 +297,17 @@
     body.innerHTML = '<label class="field"><span>HTML</span><textarea class="input code" rows="14" spellcheck="false" data-html></textarea></label>' +
       '<label class="field"><span>CSS</span><textarea class="input code" rows="10" spellcheck="false" data-css></textarea></label>' +
       '<p class="muted small">Template tags such as {{title}}, {{field:name}} and {{form:slug}} are filled in for visitors. Scripts are removed for users without the “any HTML” permission.</p>';
-    qs('[data-html]', body).value = bodyHtml();
-    qs('[data-css]', body).value = editor.getCss({ avoidProtected: true }) || '';
+    withoutChrome(() => {
+      qs('[data-html]', body).value = bodyHtml();
+      qs('[data-css]', body).value = editor.getCss({ avoidProtected: true }) || '';
+    });
     const foot = document.createElement('div');
     foot.innerHTML = '<button type="button" class="btn" data-close>Cancel</button> <button type="button" class="btn btn-primary" data-apply>Apply</button>';
     const m = modal({ title: 'Edit HTML & CSS', body, foot, size: 'lg' });
     qs('[data-apply]', foot).addEventListener('click', () => {
       editor.setComponents(qs('[data-html]', body).value);
       editor.setStyle(qs('[data-css]', body).value);
+      addChrome();
       m.close();
       markDirty();
     });
@@ -286,8 +340,8 @@
     setState('Saving…');
     $$('[data-pb-save]').forEach((b) => { b.disabled = true; });
     try {
-      const res = await post(PB.save, { status: status === 'publish' ? (PB.canPublish ? 'publish' : 'pending') : '', layout: layoutSel.value,
-        html: bodyHtml(), css: editor.getCss({ avoidProtected: true }) || '', project: editor.getProjectData() });
+      const payload = withoutChrome(() => ({ html: bodyHtml(), css: editor.getCss({ avoidProtected: true }) || '', project: editor.getProjectData() }));
+      const res = await post(PB.save, Object.assign({ status: status === 'publish' ? (PB.canPublish ? 'publish' : 'pending') : '', layout: layoutSel.value }, payload));
       if (!res.ok) throw new Error(res.error || 'Could not save.');
       dirty = false;
       setState('Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -300,7 +354,7 @@
   $$('[data-pb-save]').forEach((b) => b.addEventListener('click', () => save(b.dataset.pbSave)));
 
   async function switchClassic() {
-    if (!confirm('Edit this item in the classic editor? The visual design is kept, and you can switch back any time.')) return;
+    if (!confirm('Go back to the classic editor? The content returns to how it was before the visual design. The design is kept, and you can switch back any time.')) return;
     if (dirty) await save('draft');
     const res = await post(PB.mode, { mode: 'classic' });
     if (res.ok) { dirty = false; location.href = PB.edit; } else toast(res.error || 'Could not switch.', 'error');

@@ -24,10 +24,20 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
   const title = 'Builder test ' + Date.now();
   await page.goto(`${BASE}/admin/content/page/new`);
   await page.fill('input[name=title]', title);
+  // Some classic content first, to prove switching back restores it exactly.
+  await page.evaluate(() => {
+    const area = document.querySelector('[data-main-editor] [contenteditable]');
+    if (area) area.innerHTML = '<p>Original classic text</p>';
+    const ta = document.querySelector('textarea[name=content]');
+    if (ta) ta.value = '<p>Original classic text</p>';
+  });
   await page.click('button[name=then][value=builder]');
   await expect(page).toHaveURL(/\/builder$/);
   await page.waitForFunction(() => window.pbEditor && window.pbEditor.getModel().get('ready') !== false);
   await page.waitForTimeout(800);
+
+  // The real site header/footer are shown around the design as locked previews
+  expect(await page.evaluate(() => window.pbEditor.getWrapper().components().filter((c) => c.getAttributes()['data-pb-chrome']).length)).toBeGreaterThan(0);
 
   // Drag the Hero block onto the canvas
   const frame = page.locator('.gjs-frame');
@@ -38,18 +48,18 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   for (let i = 1; i <= 12; i++) {
-    await page.mouse.move(from.x + (to.x + 200 - from.x) * (i / 12), from.y + (to.y + 80 - from.y) * (i / 12));
+    await page.mouse.move(from.x + (to.x + to.width / 2 - from.x) * (i / 12), from.y + (to.y + to.height / 2 - from.y) * (i / 12));
     await page.waitForTimeout(40);
   }
   await page.mouse.up();
   await page.waitForTimeout(600);
-  let count = await page.evaluate(() => window.pbEditor.getWrapper().find('h1').length);
+  let count = await page.evaluate(() => window.pbEditor.getWrapper().find('h1').filter((c) => !c.closest('[data-pb-chrome]')).length);
   test.info().annotations.push({ type: 'drag', description: count ? 'real mouse drag' : 'API fallback' });
   console.log('drop via', count ? 'real mouse drag' : 'API fallback');
   if (count === 0) {
     // Some headless setups do not deliver native drag events into iframes; drive the same block through the API.
     await page.evaluate(() => window.pbEditor.addComponents(window.pbEditor.Blocks.get('hero').get('content')));
-    count = await page.evaluate(() => window.pbEditor.getWrapper().find('h1').length);
+    count = await page.evaluate(() => window.pbEditor.getWrapper().find('h1').filter((c) => !c.closest('[data-pb-chrome]')).length);
   }
   expect(count).toBe(1);
   await page.screenshot({ path: `${SHOTS}/1-dropped.png` });
@@ -57,7 +67,7 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
   // Select the heading and style it through the Style Manager (class-based, responsive)
   const cls = await page.evaluate(() => {
     const ed = window.pbEditor;
-    const h = ed.getWrapper().find('h1')[0];
+    const h = ed.getWrapper().find('h1').filter((c) => !c.closest('[data-pb-chrome]'))[0];
     ed.select(h);
     return h.getClasses()[0];
   });
@@ -80,7 +90,7 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
 
   // Reload: the design is still there
   await page.reload();
-  await page.waitForFunction(() => window.pbEditor && window.pbEditor.getWrapper().find('h1').length === 1);
+  await page.waitForFunction(() => window.pbEditor && window.pbEditor.getWrapper().find('h1').filter((c) => !c.closest('[data-pb-chrome]')).length === 1);
   expect(await page.evaluate(() => window.pbEditor.getCss())).toContain('rgb(200, 30, 30)');
 
   // Visitor page: plain HTML + CSS, class-based rules, no builder scripts
@@ -92,8 +102,24 @@ test('visual builder: drag, style, undo, save, reload, output', async ({ page })
   expect(html).toMatch(new RegExp(`\\.${cls}\\{[^}]*color:rgb\\(200, 30, 30\\)`));
   expect(html).toContain('@media (max-width: 480px)');
   expect(html).not.toContain('grapes');
+  expect(html).not.toContain('data-pb-chrome');
+  expect((html.match(/<header class="site-header/g) || []).length).toBe(1);
   await page.goto(new URL(viewUrl, BASE).toString());
   await page.screenshot({ path: `${SHOTS}/3-visitor.png`, fullPage: true });
+
+  // Back to the classic editor: the original content returns, the design is kept
+  await page.goto(new URL(viewUrl, BASE).toString().replace(/\?.*$/, ''));
+  const editUrl = page.url();
+  const builderUrl = await page.evaluate(() => document.querySelector('#slate-bar a.sb-primary')?.getAttribute('href'));
+  expect(builderUrl).toMatch(/\/builder$/);
+  await page.goto(new URL(builderUrl.replace(/\/builder$/, ''), BASE).toString());
+  page.once('dialog', (d) => d.accept());
+  await page.click('button[name=mode][value=classic]');
+  await page.waitForLoadState('load');
+  expect(await page.locator('textarea[name=content]').inputValue()).toContain('Original classic text');
+  const visitor = await (await page.request.get(editUrl)).text();
+  expect(visitor).toContain('Original classic text');
+  expect(visitor).not.toContain('pb-page');
 
   expect(errors).toEqual([]);
 });

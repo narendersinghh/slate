@@ -12,6 +12,19 @@ Open any page (or other content type with an editor) and choose **Design with th
 - **Save** (Ctrl/⌘ S) keeps a revision; **Publish/Update** makes it live. Choose *With site header & footer* or *Blank page*.
 - **Classic editor**: the ⋯ menu switches back; the design is kept and you can return to it any time.
 
+## Your existing design is never changed
+
+- Nothing converts automatically. Existing pages, posts and code Templates keep rendering through the theme and
+  template engine exactly as before.
+- Converting is opt-in, one item at a time. Opening the builder brings the item's current content in as editable
+  parts. Saving keeps a revision, and remembers the original content.
+- **Use classic editor** (in the editor or the builder's ⋯ menu) puts the original content back exactly; the visual
+  design is kept, so you can switch again later.
+- Content with template logic (loops, conditions, tags inside attributes) asks for confirmation before converting.
+  Code Templates are not converted by the builder.
+- The canvas loads your theme's stylesheet, your design system and a locked preview of the real site header and
+  footer, so editing looks like the live site. The preview is never saved into the page.
+
 What visitors get: the page's HTML and one small `<style>` block with class-based rules (and media queries for
 tablet/mobile). No builder JavaScript, and the page cache works as usual.
 

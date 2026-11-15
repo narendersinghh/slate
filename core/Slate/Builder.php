@@ -73,8 +73,13 @@ final class Builder
         }
         $css = self::cleanCss($css);
         $layout = ($in['layout'] ?? '') === 'blank' ? 'blank' : 'theme';
-        $data = ['mode' => 'builder', 'layout' => $layout, 'html' => $html, 'css' => $css, 'project' => $project, 'v' => 1];
-        Posts::save(['fields' => ['_builder' => $data], 'content' => $html], $postId);
+        $prev = self::data($post);
+        // The content as it was before the first visual design: "Use classic editor" brings it back exactly.
+        $classic = $prev ? (string)($prev['classic'] ?? '') : (string)$post['content'];
+        $data = ['mode' => 'builder', 'layout' => $layout, 'html' => $html, 'css' => $css, 'project' => $project, 'classic' => $classic, 'v' => 1];
+        $change = ['fields' => ['_builder' => $data], 'content' => $html];
+        Revisions::snapshot($post, $change);
+        Posts::save($change, $postId);
         return null;
     }
 
@@ -83,10 +88,27 @@ final class Builder
     {
         $post = Posts::find($postId);
         $b = $post ? self::data($post) : null;
-        if ($b) {
-            $b['mode'] = $mode === 'classic' ? 'classic' : 'builder';
-            Posts::save(['fields' => ['_builder' => $b]], $postId);
+        if (!$b || ($b['mode'] ?? 'builder') === ($mode === 'classic' ? 'classic' : 'builder')) {
+            return;
         }
+        if ($mode === 'classic') {
+            // Back to the content exactly as it was before the visual design (the design itself is kept).
+            $b['mode'] = 'classic';
+            $change = ['fields' => ['_builder' => $b], 'content' => (string)($b['classic'] ?? $post['content'])];
+        } else {
+            // Keep whatever was edited in the classic editor meanwhile, so switching back again restores it.
+            $b['mode'] = 'builder';
+            $b['classic'] = (string)$post['content'];
+            $change = ['fields' => ['_builder' => $b], 'content' => (string)$b['html']];
+        }
+        Revisions::snapshot($post, $change);
+        Posts::save($change, $postId);
+    }
+
+    /** Template logic that a visual editor could disturb (loops, conditions, tags inside attributes). */
+    public static function hasTemplateLogic(string $html): bool
+    {
+        return (bool)preg_match('/\{\{\s*[#\/^]|=\s*["\'][^"\']*\{\{/', $html);
     }
 
     /** CSS from the builder: no closing tags, no script URLs, no remote @import. */
@@ -125,6 +147,42 @@ final class Builder
         ob_start();
         Theme::wrap($body);
         return (string)ob_get_clean();
+    }
+
+    /**
+     * The site's real header and footer (for a read-only preview around the design in the builder).
+     * Returns ['header' => html, 'footer' => html, 'main' => '<main …>' opening tag or ''], scripts and the admin bar removed.
+     */
+    public static function chrome(array $post): array
+    {
+        if (Theme::active() === '') {
+            return ['header' => '', 'footer' => '', 'main' => ''];
+        }
+        $marker = '<!--slate-builder-split-->';
+        Frontend::$data['post'] = $post;
+        Seo::$ctx = ['kind' => 'single', 'post' => $post];
+        try {
+            ob_start();
+            Theme::wrap($marker);
+            $doc = (string)ob_get_clean();
+        } catch (\Throwable $e) {
+            @ob_end_clean();
+            return ['header' => '', 'footer' => '', 'main' => ''];
+        }
+        if (!str_contains($doc, $marker)) {
+            return ['header' => '', 'footer' => '', 'main' => ''];
+        }
+        [$before, $after] = explode($marker, $doc, 2);
+        $before = preg_match('/<body[^>]*>(.*)$/is', $before, $m) ? $m[1] : $before;
+        $after = preg_replace('#</body>.*$#is', '', $after);
+        $clean = static fn(string $h): string => trim((string)preg_replace(['#<script\b.*?</script>#is', '#<div id="slate-bar".*?</div>#is', '#<(link|meta)\b[^>]*>#i'], '', $h));
+        $main = '';
+        if (preg_match('/<main\b[^>]*>\s*$/i', $before, $mm)) {
+            $main = $mm[0];
+            $before = substr($before, 0, -strlen($mm[0]));
+        }
+        $after = preg_replace('#^\s*</main>#i', '', (string)$after);
+        return ['header' => $clean($before), 'footer' => $clean((string)$after), 'main' => trim($main)];
     }
 
     /** Stylesheets the canvas loads so the design looks like the real site. */

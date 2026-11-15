@@ -1,0 +1,17 @@
+<?php
+// Install a throwaway Slate site for CI (SQLite). Usage: SLATE_CI_PASS=… php tests/ci-install.php http://127.0.0.1:8000
+declare(strict_types=1);
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+$url = $argv[1] ?? 'http://127.0.0.1:8000';
+require dirname(__DIR__) . '/core/bootstrap.php';
+$errors = \Slate\Installer::run([
+    'db_driver' => 'sqlite', 'site_url' => $url, 'name' => 'CI site', 'username' => 'citest', 'email' => 'ci@example.test',
+    'password' => getenv('SLATE_CI_PASS') ?: 'ci-password-123', 'db_prefix' => 'sl_',
+]);
+if ($errors) {
+    fwrite(STDERR, implode("\n", (array)$errors) . "\n");
+    exit(1);
+}
+echo "Installed at $url\n";

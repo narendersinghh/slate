@@ -78,7 +78,9 @@ function slate_body_open(): void
         echo '<div id="slate-bar" role="toolbar" aria-label="Slate admin bar">'
             . '<a class="sb-logo" href="' . e(admin_url()) . '">' . \Slate\Icons::logo(22) . ' Slate</a>'
             . ($edit ? '<a href="' . e($edit) . '">' . icon('edit', 15) . ' Edit in dashboard</a>' : '')
-            . ($p && can_frontend_edit() && ContentModel::supports($p['type'], 'frontend_edit')
+            . ($p && $edit && \Slate\Builder::active($p)
+                ? '<a class="sb-primary" href="' . e($edit . '/builder') . '">' . icon('layers', 15) . ' Edit design</a>' : '')
+            . ($p && !\Slate\Builder::active($p) && can_frontend_edit() && ContentModel::supports($p['type'], 'frontend_edit')
                 ? '<button type="button" id="sb-edit" data-id="' . (int)$p['id'] . '">' . icon('sparkles', 15) . ' Edit on page</button>'
                 . '<button type="button" id="sb-save" hidden>' . icon('check', 15) . ' Save changes</button>'
                 . '<button type="button" id="sb-cancel" hidden>Cancel</button>' : '')

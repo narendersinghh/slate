@@ -1,0 +1,21 @@
+# Pull requests for new versions of the vendored browser libraries (GrapesJS) and the test tools.
+# They target develop, never main: releasing to a live site is always a person's decision.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14          # let new releases settle before we take them (supply-chain safety)
+    open-pull-requests-limit: 3
+    labels: [dependencies]
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
+    labels: [dependencies]

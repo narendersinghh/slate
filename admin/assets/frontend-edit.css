@@ -3,8 +3,8 @@
 #slate-bar a,#slate-bar button{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border-radius:9px;color:#CFC9C1;background:none;border:0;font:inherit;cursor:pointer;text-decoration:none;white-space:nowrap}
 #slate-bar a:hover,#slate-bar button:hover{background:#1E1E22;color:#fff}
 #slate-bar .sb-logo{color:#fff;font:400 19px/1 "Instrument Serif",Georgia,serif;padding-left:6px}
-#slate-bar #sb-edit{background:#F26B2D;color:#fff}
-#slate-bar #sb-edit:hover{background:#DB5419}
+#slate-bar #sb-edit,#slate-bar .sb-primary{background:#F26B2D;color:#fff}
+#slate-bar #sb-edit:hover,#slate-bar .sb-primary:hover{background:#DB5419}
 #slate-bar #sb-save{background:#fff;color:#0D0D0E}
 #slate-bar [hidden]{display:none!important}
 #slate-bar .sb-spacer{width:1px;height:20px;background:#2A2A2E;margin:0 4px}

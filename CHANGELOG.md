@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.14.0: Visual page builder
+- **Visual builder** (GrapesJS 0.23.8, vendored, BSD-3): drag and drop, full style manager, desktop/tablet/mobile
+  breakpoints, layers, undo/redo, HTML/CSS code view, saved reusable blocks, section starters (hero, features, CTA,
+  testimonial, FAQ, image grid) and dynamic blocks (title, excerpt, form, latest posts) rendered by Slate.
+  Your design-system colours and fonts come first and CSS variables work everywhere; images come from the media
+  library. Styles are always class-based (no element ids), and visitors get plain HTML + CSS: no builder scripts,
+  page-cached like any page. Inside the site header/footer or on a blank page. Saves create revisions.
+- Optional at three levels: per item (classic editor or visual design, switch any time without losing either),
+  per content type and site-wide (Settings → Content & media → Visual builder). The builder's files load only on
+  the builder screen.
+- Updates: `package.json` pins GrapesJS, `npm run vendor` copies it into `admin/assets/vendor/`; Dependabot proposes
+  new versions after a 14-day cooldown, a Playwright test drags, styles, undoes, saves, reloads and checks the
+  visitor page (screenshots kept as artifacts); patch versions merge into develop automatically when green, others
+  wait for a person. Nothing is released to live automatically.
+- Dashboard: stats first, site status and settings shortcuts in a compact side column; Settings expands in the
+  sidebar and has a top-bar menu; every module page gets the same header and tabs (drawn by the core), wizards get
+  a step indicator; themed scrollbars and file fields.
+- No em dashes in the dashboard's text; the AI assistant avoids them too (Settings → AI assistant → Brand voice).
+
 ## 0.13.0: Cleaner dashboard
 - **Sidebar**: Content, Modules (each module's pages grouped under its name, with counts), Design (Templates, Menus,
   Theme & styles) and Administration. Groups expand without leaving the page.

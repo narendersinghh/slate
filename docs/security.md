@@ -6,7 +6,8 @@ Slate is built so that the usual ways CMS sites get hacked are closed by default
 ## What Slate does out of the box
 
 - Passwords hashed with Argon2id; login rate limiting and lockout (also counts password-reset and API-key attempts).
-- Two-factor authentication (TOTP); can be required for administrators.
+- Two-factor authentication: authenticator app (TOTP) or **passkeys** (Face ID, Touch ID, Windows Hello, security keys —
+  phishing-proof, user verification required); can be required for administrators.
 - Email alert to administrators when they sign in from a new address.
 - CSRF protection on every form; strict, regenerated sessions; secrets (API keys, SMTP, 2FA) encrypted at rest.
 - No PHP execution in `content/` (uploads); PHP in `core/`, `modules/`, `themes/` can't be opened from the web.
@@ -33,6 +34,13 @@ Slate is built so that the usual ways CMS sites get hacked are closed by default
    - Use a name nobody can guess and never link to it. Certificate transparency logs list issued certificates, so prefer
      a wildcard certificate (`*.yourdomain.com`) for the admin host if your host offers one.
 3. **IP allow-list** (optional) — `php bin/slate admin:ips "203.0.113.7 198.51.100.0/24"`; `off` removes it.
+
+What keeps working with a separate admin domain: password resets and alert emails link to the admin host; previews and
+"View" links stay on the admin host, where the whole site is browsable with on-page editing; passkeys are bound to the
+parent domain (`example.com` for `cms.example.com`), so they survive host changes (override with `'passkey_rp_id'`);
+the dashboard's own scripts and styles (`admin/assets`) are hidden on the public host automatically (Apache/LiteSpeed —
+on nginx add `location ^~ /admin/ { if ($host != "cms.example.com") { return 404; } }`). The REST API and webhooks keep
+working on the public domain.
 
 Locked out? All three settings can be changed from SSH (`bin/slate`) or by editing `config.php` — never only in the database.
 

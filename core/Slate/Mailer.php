@@ -5,7 +5,8 @@ namespace Slate;
 
 /**
  * Outgoing email for core and modules: Mailer::send('a@b.com', 'Subject', '<p>HTML</p>').
- * Transport: the server's mail() or SMTP (TLS/STARTTLS, AUTH LOGIN/PLAIN) — Settings → General → Email.
+ * Works with no setup: SMTP when a host is configured, otherwise the server's own mail() (Hostinger, cPanel and most
+ * hosts provide it) — a built-in equivalent of PHPMailer (TLS/STARTTLS, AUTH LOGIN/PLAIN). Settings → General → Email.
  * Modules can take over delivery entirely with the "mail_send" filter (return true when sent).
  */
 final class Mailer
@@ -66,7 +67,9 @@ final class Mailer
         $encSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $bcc = array_values(array_filter((array)($opts['bcc'] ?? []), static fn($a) => filter_var($a, FILTER_VALIDATE_EMAIL)));
 
-        $ok = Options::get('mail_transport', 'php') === 'smtp'
+        $transport = (string)Options::get('mail_transport', 'auto');
+        $useSmtp = $transport === 'smtp' || ($transport === 'auto' && trim((string)Options::get('smtp_host', '')) !== '');
+        $ok = $useSmtp
             ? self::smtp($fromEmail, array_merge($to, (array)($opts['cc'] ?? []), $bcc), $encSubject, $headers + ['To' => implode(', ', $to)], $body)
             : self::phpMail($to, $encSubject, $headers + ($bcc ? ['Bcc' => implode(', ', $bcc)] : []), $body, $fromEmail);
         if (!$ok) {
@@ -148,8 +151,8 @@ final class Mailer
     private static function smtp(string $from, array $rcpt, string $subject, array $headers, string $body): bool
     {
         $host = trim((string)Options::get('smtp_host', ''));
-        $port = (int)Options::get('smtp_port', 587);
-        $enc = (string)Options::get('smtp_encryption', 'tls');
+        $port = (int)Options::get('smtp_port');
+        $enc = (string)Options::get('smtp_encryption');
         $user = (string)Options::get('smtp_user', '');
         $pass = Crypto::decrypt((string)Options::get('smtp_pass', ''));
         if ($host === '') {

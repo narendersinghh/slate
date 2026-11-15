@@ -140,6 +140,32 @@ final class AdminAccess
         if (function_exists('opcache_invalidate')) {
             @opcache_invalidate($file, true);
         }
+        if ($key === 'admin_host') {
+            self::writeAssetRules(is_string($value) ? $value : '');
+        }
         return null;
+    }
+
+    /**
+     * Dashboard scripts/styles live in admin/assets and are served directly by the web server. With a private admin
+     * host, hide them on every other host too (they would reveal the CMS). Apache/LiteSpeed only; nginx: see docs.
+     */
+    public static function writeAssetRules(string $host): void
+    {
+        $file = SLATE_ADMIN . '/.htaccess';
+        if ($host === '') {
+            @unlink($file);
+        } else {
+            $rule = "# Written by Slate (admin_host). Dashboard files only on the private admin host.\n"
+                . "<IfModule mod_rewrite.c>\n    RewriteEngine On\n"
+                . "    # Internal dashboard code is never requested directly (the front controller loads it).\n"
+                . "    RewriteRule \\.(php\\d?|phtml|phar|inc)$ - [R=404,L,NC]\n"
+                . "    RewriteCond %{HTTP_HOST} !^" . preg_quote($host, '/') . "(:\\d+)?$ [NC]\n"
+                . "    RewriteRule ^ - [R=404,L]\n</IfModule>\n";
+            @file_put_contents($file, $rule, LOCK_EX);
+        }
+        if (DB::connected()) {
+            Integrity::trust('admin/.htaccess');
+        }
     }
 }

@@ -63,14 +63,15 @@ final class Settings
                     ['key' => 'mail_from_name', 'type' => 'text', 'label' => 'From name', 'default' => '', 'help' => 'Defaults to the site title.'],
                     ['key' => 'mail_from_email', 'type' => 'email', 'label' => 'From address', 'default' => '',
                         'help' => 'An address on your own domain (e.g. no-reply@yourdomain.com), so mail is not marked as spam. Defaults to no-reply@ your site domain.'],
-                    ['key' => 'mail_transport', 'type' => 'select', 'label' => 'Send with', 'default' => 'php',
-                        'options' => ['php' => 'This server (PHP mail)', 'smtp' => 'SMTP server (recommended)']],
-                    ['key' => 'smtp_host', 'type' => 'text', 'label' => 'SMTP host', 'default' => '', 'placeholder' => 'smtp.hostinger.com', 'show_if' => 'mail_transport=smtp'],
-                    ['key' => 'smtp_port', 'type' => 'number', 'label' => 'Port', 'default' => 587, 'min' => 1, 'max' => 65535, 'show_if' => 'mail_transport=smtp'],
-                    ['key' => 'smtp_encryption', 'type' => 'select', 'label' => 'Encryption', 'default' => 'tls', 'show_if' => 'mail_transport=smtp',
-                        'options' => ['tls' => 'STARTTLS (port 587)', 'ssl' => 'SSL/TLS (port 465)', 'none' => 'None (not recommended)']],
-                    ['key' => 'smtp_user', 'type' => 'text', 'label' => 'Username', 'default' => '', 'show_if' => 'mail_transport=smtp'],
-                    ['key' => 'smtp_pass', 'type' => 'secret', 'label' => 'Password', 'default' => '', 'help' => 'Stored encrypted.', 'show_if' => 'mail_transport=smtp'],
+                    ['key' => 'mail_transport', 'type' => 'select', 'label' => 'Send with', 'default' => 'auto',
+                        'options' => ['auto' => 'Automatic — SMTP when filled in below, otherwise this server', 'php' => 'This server only (PHP mail)', 'smtp' => 'SMTP only'],
+                        'help' => 'Works out of the box with your host\'s mail. Add an SMTP mailbox for the best delivery (fewer spam-folder landings).'],
+                    ['key' => 'smtp_host', 'type' => 'text', 'label' => 'SMTP host', 'default' => '', 'placeholder' => 'smtp.hostinger.com', 'show_if' => 'mail_transport!=php'],
+                    ['key' => 'smtp_port', 'type' => 'number', 'label' => 'Port', 'default' => 465, 'min' => 1, 'max' => 65535, 'show_if' => 'mail_transport!=php'],
+                    ['key' => 'smtp_encryption', 'type' => 'select', 'label' => 'Encryption', 'default' => 'ssl', 'show_if' => 'mail_transport!=php',
+                        'options' => ['ssl' => 'SSL/TLS (port 465)', 'tls' => 'STARTTLS (port 587)', 'none' => 'None (not recommended)']],
+                    ['key' => 'smtp_user', 'type' => 'text', 'label' => 'Username', 'default' => '', 'show_if' => 'mail_transport!=php'],
+                    ['key' => 'smtp_pass', 'type' => 'secret', 'label' => 'Password', 'default' => '', 'help' => 'Stored encrypted.', 'show_if' => 'mail_transport!=php'],
                 ]],
                 'users' => ['label' => 'Users & registration', 'fields' => [
                     ['key' => 'registration_enabled', 'type' => 'toggle', 'label' => 'Anyone can register', 'default' => false],
@@ -133,6 +134,10 @@ final class Settings
             ]],
 
             'integrations' => ['label' => 'Integrations', 'icon' => 'plug', 'sections' => [
+                'webhooks' => ['label' => 'Webhooks', 'render' => 'webhooks', 'fields' => [
+                    ['key' => 'webhooks_allow_private', 'type' => 'toggle', 'label' => 'Allow webhooks to private network addresses', 'default' => false,
+                        'help' => 'Off protects against requests to your own server or internal network (SSRF). Only turn on for self-hosted receivers on a private network.'],
+                ]],
                 'api' => ['label' => 'REST API', 'render' => 'api', 'fields' => [
                     ['key' => 'api_enabled', 'type' => 'toggle', 'label' => 'Enable the REST API (/api/v1)', 'default' => false,
                         'help' => 'For headless front-ends, mobile apps and integrations. Writing always needs an API key (Profile → API keys).'],
@@ -191,8 +196,16 @@ final class Settings
 
             'performance' => ['label' => 'Performance', 'icon' => 'zap', 'sections' => [
                 'cache' => ['label' => 'Page cache', 'render' => 'cache', 'fields' => [
-                    ['key' => 'cache_pages', 'type' => 'toggle', 'label' => 'Full-page cache for visitors', 'help' => 'Pages are served as static HTML without touching the database. Cleared automatically when content changes.', 'default' => true],
+                    ['key' => 'cache_pages', 'type' => 'toggle', 'label' => 'Full-page cache for visitors', 'help' => 'Optional. Pages are still built dynamically; the cache keeps the result for visitors (zero database queries) and refreshes automatically when content changes. Turn off for fully live sites.', 'default' => true],
                     ['key' => 'cache_ttl', 'type' => 'number', 'label' => 'Cache lifetime (minutes)', 'default' => 720, 'min' => 1, 'max' => 43200],
+                    ['key' => 'cache_purge', 'type' => 'select', 'label' => 'When content changes, refresh', 'default' => 'all', 'show_if' => 'cache_pages=1',
+                        'options' => ['all' => 'Every page (always up to date)', 'smart' => 'Only the changed item + listing pages (fastest for large sites)'],
+                        'help' => 'Both are instant, even with thousands of pages. "Smart" keeps other item pages cached; pages that show related items may show the old title/photo until their cache lifetime ends.'],
+                    ['key' => 'cache_warm', 'type' => 'toggle', 'label' => 'Re-warm important pages in the background after changes', 'default' => true, 'show_if' => 'cache_pages=1'],
+                    ['key' => 'cache_exclude', 'type' => 'textarea', 'label' => 'Never cache these paths', 'rows' => 3, 'default' => '', 'show_if' => 'cache_pages=1',
+                        'help' => 'One per line, * as wildcard — e.g. /cart*, /account/*, /checkout. For pages that must always be personal or live.'],
+                    ['key' => 'cache_bypass_cookies', 'type' => 'text', 'label' => 'Skip the cache when these cookies are set', 'default' => '', 'show_if' => 'cache_pages=1',
+                        'placeholder' => 'cart_id, member_*', 'help' => 'Comma-separated, * as wildcard. Signed-in team members always bypass the cache.'],
                     ['key' => 'cache_browser_assets', 'type' => 'toggle', 'label' => 'Long browser cache for theme assets & uploads', 'default' => true, 'help' => 'Handled by the bundled .htaccess / nginx config.'],
                 ]],
                 'output' => ['label' => 'HTML output', 'fields' => [
@@ -258,8 +271,8 @@ final class Settings
                     ['key' => 'backups_keep', 'type' => 'number', 'label' => 'Backups to keep (of each kind)', 'default' => 7, 'min' => 1, 'max' => 100],
                 ]],
                 'cron' => ['label' => 'Scheduled tasks', 'render' => 'cron', 'fields' => [
-                    ['key' => 'cron_visitor_trigger', 'type' => 'toggle', 'label' => 'Run tasks after visits when no server cron is set up', 'default' => true,
-                        'help' => 'A server cron job is more reliable: it runs on time even when nobody visits.'],
+                    ['key' => 'cron_visitor_trigger', 'type' => 'toggle', 'label' => 'Run scheduled tasks automatically', 'default' => true,
+                        'help' => 'Tasks run in the background right after visits — nothing to set up, and visitors never wait. A server cron is optional; it only helps on sites with very few visitors.'],
                 ]],
                 'maintenance' => ['label' => 'Maintenance mode', 'fields' => [
                     ['key' => 'maintenance_mode', 'type' => 'toggle', 'label' => 'Enable maintenance mode', 'help' => 'Visitors get a 503 page; logged-in team members see the site.', 'default' => false],

@@ -5,8 +5,8 @@
  */
 declare(strict_types=1);
 
-const SLATE_VERSION = '0.9.0';
-const SLATE_DB_VERSION = 2;
+const SLATE_VERSION = '0.10.0';
+const SLATE_DB_VERSION = 3;
 const SLATE_MIN_PHP = '8.2.0';
 
 define('SLATE_ROOT', dirname(__DIR__));

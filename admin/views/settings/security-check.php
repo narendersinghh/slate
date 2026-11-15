@@ -27,11 +27,11 @@ $ips = AdminAccess::allowedIps();
 $add($ips ? 'ok' : 'info', 'Dashboard IP allow-list', $ips ? 'Only ' . e(implode(', ', $ips)) . ' can reach the dashboard.'
     : 'Optional: limit the dashboard to your own IP addresses — <code>php bin/slate admin:ips "1.2.3.4"</code>.');
 
-$admins = DB::all("SELECT username, totp_secret FROM {{users}} WHERE role = 'administrator' AND status = 'active'");
-$no2fa = array_column(array_filter($admins, static fn($u) => empty($u['totp_secret'])), 'username');
+$admins = DB::all("SELECT u.username, u.totp_secret, (SELECT COUNT(*) FROM {{passkeys}} p WHERE p.user_id = u.id) AS passkeys FROM {{users}} u WHERE u.role = 'administrator' AND u.status = 'active'");
+$no2fa = array_column(array_filter($admins, static fn($u) => empty($u['totp_secret']) && !(int)$u['passkeys']), 'username');
 $add($no2fa ? 'bad' : 'ok', 'Two-factor authentication', $no2fa
     ? 'Administrators without 2FA: ' . e(implode(', ', $no2fa)) . '. A stolen password is then enough to take over the site.'
-    : 'Every administrator uses 2FA.' . (Options::get('security_require_2fa') ? ' It is required.' : ''), admin_url('profile') . '#2fa');
+    : 'Every administrator uses 2FA (authenticator app or passkey).' . (Options::get('security_require_2fa') ? ' It is required.' : ''), admin_url('profile') . '#2fa');
 if (!Options::get('security_require_2fa')) {
     $add('warn', 'Require 2FA', 'Make 2FA mandatory for administrators.', admin_url('settings/security/login'));
 }

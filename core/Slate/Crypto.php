@@ -15,6 +15,12 @@ final class Crypto
         return sodium_crypto_generichash($secret, '', SODIUM_CRYPTO_SECRETBOX_KEYBYTES);
     }
 
+    /** Keyed hash with the site secret (stable per site, useless elsewhere). Returns hex. */
+    public static function hmac(string $data): string
+    {
+        return hash_hmac('sha256', $data, self::key());
+    }
+
     public static function encrypt(string $plain): string
     {
         if ($plain === '') {

@@ -85,6 +85,31 @@ $isSelf = (int)$u['id'] === Auth::id();
     </div>
   </section>
 
+  <section class="card" id="passkeys">
+    <div class="card-head"><h2><?= icon('lock', 16) ?> Passkeys</h2></div>
+    <div class="card-pad stack">
+      <p class="muted">Sign in with your fingerprint, face or device PIN instead of a password — phishing-proof, and it counts as two-factor authentication.
+        Passkeys are tied to this address (<code><?= e(\Slate\Passkeys::rpId()) ?></code>).</p>
+      <?php $pks = \Slate\Passkeys::forUser((int)$u['id']); if ($pks): ?>
+      <ul class="list list-compact">
+        <?php foreach ($pks as $pk): ?>
+          <li><span class="list-main"><span><strong><?= e($pk['name']) ?></strong>
+            <small>added <?= e(time_ago($pk['created_at'])) ?> · <?= $pk['last_used'] ? 'used ' . e(time_ago($pk['last_used'])) : 'not used yet' ?></small></span></span>
+            <form method="post" action="<?= e(admin_url('profile/passkeys/' . (int)$pk['id'] . '/remove')) ?>"><?= csrf_field() ?>
+              <button class="btn btn-sm btn-danger" data-confirm="Remove “<?= e($pk['name']) ?>”? You will no longer be able to sign in with it.">Remove</button></form></li>
+        <?php endforeach; ?>
+      </ul>
+      <?php endif; ?>
+      <div class="inline-form">
+        <input class="input" data-passkey-name placeholder="Name, e.g. MacBook Touch ID" maxlength="100">
+        <button class="btn btn-primary" type="button" data-passkey-add data-options="<?= e(admin_url('profile/passkeys/options')) ?>"
+          data-submit="<?= e(admin_url('profile/passkeys')) ?>" data-csrf="<?= e(\Slate\Csrf::token()) ?>">Add a passkey</button>
+      </div>
+      <div class="alert" data-passkey-add-msg hidden role="alert"></div>
+      <script src="<?= e(asset_url('admin/assets/passkeys.js')) ?>" defer></script>
+    </div>
+  </section>
+
   <?php if (\Slate\Api::enabled() || \Slate\Api::keys((int)$u['id'])): $keys = \Slate\Api::keys((int)$u['id']); $newKey = \Slate\Session::takeValue('new_api_key'); ?>
   <section class="card" id="api-keys">
     <div class="card-head"><h2><?= icon('link', 16) ?> API keys</h2></div>

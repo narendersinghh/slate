@@ -4,12 +4,13 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Scheduled tasks. Core and modules register jobs with the "cron_jobs" filter:
+ * Scheduled tasks — automatic, no setup needed. Core and modules register jobs with the "cron_jobs" filter:
  *
  *   Hooks::add('cron_jobs', fn(array $jobs) => $jobs + ['shop_sync' => ['every' => 3600, 'label' => 'Sync stock', 'run' => fn() => …]]);
  *
- * Jobs run from a real server cron (recommended: `* * * * * php /path/to/slate/bin/slate cron`) or, when no server cron
- * has been seen recently, after visitor requests (once a minute at most, after the page has been sent).
+ * Due jobs run right after a page has been sent to a visitor (cached pages included), so nobody waits for them.
+ * Where the server cannot finish a response early, Slate triggers itself with a short background request instead.
+ * A real server cron (`php bin/slate cron` every few minutes) is optional: it only adds punctuality on quiet sites.
  */
 final class Cron
 {
@@ -24,31 +25,75 @@ final class Cron
             'cleanup' => ['every' => 86400, 'label' => 'Clean up old login attempts, activity and temporary files', 'run' => [self::class, 'cleanup']],
             'backup' => ['every' => 3600, 'label' => 'Automatic backups (Settings → System → Backups)', 'run' => [Backup::class, 'scheduled']],
             'module_updates' => ['every' => 43200, 'label' => 'Check for module updates', 'run' => static fn() => ModuleInstaller::updates(true)],
+            'cache_warm' => ['every' => 300, 'label' => 'Re-warm the page cache after changes', 'run' => static fn() => PageCache::warm()],
+            'cache_sweep' => ['every' => 3600, 'label' => 'Remove outdated cached pages', 'run' => static fn() => PageCache::sweep()],
+            'webhooks' => ['every' => 60, 'label' => 'Send queued webhook deliveries and retries', 'run' => [Webhooks::class, 'run']],
             'integrity' => ['every' => 86400, 'label' => 'File integrity check (emails administrators about tampering)', 'run' => [Integrity::class, 'scheduled']],
         ];
         $jobs = Hooks::filter('cron_jobs', $jobs);
         return array_filter($jobs, static fn($j) => is_array($j) && isset($j['run']) && is_callable($j['run']) && (int)($j['every'] ?? 0) >= 60);
     }
 
-    /** Called at the end of a request: run due jobs unless a server cron is doing it. */
+    private const NEXT = SLATE_CACHE . '/cron-next';
+
+    /** Due according to the marker file (no database needed), and not already claimed by another request. */
+    private static function due(): bool
+    {
+        $next = @file_get_contents(self::NEXT);
+        return $next === false || (int)$next <= time();
+    }
+
+    /** Mark the next minute as taken so concurrent visitors do not all start a run. */
+    private static function claim(): bool
+    {
+        @mkdir(SLATE_CACHE, 0755, true);
+        $fp = @fopen(self::NEXT, 'c+');
+        if (!$fp || !flock($fp, LOCK_EX | LOCK_NB)) {
+            return false;
+        }
+        $next = (int)stream_get_contents($fp);
+        $ok = $next <= time();
+        if ($ok) {
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, (string)(time() + 60));
+        }
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return $ok;
+    }
+
+    private static function automatic(): bool
+    {
+        return PHP_SAPI !== 'cli' && (!DB::connected() || Options::get('cron_visitor_trigger', true));
+    }
+
+    /** Send the response to the visitor now and keep working. False when the server cannot do that. */
+    private static function finishResponse(): bool
+    {
+        if (function_exists('fastcgi_finish_request')) {
+            return @fastcgi_finish_request();
+        }
+        if (function_exists('litespeed_finish_request')) {
+            @litespeed_finish_request();
+            return true;
+        }
+        return false;
+    }
+
+    /** Called at the end of a normal (uncached) request. */
     public static function maybeRunAfterRequest(): void
     {
-        if (PHP_SAPI === 'cli' || !DB::connected() || !Options::get('cron_visitor_trigger', true)) {
-            return;
-        }
-        $next = (int)Options::get('cron_next', 0);
-        if ($next > time()) {
-            return;
-        }
-        // A server cron ran in the last 5 minutes: leave it to that.
-        if ((int)Options::get('cron_server_seen', 0) > time() - 300) {
+        if (!self::automatic() || !self::due()) {
             return;
         }
         register_shutdown_function(static function (): void {
-            if (function_exists('fastcgi_finish_request')) {
-                @fastcgi_finish_request();
-            } elseif (function_exists('litespeed_finish_request')) {
-                @litespeed_finish_request();
+            if (!self::claim()) {
+                return;
+            }
+            if (!self::finishResponse()) {
+                self::spawn();
+                return;
             }
             ignore_user_abort(true);
             try {
@@ -57,6 +102,65 @@ final class Cron
                 error_log('Slate cron: ' . $e->getMessage());
             }
         });
+    }
+
+    /** Called after a cached page was sent (no database connection yet). */
+    public static function afterCachedPage(): void
+    {
+        if (PHP_SAPI === 'cli' || !self::due() || !defined('SLATE_CONFIG') || !self::claim()) {
+            return;
+        }
+        if (!self::finishResponse()) {
+            self::spawn();
+            return;
+        }
+        ignore_user_abort(true);
+        try {
+            DB::connect(SLATE_CONFIG['db']);
+            Options::load();
+            if (!Options::get('cron_visitor_trigger', true)) {
+                return;
+            }
+            Modules::boot();
+            self::run(false, 'visit');
+        } catch (\Throwable $e) {
+            error_log('Slate cron: ' . $e->getMessage());
+        }
+    }
+
+    /** Secret path that runs due jobs (used by the self-trigger; also usable by external uptime/cron services). */
+    public static function webPath(): string
+    {
+        return '/__tasks/' . substr(Crypto::hmac('scheduled-tasks'), 0, 24);
+    }
+
+    /** Fire-and-forget request to webPath() for servers that cannot finish a response early. */
+    private static function spawn(): void
+    {
+        if (!function_exists('curl_init') || !defined('SLATE_CONFIG')) {
+            return;
+        }
+        $ch = curl_init(rtrim((string)(SLATE_CONFIG['url'] ?? site_url()), '/') . self::webPath());
+        curl_setopt_array($ch, [CURLOPT_TIMEOUT_MS => 300, CURLOPT_CONNECTTIMEOUT_MS => 300, CURLOPT_NOSIGNAL => true,
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_USERAGENT => 'tasks']);
+        @curl_exec($ch);
+        unset($ch);
+    }
+
+    /** Handler for webPath(). */
+    public static function handleWeb(): void
+    {
+        ignore_user_abort(true);
+        header('Cache-Control: no-store');
+        header('X-Robots-Tag: noindex');
+        http_response_code(204);
+        self::finishResponse();
+        try {
+            self::run(false, 'visit');
+        } catch (\Throwable $e) {
+            error_log('Slate cron: ' . $e->getMessage());
+        }
+        exit;
     }
 
     /**
@@ -105,7 +209,9 @@ final class Cron
                 $next = min($next, time() + $every);
             }
             Options::set('cron_state', $state, false);
-            Options::set('cron_next', $next === PHP_INT_MAX ? time() + 60 : max(time() + 60, $next));
+            $nextAt = $next === PHP_INT_MAX ? time() + 60 : max(time() + 60, $next);
+            Options::set('cron_next', $nextAt);
+            @file_put_contents(self::NEXT, (string)$nextAt, LOCK_EX);
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);

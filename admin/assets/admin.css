@@ -856,3 +856,9 @@ label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; c
 .sec-info .sec-icon { background: var(--surface-3); color: var(--muted); }
 .sec-tag { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-left: 6px; }
 .sec-bad .sec-tag { color: var(--danger); } .sec-warn .sec-tag { color: var(--warn); }
+
+.auth-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 14px 0; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.wh-events { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 14px; }
+.wh-events code { font-size: 11px; color: var(--muted); }

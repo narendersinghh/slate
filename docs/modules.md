@@ -98,6 +98,10 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `template_tag`, `template_lookup`, `template_block` | filter | add `{{tags}}`, conditions and `{{#blocks}}` to Templates |
 | `design_system_css` | filter | CSS variables of the design system |
 | `modules_loaded` | action | every active module is loaded |
+| `webhook_events` | filter | add events (then `Webhooks::dispatch('shop.order_paid', $data)`) |
+| `page_cacheable` | filter | return `false` to keep the current response out of the page cache (or call `PageCache::skip()`) |
+| `page_cache_kind` | filter | `'single'` or `'listing'` — mark pages that list other content as listings so "smart" purges refresh them |
+| `cache_warm_paths` | filter | paths the background task re-warms after a purge |
 | `cron_jobs` | filter | `['name' => ['every' => 3600, 'label' => '…', 'run' => fn() => …]]`: scheduled tasks |
 | `api_routes` | action | `Router $r`: extra REST endpoints under `/api/v1/…` |
 | `api_post`, `api_types` | filter | shape API output / choose exposed content types |

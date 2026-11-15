@@ -132,6 +132,32 @@ final class Schema
                 last_used DATETIME NULL,
                 created_at DATETIME NOT NULL
             )$tail",
+            // v3: passkeys and webhook deliveries
+            "CREATE TABLE IF NOT EXISTS {{passkeys}} (
+                id $pk,
+                user_id $int NOT NULL,
+                credential_id VARCHAR(255) NOT NULL UNIQUE,
+                public_key TEXT NOT NULL,
+                sign_count $int NOT NULL DEFAULT 0,
+                name VARCHAR(100) NOT NULL DEFAULT '',
+                transports VARCHAR(100) NOT NULL DEFAULT '',
+                last_used DATETIME NULL,
+                created_at DATETIME NOT NULL
+            )$tail",
+            "CREATE INDEX idx_passkeys_user ON {{passkeys}} (user_id)",
+            "CREATE TABLE IF NOT EXISTS {{webhook_deliveries}} (
+                id $pk,
+                hook_id VARCHAR(32) NOT NULL,
+                event VARCHAR(60) NOT NULL,
+                payload $text NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                attempts INT NOT NULL DEFAULT 0,
+                next_at DATETIME NOT NULL,
+                response_code INT NULL,
+                response TEXT NULL,
+                created_at DATETIME NOT NULL
+            )$tail",
+            "CREATE INDEX idx_webhook_due ON {{webhook_deliveries}} (status, next_at)",
         ];
     }
 
@@ -162,6 +188,9 @@ final class Schema
             },
             2 => static function (): void {
                 self::install(); // adds revisions + api_keys (CREATE … IF NOT EXISTS)
+            },
+            3 => static function (): void {
+                self::install(); // adds passkeys + webhook_deliveries
             },
         ];
         foreach ($migrations as $version => $fn) {

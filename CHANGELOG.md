@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.10.0 — Passkeys, webhooks, automatic tasks, faster cache
+- **Passkeys** (WebAuthn): sign in with Face ID, Touch ID, Windows Hello, a phone or a security key; user verification
+  required, counts as two-factor; ES256 and RS256; clone detection via signature counter. Profile → Passkeys.
+- **Webhooks**: content created/updated/published/unpublished/deleted, media uploaded, form submitted, backup created,
+  security alert (+ module events). Signed (HMAC-SHA256 with timestamp), sent after the response, retried with back-off,
+  delivery log with retry, test button, SSRF protection. Settings → Integrations → Webhooks.
+- **Scheduled tasks run automatically** — after any page view, cached pages included, without delaying the visitor
+  (finishes the response first; self-trigger fallback elsewhere). No cron setup needed; a server cron stays optional.
+- **Email works with no setup**: "Automatic" sending uses SMTP when configured, otherwise the server's mail().
+- **Page cache** (optional, on by default): purges are instant at any size (generation counters instead of deleting
+  files; outdated files are swept in the background); "smart" mode refreshes only the edited item + listing pages;
+  important pages are re-warmed in the background; never-cache paths and bypass cookies for dynamic sites;
+  `PageCache::skip()` / `page_cacheable` for modules.
+- Private admin host without side effects: previews and View links stay on the admin host, passkeys bound to the parent
+  domain, dashboard assets hidden on the public host.
+- DB v3: passkeys, webhook_deliveries.
+
 ## 0.9.0 — Security
 - **Separate admin domain**: `admin_host` in config.php (or `php bin/slate admin:host`) — the dashboard only answers on
   that host and is a plain 404 everywhere else; the public site on the admin host is only shown to signed-in team members.

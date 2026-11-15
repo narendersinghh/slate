@@ -49,9 +49,10 @@ function admin_dispatch(string $path): void
 
     // "Require two-factor auth for administrators": until it is set up, only the profile page is reachable.
     if (Auth::user() && Auth::user()['role'] === 'administrator' && Options::get('security_require_2fa')
-        && !in_array(trim($path, '/'), ['profile', 'profile/2fa', 'logout'], true)
-        && !DB::val('SELECT totp_secret FROM {{users}} WHERE id = :id', ['id' => Auth::id()])) {
-        Session::flash('error', 'Two-factor authentication is required for administrators. Set it up to continue.');
+        && !in_array(trim($path, '/'), ['profile', 'profile/2fa', 'profile/passkeys', 'profile/passkeys/options', 'logout'], true)
+        && !DB::val('SELECT totp_secret FROM {{users}} WHERE id = :id', ['id' => Auth::id()])
+        && !\Slate\Passkeys::count(Auth::id())) {
+        Session::flash('error', 'Two-factor authentication is required for administrators. Set up an authenticator app or a passkey to continue.');
         redirect(admin_url('profile') . '#2fa');
     }
 
@@ -94,6 +95,33 @@ function admin_dispatch(string $path): void
             return;
         }
         admin_view('login', ['step' => 'login', 'error' => $res['error'] ?? 'Login failed.', 'login' => $login], false);
+    });
+    // ---------- Passkeys ----------
+    $r->get('/passkey/options', static fn() => json_response(\Slate\Passkeys::loginOptions()));
+    $r->post('/passkey/login', static function () {
+        $res = \Slate\Passkeys::login(json_input());
+        json_response($res + ['redirect' => admin_url()], $res['ok'] ? 200 : 401);
+    });
+    $r->get('/profile/passkeys/options', static function () {
+        Auth::require('access_admin');
+        $u = DB::row('SELECT * FROM {{users}} WHERE id = :id', ['id' => Auth::id()]);
+        json_response(\Slate\Passkeys::registrationOptions($u));
+    });
+    $r->post('/profile/passkeys', static function () {
+        Auth::require('access_admin');
+        $in = json_input();
+        $u = DB::row('SELECT * FROM {{users}} WHERE id = :id', ['id' => Auth::id()]);
+        $err = \Slate\Passkeys::register($u, $in, (string)($in['name'] ?? ''));
+        if (!$err) {
+            Session::flash('success', 'Passkey added. You can now sign in with it.');
+        }
+        json_response($err ? ['ok' => false, 'error' => $err] : ['ok' => true], $err ? 422 : 200);
+    });
+    $r->post('/profile/passkeys/{id:\d+}/remove', static function (string $id) {
+        Auth::require('access_admin');
+        \Slate\Passkeys::remove((int)$id, Auth::id());
+        Session::flash('success', 'Passkey removed.');
+        redirect(admin_url('profile') . '#passkeys');
     });
     $r->get('/forgot', static fn() => admin_view('password', ['mode' => 'forgot'], false));
     $r->post('/forgot', static function () {
@@ -369,6 +397,40 @@ function admin_dispatch(string $path): void
         $n = \Slate\Integrity::trust();
         Session::flash('success', "Trusted the current $n files. Future changes will be reported.");
         redirect(admin_url('settings/security/check'));
+    });
+    $r->post('/system/webhooks/add', static function () {
+        admin_require_settings('integrations');
+        $url = trim((string)input('wh_url', ''));
+        $events = array_values(array_intersect((array)input('wh_events', []), array_merge(['*'], array_keys(\Slate\Webhooks::events()))));
+        if ($err = \Slate\Webhooks::urlProblem($url)) {
+            Session::flash('error', $err);
+        } elseif (!$events) {
+            Session::flash('error', 'Choose at least one event.');
+        } else {
+            [, $secret] = \Slate\Webhooks::add($url, $events);
+            Session::putValue('new_webhook_secret', $secret);
+            Session::flash('success', 'Webhook added. Copy its signing secret now.');
+        }
+        redirect(admin_url('settings/integrations/webhooks'));
+    });
+    $r->post('/system/webhooks/{id:[a-f0-9]+}/{action:remove|toggle|ping}', static function (string $id, string $action) {
+        admin_require_settings('integrations');
+        if ($action === 'remove') {
+            \Slate\Webhooks::remove($id);
+            Session::flash('success', 'Webhook removed.');
+        } elseif ($action === 'toggle') {
+            \Slate\Webhooks::toggle($id);
+        } else {
+            [$ok, $msg] = \Slate\Webhooks::ping($id);
+            Session::flash($ok ? 'success' : 'error', 'Test: ' . $msg);
+        }
+        redirect(admin_url('settings/integrations/webhooks'));
+    });
+    $r->post('/system/webhooks/deliveries/{id:\d+}/retry', static function (string $id) {
+        admin_require_settings('integrations');
+        \Slate\Webhooks::retry((int)$id);
+        Session::flash('success', 'Delivery retried.');
+        redirect(admin_url('settings/integrations/webhooks'));
     });
     $r->post('/system/cron/run', static function () {
         admin_require_settings('system');
@@ -910,9 +972,9 @@ function admin_dispatch(string $path): void
     });
     $r->post('/system/cache/clear', static function () {
         Auth::require('manage_settings');
-        $n = PageCache::clear();
-        is_ajax() ? json_response(['ok' => true, 'message' => "Cleared $n cached pages."]) : null;
-        Session::flash('success', "Cleared $n cached pages.");
+        PageCache::clear();
+        is_ajax() ? json_response(['ok' => true, 'message' => 'Cache refreshed: every page will be rebuilt on its next visit.']) : null;
+        Session::flash('success', 'Cache refreshed: every page will be rebuilt on its next visit (important pages are re-warmed in the background).');
         back();
     });
     $r->post('/system/updates/check', static function () {
@@ -1099,7 +1161,8 @@ function admin_save_post(string $type): void
     log_activity($id ? 'content_updated' : 'content_created', $type . ':' . $post['title']);
     if (is_ajax()) {
         json_response(['ok' => true, 'id' => $newId, 'slug' => $post['slug'], 'status' => $post['status'],
-            'permalink' => Posts::permalink($post, true), 'edit_url' => admin_url("content/$type/$newId"),
+            // On a private admin host stay on that host, so previews and on-page editing keep the session.
+            'permalink' => \Slate\AdminAccess::onAdminHost() ? Posts::permalink($post) : Posts::permalink($post, true), 'edit_url' => admin_url("content/$type/$newId"),
             'message' => $def['singular'] . ' ' . ($post['status'] === 'publish' ? 'published' : 'saved') . '.']);
     }
     Session::flash('success', $def['singular'] . ' saved.');

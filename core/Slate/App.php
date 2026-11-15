@@ -34,12 +34,16 @@ final class App
         }
         self::headers();
         Cron::maybeRunAfterRequest();
+        Webhooks::boot();
 
         Modules::boot();
         Theme::boot();
         Hooks::action('init');
 
         // 4. Route.
+        if ($path === Cron::webPath()) {
+            Cron::handleWeb();
+        }
         $admin = admin_slug();
         if ($path === "/$admin" || str_starts_with($path, "/$admin/")) {
             // Wrong host or address for the dashboard: indistinguishable from any missing page.

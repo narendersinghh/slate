@@ -35,6 +35,14 @@ require __DIR__ . '/partials/auth-head.php';
       <?php endif; ?>
       <button class="btn btn-primary btn-lg btn-block" type="submit"><?= $step === '2fa' ? 'Verify' : 'Sign in' ?> →</button>
     </form>
+    <?php if ($step !== '2fa' && \Slate\Passkeys::supported()): ?>
+      <div class="auth-or"><span>or</span></div>
+      <button class="btn btn-lg btn-block" type="button" data-passkey-login data-options="<?= e(admin_url('passkey/options')) ?>"
+        data-submit="<?= e(admin_url('passkey/login')) ?>" data-csrf="<?= e(\Slate\Csrf::token()) ?>"
+        data-redirect="<?= e(($r = (string)($_GET['redirect'] ?? '')) !== '' && str_starts_with($r, '/') && !str_starts_with($r, '//') ? $r : admin_url()) ?>"><?= icon('lock', 16) ?> Sign in with a passkey</button>
+      <div class="alert" data-passkey-msg hidden role="alert"></div>
+      <script src="<?= e(asset_url('admin/assets/passkeys.js')) ?>" defer></script>
+    <?php endif; ?>
     <p class="auth-foot"><a href="<?= e(url()) ?>">← Back to <?= e(Options::get('site_title')) ?></a></p>
   </div>
 </main>

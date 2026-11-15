@@ -217,6 +217,7 @@ final class Posts
             $row['parent_id'] = null;
         }
         $row = Hooks::filter('post_before_save', $row, $id);
+        $oldPath = $existing ? (parse_url(self::permalink($existing, true), PHP_URL_PATH) ?: null) : null;
 
         if ($existing) {
             DB::update('posts', $row, ['id' => $id]);
@@ -234,8 +235,11 @@ final class Posts
                 Terms::sync($id, $tax, $data['terms'][$tax] ?? []);
             }
         }
-        PageCache::clear();
+        PageCache::purgeContent(self::find((int)$id), $oldPath ? [$oldPath] : []);
         Hooks::action('post_saved', $id, $row, (bool)$existing);
+        if (($existing['status'] ?? null) !== $row['status']) {
+            Hooks::action('post_status_changed', (int)$id, $existing['status'] ?? null, $row['status']);
+        }
         return (int)$id;
     }
 
@@ -256,7 +260,7 @@ final class Posts
             Terms::recount($termIds);
         }
         unset(self::$cache[$id]);
-        PageCache::clear();
+        PageCache::purgeContent($post);
         Hooks::action('post_deleted', $id, $force);
     }
 

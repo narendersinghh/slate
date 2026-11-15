@@ -282,5 +282,6 @@ final class Integrity
         }
         Options::set('integrity_notified', $sig, false);
         log_activity('integrity_alert', count($serious) . ' files');
+        Webhooks::dispatch('security.alert', ['kind' => 'integrity', 'files' => array_map(static fn($i) => ['path' => $i['path'], 'kind' => $i['kind']], array_slice($serious, 0, 50))]);
     }
 }

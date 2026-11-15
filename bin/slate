@@ -63,7 +63,8 @@ switch ($cmd) {
         break;
 
     case 'cache:clear':
-        $out('Cleared ' . PageCache::clear() . ' cached pages.');
+        PageCache::clear();
+        $out('✓ Cache refreshed. Outdated files are removed in the background (or now: php bin/slate cron --job=cache_sweep --force).');
         break;
 
     case 'module:list':

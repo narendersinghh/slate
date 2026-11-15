@@ -79,8 +79,9 @@ function back(): never
 {
     $ref = $_SERVER['HTTP_REFERER'] ?? admin_url();
     // Only allow redirects to our own host.
-    $host = parse_url($ref, PHP_URL_HOST);
-    if ($host && $host !== ($_SERVER['HTTP_HOST'] ?? '')) {
+    $u = parse_url($ref);
+    $host = isset($u['host']) ? strtolower($u['host'] . (isset($u['port']) ? ':' . $u['port'] : '')) : '';
+    if ($host !== '' && $host !== strtolower((string)($_SERVER['HTTP_HOST'] ?? ''))) {
         $ref = admin_url();
     }
     redirect($ref);

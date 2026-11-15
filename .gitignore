@@ -19,6 +19,6 @@
 /content/assets/
 /content/safe-mode
 
-# Installed modules live outside the core repository (see docs/modules.md); only the example ships with Slate.
+# Installed modules live outside the core repository (see docs/modules.md).
 /modules/*
-!/modules/hello-world/
+!/modules/.gitkeep

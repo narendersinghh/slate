@@ -90,7 +90,7 @@ index.php            Front controller
 core/                Framework (Slate\* classes), helpers, template API
 admin/               Dashboard: routes, JSON API, views, assets (vanilla JS/CSS, no build step)
 themes/default/      Default theme (templates/, partials/, assets/, theme.json, functions.php)
-modules/             Installed modules (not tracked in this repository) — hello-world example included
+modules/             Installed modules (not tracked in this repository)
 docs/                Developer guides (docs/modules.md)
 content/             Uploads, cache, backups, SQLite DB (never touched by updates)
 ```

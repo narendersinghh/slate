@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0 — Module foundations
+- `Posts::query(['fields' => […]])`: filter by custom-field values (null = not set), portable via `DB::jsonField()`.
+- `posts_query_args` and `posts_query_sql` hooks: modules can add conditions to every content query (used by Multilingual).
+- Module scanner: fixed a pattern that silently disabled the "writes files" / "sends email" checks; `$var()`,
+  `->method()` and `::method()` calls no longer count, fully-qualified `\copy()` / `\mail()` still do.
+- New official modules in slate-modules: **Comments**, **Multilingual** and **Shop** (products, cart, checkout, orders,
+  Stripe/Razorpay).
+
 ## 0.10.0 — Passkeys, webhooks, automatic tasks, faster cache
 - **Passkeys** (WebAuthn): sign in with Face ID, Touch ID, Windows Hello, a phone or a security key; user verification
   required, counts as two-factor; ES256 and RS256; clone detection via signature counter. Profile → Passkeys.

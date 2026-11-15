@@ -12,7 +12,7 @@
     <thead><tr><th>Capability</th><?php foreach (Roles::all() as $r): ?><th class="center"><?= e($r['label']) ?></th><?php endforeach; ?></tr></thead>
     <tbody>
     <?php foreach (Roles::CAPS as $cap => $label): ?>
-      <tr><td><?= e($label) ?></td><?php foreach (Roles::all() as $key => $r): ?><td class="center"><?= in_array($cap, $r['caps'], true) ? '<span class="cap-yes">' . icon('check', 14) . '</span>' : '<span class="muted">—</span>' ?></td><?php endforeach; ?></tr>
+      <tr><td><?= e($label) ?></td><?php foreach (Roles::all() as $key => $r): ?><td class="center"><?= in_array($cap, $r['caps'], true) ? '<span class="cap-yes">' . icon('check', 14) . '</span>' : '<span class="muted">-</span>' ?></td><?php endforeach; ?></tr>
     <?php endforeach; ?>
     </tbody>
   </table></div>

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Installs, updates and removes modules — from an uploaded zip, any zip URL, a GitHub repository (or a folder inside one,
+ * Installs, updates and removes modules, from an uploaded zip, any zip URL, a GitHub repository (or a folder inside one,
  * e.g. https://github.com/me/slate-modules/tree/main/shop) or a module registry.
  *
  * Registries are plain JSON files anyone can publish (Settings → Modules → Registries):
@@ -436,7 +436,7 @@ final class ModuleInstaller
         return is_array($j) && isset($j['version']) ? (string)$j['version'] : null;
     }
 
-    /** GitHub token (Modules → Sources, falling back to the core updater's) — only ever sent to GitHub. */
+    /** GitHub token (Modules → Sources, falling back to the core updater's), only ever sent to GitHub. */
     private static function authHeaders(string $url): array
     {
         $host = strtolower((string)parse_url($url, PHP_URL_HOST));

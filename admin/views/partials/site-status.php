@@ -19,11 +19,11 @@ $canSettings = Auth::can('manage_settings');
 
 if ($canSettings) {
     $hidden = (bool)Options::get('seo_noindex_site');
-    $add($hidden ? 'warn' : 'ok', 'search', 'Search engines', $hidden ? 'Hidden — site is noindexed' : 'Visible to Google & others', admin_url('settings/seo/indexing'), 'seo_noindex_site', !$hidden);
+    $add($hidden ? 'warn' : 'ok', 'search', 'Search engines', $hidden ? 'Hidden, site is noindexed' : 'Visible to Google & others', admin_url('settings/seo/indexing'), 'seo_noindex_site', !$hidden);
     $maint = (bool)Options::get('maintenance_mode');
-    $add($maint ? 'warn' : 'ok', 'monitor', 'Website', $maint ? 'Maintenance mode — visitors see a notice' : 'Online for everyone', admin_url('settings/system/maintenance'), 'maintenance_mode', !$maint);
+    $add($maint ? 'warn' : 'ok', 'monitor', 'Website', $maint ? 'Maintenance mode, visitors see a notice' : 'Online for everyone', admin_url('settings/system/maintenance'), 'maintenance_mode', !$maint);
     $cache = (bool)Options::get('cache_pages', true);
-    $add($cache ? 'ok' : 'info', 'zap', 'Page cache', $cache ? 'On — pages load instantly' : 'Off — every page is built live', admin_url('settings/performance/cache'), 'cache_pages', $cache);
+    $add($cache ? 'ok' : 'info', 'zap', 'Page cache', $cache ? 'On, pages load instantly' : 'Off, every page is built live', admin_url('settings/performance/cache'), 'cache_pages', $cache);
     $smtp = (string)Options::get('smtp_host') !== '' && Options::get('mail_transport', 'auto') !== 'php';
     $add($smtp ? 'ok' : 'info', 'mail', 'Email delivery', $smtp ? 'SMTP · ' . Options::get('smtp_host') : 'Server mail (add SMTP for best delivery)', admin_url('settings/email/delivery'));
 }
@@ -40,10 +40,10 @@ if ($canSettings) {
     $host = AdminAccess::adminHost();
     $slug = admin_slug();
     $add($host !== '' || $slug !== 'admin' ? 'ok' : 'warn', 'lock', 'Dashboard address',
-        $host !== '' ? 'Private domain · ' . $host : ($slug !== 'admin' ? 'Custom URL /' . $slug : 'Default /admin — easy for bots to find'), admin_url('settings/security/access'));
+        $host !== '' ? 'Private domain · ' . $host : ($slug !== 'admin' ? 'Custom URL /' . $slug : 'Default /admin, easy for bots to find'), admin_url('settings/security/access'));
 }
 $secured = Passkeys::count((int)$me['id']) > 0 || \Slate\DB::val('SELECT totp_secret IS NOT NULL AND totp_secret <> \'\' FROM {{users}} WHERE id = :id', ['id' => $me['id']]);
-$add($secured ? 'ok' : 'warn', 'key', 'Your sign-in', $secured ? 'Protected with 2FA or a passkey' : 'Password only — add a passkey or 2FA', admin_url('profile'));
+$add($secured ? 'ok' : 'warn', 'key', 'Your sign-in', $secured ? 'Protected with 2FA or a passkey' : 'Password only, add a passkey or 2FA', admin_url('profile'));
 ?>
 <div class="status-grid" data-quick-settings data-url="<?= e(admin_url('settings/quick')) ?>">
   <?php foreach ($items as $it): ?>

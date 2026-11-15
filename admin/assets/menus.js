@@ -52,7 +52,7 @@
       '<button type="button" class="btn btn-sm btn-ghost" data-new-menu>+ New menu</button></div>' +
       '<div class="mb-layout"><div class="mb-add">' +
       '<label class="field"><span>Menu name</span><input class="input" data-menu-name value="' + esc(m.name) + '"></label>' +
-      '<label class="field"><span>Display location</span><select class="input" data-menu-loc><option value="">— None —</option>' + Object.entries(locations).map(([k, l]) => '<option value="' + k + '"' + (m.location === k ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label>' +
+      '<label class="field"><span>Display location</span><select class="input" data-menu-loc><option value="">None</option>' + Object.entries(locations).map(([k, l]) => '<option value="' + k + '"' + (m.location === k ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label>' +
       '<hr><strong class="small-label">Add items</strong>' +
       '<label class="field"><span>Content</span><span class="input-group"><select class="input" data-add-post>' + optList(sources.posts || []) + '</select><button type="button" class="btn btn-sm" data-add="post">Add</button></span></label>' +
       ((sources.terms || []).length ? '<label class="field"><span>Taxonomy term</span><span class="input-group"><select class="input" data-add-term>' + optList(sources.terms) + '</select><button type="button" class="btn btn-sm" data-add="term">Add</button></span></label>' : '') +

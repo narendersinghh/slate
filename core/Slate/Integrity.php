@@ -12,7 +12,7 @@ namespace Slate;
  *     trusted (Settings → Security → Security check → "Trust current files"; installs/updates through Slate are
  *     trusted automatically).
  *  3. Executable files (.php, .phtml, .phar, .user.ini, scripts…) or new .htaccess files inside content/, uploads or
- *     other data folders are always reported — they never belong there.
+ *     other data folders are always reported, they never belong there.
  *
  * Runs daily (scheduled task) and on demand; administrators get an email when something new shows up.
  */
@@ -46,7 +46,7 @@ final class Integrity
                     $known = isset($baseline[$rel]) && $baseline[$rel] === hash_file('sha256', $full);
                     if (!$known) {
                         $issues[] = ['level' => 'danger', 'kind' => 'executable', 'path' => $rel,
-                            'detail' => 'Executable file in a data folder — this is how most hacked sites are taken over. Inspect and delete it unless you put it there.'];
+                            'detail' => 'Executable file in a data folder, this is how most hacked sites are taken over. Inspect and delete it unless you put it there.'];
                     }
                 } elseif ($base === '.htaccess') {
                     $matchesOfficial = isset($official['tree'][$rel]) && self::blobSha($full) === $official['tree'][$rel];
@@ -272,7 +272,7 @@ final class Integrity
             $site = (string)Options::get('site_title', 'your site');
             $rows = '';
             foreach (array_slice($serious, 0, 25) as $i) {
-                $rows .= '<li><code>' . e($i['path']) . '</code> — ' . e($i['detail']) . '</li>';
+                $rows .= '<li><code>' . e($i['path']) . '</code>, ' . e($i['detail']) . '</li>';
             }
             $more = count($serious) > 25 ? '<p>…and ' . (count($serious) - 25) . ' more.</p>' : '';
             $link = AdminAccess::baseUrl() . '/' . admin_slug() . '/settings/security/check';

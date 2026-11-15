@@ -17,7 +17,7 @@ $riskWord = ['high' => 'Review carefully', 'medium' => 'Common', 'info' => 'Norm
 
 $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?>
   <?php if ($scan['errors']): ?>
-    <div class="banner banner-danger"><span class="ic"><?= icon('alert', 18) ?></span><div><strong>Syntax errors — this code cannot run.</strong>
+    <div class="banner banner-danger"><span class="ic"><?= icon('alert', 18) ?></span><div><strong>Syntax errors, this code cannot run.</strong>
       <ul class="scan-list"><?php foreach (array_slice($scan['errors'], 0, 8) as $er): ?><li><code><?= e($er) ?></code></li><?php endforeach; ?></ul></div></div>
   <?php endif; ?>
   <?php if (!$scan['findings']): ?>
@@ -36,7 +36,7 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
 <?php };
 ?>
 <div class="page-head">
-  <div><h1>Modules</h1><p class="muted">Add features to your site. Install from a registry, a zip, GitHub — or write your own, with or without AI.</p></div>
+  <div><h1>Modules</h1><p class="muted">Add features to your site. Install from a registry, a zip, GitHub, or write your own, with or without AI.</p></div>
   <a class="btn" href="<?= e(admin_url('modules/available?refresh=1')) ?>"><?= icon('refresh', 16) ?> Check for updates</a>
 </div>
 
@@ -48,7 +48,7 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
 </nav>
 
 <?php if (Modules::safeMode()): ?>
-  <div class="banner banner-danger"><span class="ic"><?= icon('shield', 18) ?></span><div><strong>Safe mode is on — no module is running.</strong>
+  <div class="banner banner-danger"><span class="ic"><?= icon('shield', 18) ?></span><div><strong>Safe mode is on, no module is running.</strong>
     Delete the file <code>content/safe-mode</code> to load modules again.</div></div>
 <?php endif; ?>
 <?php if ($locked !== '' && in_array($tab, ['add', 'available'], true)): ?>
@@ -239,10 +239,10 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
     <div class="card-pad stack">
       <label class="field"><span>Registries <small class="muted">one URL per line</small></span>
         <textarea class="input code" name="registries" rows="4" spellcheck="false"><?= e(implode("\n", $registries)) ?></textarea>
-        <small class="help">A registry is a JSON file listing modules anyone can publish — your own, your agency's, the community's.
+        <small class="help">A registry is a JSON file listing modules anyone can publish, your own, your agency's, the community's.
           Format: <code>{"name": "…", "modules": [{"slug", "name", "description", "version", "requires", "download", "sha256"}]}</code>. See <code>docs/modules.md</code>.</small>
       </label>
-      <label class="field"><span>GitHub token <small class="muted"><?= $hasToken ? 'saved — enter a new one to replace it' : 'optional' ?></small></span>
+      <label class="field"><span>GitHub token <small class="muted"><?= $hasToken ? 'saved, enter a new one to replace it' : 'optional' ?></small></span>
         <input class="input" type="password" name="token" autocomplete="off" placeholder="<?= $hasToken ? '••••••••' : 'github_pat_…' ?>">
         <small class="help">For modules in private repositories. Stored encrypted and only ever sent to GitHub. A fine-grained token with read-only “Contents” access is enough.</small>
         <?php if ($hasToken): ?><label class="check"><input type="checkbox" name="token_clear" value="1"> Remove the saved token</label><?php endif; ?>
@@ -265,7 +265,7 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
       <p><?= e($m['description']) ?></p>
       <dl class="module-meta">
         <dt>Folder</dt><dd><code>modules/<?= e($slug) ?>/</code></dd>
-        <dt>Author</dt><dd><?= e($m['author'] ?: '—') ?></dd>
+        <dt>Author</dt><dd><?= e($m['author'] ?: '-') ?></dd>
         <dt>Requires</dt><dd>Slate <?= e($m['requires']) ?><?= $m['requires_php'] ? ', PHP ' . e($m['requires_php']) : '' ?></dd>
         <?php if ($m['depends']): ?><dt>Needs</dt><dd><?= e(implode(', ', array_map(static fn($d, $c) => $c === '*' ? $d : "$d $c", array_keys($m['depends']), $m['depends']))) ?></dd><?php endif; ?>
         <?php if ($dependents): ?><dt>Needed by</dt><dd><?= e(implode(', ', $dependents)) ?></dd><?php endif; ?>
@@ -297,7 +297,7 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
     <div class="card-pad stack-sm">
       <p class="muted">Removes <code>modules/<?= e($slug) ?>/</code>. A backup zip is kept in <code>content/backups/modules/</code>.</p>
       <?php if (is_file(SLATE_MODULES . "/$slug/uninstall.php")): ?>
-        <label class="check"><input type="checkbox" name="purge" value="1"> Also delete its data (runs the module's uninstall script — cannot be undone)</label>
+        <label class="check"><input type="checkbox" name="purge" value="1"> Also delete its data (runs the module's uninstall script, cannot be undone)</label>
       <?php endif; ?>
       <div><button class="btn btn-danger" data-confirm="Delete <?= e($m['name']) ?>?"<?= $locked !== '' ? ' disabled' : '' ?>>Delete module</button></div>
     </div>

@@ -1,6 +1,6 @@
 <?php
 /**
- * Theme functions — runs on every request after modules are loaded.
+ * Theme functions, runs on every request after modules are loaded.
  * Use it for theme-specific hooks. Keep it light for speed.
  */
 declare(strict_types=1);

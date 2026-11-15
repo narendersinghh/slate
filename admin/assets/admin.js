@@ -1,4 +1,4 @@
-/* Slate admin — core UI behaviours (vanilla JS, no dependencies). */
+/* Slate admin, core UI behaviours (vanilla JS, no dependencies). */
 (function () {
   'use strict';
   const S = window.SLATE || {};
@@ -252,7 +252,7 @@
       const p = presets[sel.value];
       if (!p) return;
       $('[data-ai-label]').textContent = p.label;
-      $('[data-ai-model]').textContent = p.model || '—';
+      $('[data-ai-model]').textContent = p.model || '-';
       $('[data-ai-models]').textContent = (p.models || []).join(', ') || 'enter any model id';
       $('[data-ai-keys]').innerHTML = p.keys ? ' · <a href="' + esc(p.keys) + '" target="_blank" rel="noopener">Get an API key</a>' : '';
       const model = $('#s_ai_model');

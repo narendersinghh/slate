@@ -10,7 +10,7 @@ namespace Slate;
  *
  * Request: POST JSON {"id","event","created_at","site","data"} with headers
  *   X-Webhook-Event, X-Webhook-Id, X-Webhook-Timestamp,
- *   X-Webhook-Signature: sha256=HMAC_SHA256(secret, timestamp + "." + body)   — verify it and reject old timestamps.
+ *   X-Webhook-Signature: sha256=HMAC_SHA256(secret, timestamp + "." + body), verify it and reject old timestamps.
  *
  * Modules fire their own events with Webhooks::dispatch('shop.order_paid', $data) and list them with the
  * "webhook_events" filter.

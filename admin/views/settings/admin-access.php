@@ -39,7 +39,7 @@ $dashUrl = AdminAccess::baseUrl() . '/' . admin_slug() . '/';
           folder, choose this website’s folder: <code><?= e(SLATE_ROOT) ?></code>.</li>
         <li><strong>Only if it got its own empty folder</strong> (you could not choose one): download the bridge kit below and upload its two files into that folder. They run this same website there.</li>
         <li><strong>Turn on SSL</strong> for the subdomain (most panels do it automatically within minutes).</li>
-        <li><strong>Check & switch</strong> below. Slate first confirms the subdomain really reaches this website, then moves the dashboard and signs you in there — nothing to lose if a step is missing.</li>
+        <li><strong>Check & switch</strong> below. Slate first confirms the subdomain really reaches this website, then moves the dashboard and signs you in there, nothing to lose if a step is missing.</li>
       </ol>
       <div class="inline-form" data-admin-host data-check="<?= e(admin_url('system/admin-host/check')) ?>">
         <input class="input" name="admin_host_new" placeholder="<?= e($suggest) ?>" value="<?= e($_GET['host'] ?? '') ?>" autocomplete="off" spellcheck="false">
@@ -59,7 +59,7 @@ $dashUrl = AdminAccess::baseUrl() . '/' . admin_slug() . '/';
   <div class="card-head"><h2>IP allow-list</h2><?php if ($ips): ?><span class="pill pill-success">On</span><?php else: ?><span class="pill">Off</span><?php endif; ?></div>
   <div class="card-pad stack">
     <p class="muted small">Only these addresses can open the dashboard; everyone else gets “not found”. One IP or range (CIDR) per line. Your address right now is
-      <code><?= e(Auth::ip()) ?></code>. Leave empty to allow any network. Best for fixed office or VPN addresses — home connections often change.</p>
+      <code><?= e(Auth::ip()) ?></code>. Leave empty to allow any network. Best for fixed office or VPN addresses, home connections often change.</p>
     <textarea class="input code" name="ips" rows="3" placeholder="<?= e(Auth::ip()) ?>"><?= e(implode("\n", $ips)) ?></textarea>
     <div><button class="btn" type="submit" formaction="<?= e(admin_url('system/admin-ips')) ?>" formnovalidate>Save allow-list</button></div>
   </div>

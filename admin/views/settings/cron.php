@@ -8,7 +8,7 @@ $php = PHP_BINARY && !str_contains(PHP_BINARY, 'fpm') && !str_contains(PHP_BINAR
 <div class="card-pad stack">
   <div class="row-between">
     <div><strong class="small-label">Server cron</strong>
-      <p class="muted small"><?= $server > time() - 600 ? '<span class="text-success">Active</span> — last run ' . e(time_ago(gmdate('Y-m-d H:i:s', $server))) : 'Not detected. Tasks run after visits instead.' ?></p></div>
+      <p class="muted small"><?= $server > time() - 600 ? '<span class="text-success">Active</span>, last run ' . e(time_ago(gmdate('Y-m-d H:i:s', $server))) : 'Not detected. Tasks run after visits instead.' ?></p></div>
     <button class="btn" type="submit" formaction="<?= e(admin_url('system/cron/run')) ?>" formnovalidate><?= icon('refresh', 15) ?> Run due tasks now</button>
   </div>
   <p class="muted small">Recommended: add this to your hosting's cron jobs (every minute or every 5 minutes):<br>

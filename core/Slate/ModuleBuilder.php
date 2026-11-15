@@ -66,7 +66,7 @@ final class ModuleBuilder
             . "Rules: escape all output with e(); check Auth::can() in admin pages and call Slate\\Csrf::check() on every POST you handle "
             . "(put csrf_field() in forms); use prepared statements; prefix tables, options, functions and CSS classes with the slug; "
             . "no shell commands, no eval, no obfuscation, no external calls unless the request needs them; "
-            . "create tables in migrations/001-*.php; keep it complete and working — no placeholders or TODOs. "
+            . "create tables in migrations/001-*.php; keep it complete and working, no placeholders or TODOs. "
             . "Already installed modules (do not reuse these slugs): $existing.\n\n"
             . "Reply with ONLY a JSON object, no markdown fence: "
             . '{"slug":"lowercase-slug","name":"Name","notes":"what it does and how to use it, 2-5 sentences","files":{"module.json":"…","module.php":"…","migrations/001-tables.php":"…"}}';

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Slate admin — brand: #F26B2D + black · Instrument Serif (display) + Inter (UI)
+   Slate admin, brand: #F26B2D + black · Instrument Serif (display) + Inter (UI)
    ========================================================================== */
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/inter.woff2") format("woff2"); }
 @font-face { font-family: "Instrument Serif"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/instrument-serif.woff2") format("woff2"); }
@@ -864,7 +864,7 @@ label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; c
 .wh-events code { font-size: 11px; color: var(--muted); }
 
 /* ==========================================================================
-   0.13 refresh — calmer, cleaner: Inter for headings, quieter accents, denser
+   0.13 refresh, calmer, cleaner: Inter for headings, quieter accents, denser
    tables, a single settings navigation, status tiles and the list-table kit.
    ========================================================================== */
 h1 { font: 650 26px/1.2 var(--font); letter-spacing: -.02em; }

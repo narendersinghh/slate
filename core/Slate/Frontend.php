@@ -265,7 +265,7 @@ final class Frontend
     }
 
     /**
-     * Render a full page through the active theme (or an admin Template) — for modules that add their own views.
+     * Render a full page through the active theme (or an admin Template), for modules that add their own views.
      * $kind is free-form (e.g. "shop-cart"); $candidates are theme template names to try. Set Seo::$ctx first.
      */
     public static function page(string $kind, array $vars = [], array $candidates = []): void
@@ -275,7 +275,7 @@ final class Frontend
 
     /**
      * Render module-provided HTML inside the theme's header and footer, through the normal output pipeline
-     * (minification, "html_output", page cache — call PageCache::skip() first for personal pages).
+     * (minification, "html_output", page cache, call PageCache::skip() first for personal pages).
      */
     public static function content(string $kind, string $html, array $vars = []): void
     {

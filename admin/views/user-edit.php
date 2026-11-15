@@ -88,7 +88,7 @@ $isSelf = (int)$u['id'] === Auth::id();
   <section class="card" id="passkeys">
     <div class="card-head"><h2><?= icon('lock', 16) ?> Passkeys</h2></div>
     <div class="card-pad stack">
-      <p class="muted">Sign in with your fingerprint, face or device PIN instead of a password — phishing-proof, and it counts as two-factor authentication.
+      <p class="muted">Sign in with your fingerprint, face or device PIN instead of a password, phishing-proof, and it counts as two-factor authentication.
         Passkeys are tied to this address (<code><?= e(\Slate\Passkeys::rpId()) ?></code>).</p>
       <?php $pks = \Slate\Passkeys::forUser((int)$u['id']); if ($pks): ?>
       <ul class="list list-compact">
@@ -116,7 +116,7 @@ $isSelf = (int)$u['id'] === Auth::id();
     <div class="card-pad stack">
       <?php if (!\Slate\Api::enabled()): ?><div class="alert"><?= icon('info', 16) ?> The REST API is switched off (Settings → Integrations → REST API). Existing keys do nothing until it is on.</div><?php endif; ?>
       <?php if ($newKey): ?>
-        <div class="alert alert-success stack-sm"><strong><?= icon('check', 16) ?> Copy your new key now — it will not be shown again.</strong>
+        <div class="alert alert-success stack-sm"><strong><?= icon('check', 16) ?> Copy your new key now, it will not be shown again.</strong>
           <code class="secret" style="user-select:all;word-break:break-all"><?= e($newKey) ?></code></div>
       <?php endif; ?>
       <p class="muted">Keys let apps and scripts use the API as you, with your permissions. Send them as <code>Authorization: Bearer &lt;key&gt;</code>.</p>

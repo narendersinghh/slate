@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * REST API (JSON) at /api/v1 — for headless front-ends, apps and integrations. Off until enabled under
+ * REST API (JSON) at /api/v1, for headless front-ends, apps and integrations. Off until enabled under
  * Settings → Integrations → REST API. Reads of published, public content can be anonymous; everything else needs an
  * API key (Profile → API keys) sent as "Authorization: Bearer <key>" and acts with that user's permissions.
  *
@@ -104,7 +104,7 @@ final class Api
         return $key && hash_equals((string)$key['token_hash'], hash('sha256', $token)) ? $key : null;
     }
 
-    /** Create a key for a user. Returns the full token — shown once, only its hash is stored. */
+    /** Create a key for a user. Returns the full token, shown once, only its hash is stored. */
     public static function createKey(int $userId, string $name, string $scope): string
     {
         $prefix = bin2hex(random_bytes(5));

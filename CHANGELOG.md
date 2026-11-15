@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.13.0 — Cleaner dashboard
+## 0.13.0: Cleaner dashboard
 - **Sidebar**: Content, Modules (each module's pages grouped under its name, with counts), Design (Templates, Menus,
   Theme & styles) and Administration. Groups expand without leaving the page.
 - **Settings reorganised**: one navigation with every category and section, a search box that finds any setting,
@@ -21,7 +21,7 @@
 - Modules list redesigned (filter by active/inactive/updates, Open and Settings links); phones get a settings jump
   menu and collapsible filters.
 
-## 0.12.0 — Hooks for modules
+## 0.12.0: Hooks for modules
 - `<html>` language and direction from `html_attrs()` / `html_lang` / `html_dir` filters (themes and Templates use it).
 - Routing: `Frontend::resolving()`, `route_resolved` action (redirect/404 before rendering), `frontend_vars` filter.
 - `Frontend::page()` and `Frontend::content()` render module pages through the theme and the normal output pipeline;
@@ -31,7 +31,7 @@
 - Fix: saving or deleting a custom-field group no longer stores groups that modules add at runtime.
 - Multilingual 1.1 and Shop 1.1 use these hooks (no more workarounds).
 
-## 0.11.0 — Module foundations
+## 0.11.0: Module foundations
 - `Posts::query(['fields' => […]])`: filter by custom-field values (null = not set), portable via `DB::jsonField()`.
 - `posts_query_args` and `posts_query_sql` hooks: modules can add conditions to every content query (used by Multilingual).
 - Module scanner: fixed a pattern that silently disabled the "writes files" / "sends email" checks; `$var()`,
@@ -39,13 +39,13 @@
 - New official modules in slate-modules: **Comments**, **Multilingual** and **Shop** (products, cart, checkout, orders,
   Stripe/Razorpay).
 
-## 0.10.0 — Passkeys, webhooks, automatic tasks, faster cache
+## 0.10.0: Passkeys, webhooks, automatic tasks, faster cache
 - **Passkeys** (WebAuthn): sign in with Face ID, Touch ID, Windows Hello, a phone or a security key; user verification
   required, counts as two-factor; ES256 and RS256; clone detection via signature counter. Profile → Passkeys.
 - **Webhooks**: content created/updated/published/unpublished/deleted, media uploaded, form submitted, backup created,
   security alert (+ module events). Signed (HMAC-SHA256 with timestamp), sent after the response, retried with back-off,
   delivery log with retry, test button, SSRF protection. Settings → Integrations → Webhooks.
-- **Scheduled tasks run automatically** — after any page view, cached pages included, without delaying the visitor
+- **Scheduled tasks run automatically**: after any page view, cached pages included, without delaying the visitor
   (finishes the response first; self-trigger fallback elsewhere). No cron setup needed; a server cron stays optional.
 - **Email works with no setup**: "Automatic" sending uses SMTP when configured, otherwise the server's mail().
 - **Page cache** (optional, on by default): purges are instant at any size (generation counters instead of deleting
@@ -56,8 +56,8 @@
   domain, dashboard assets hidden on the public host.
 - DB v3: passkeys, webhook_deliveries.
 
-## 0.9.0 — Security
-- **Separate admin domain**: `admin_host` in config.php (or `php bin/slate admin:host`) — the dashboard only answers on
+## 0.9.0: Security
+- **Separate admin domain**: `admin_host` in config.php (or `php bin/slate admin:host`), the dashboard only answers on
   that host and is a plain 404 everywhere else; the public site on the admin host is only shown to signed-in team members.
 - **Dashboard IP allow-list** (`admin_ips`, IPv4/IPv6 CIDR). Recovery from SSH: `admin:url`, `admin:host`, `admin:ips`.
 - **File integrity monitor**: core verified against the official GitHub files of the installed commit/release, modules and
@@ -69,14 +69,14 @@
 - "Require two-factor auth for administrators" is now enforced (until set up, only the profile page is reachable).
 - Email alert when someone with settings access signs in from a new address.
 - No fingerprints: no `X-Slate-Cache` header (only with debug), no "cached by" comment, neutral cookie names
-  (`sid`, `li` — everyone signs in again once) and element ids.
+  (`sid`, `li`, everyone signs in again once) and element ids.
 - `.htaccess`/nginx: blocked paths answer 404; hidden files, `module.json`/`theme.json` and `.example/.bak/.sql…` files blocked.
 - Fix: a syntax error in a core file is no longer blamed on (and switches off) the module that happened to be loading.
 
-## 0.8.0 — Revisions, email, backups, scheduled tasks, REST API
+## 0.8.0: Revisions, email, backups, scheduled tasks, REST API
 - **Revisions**: every editor save keeps the previous version (title, content, excerpt, custom fields, SEO); compare with a
   line diff and restore in one click (restoring is undoable too). Settings → General → Writing & revisions (default 25 per item).
-- **Email**: one mail system for core and modules — the server's mail() or **SMTP** (STARTTLS/SSL, login), HTML + text,
+- **Email**: one mail system for core and modules, the server's mail() or **SMTP** (STARTTLS/SSL, login), HTML + text,
   test button. Settings → General → Email. `Slate\Mailer::send()`; `mail_send` filter lets a module deliver (e.g. an API service).
 - **Forgot password**: reset links by email (one hour, single use, never reveal whether an account exists, rate limited
   with the login lockout); a reset signs the account out everywhere else.
@@ -92,7 +92,7 @@
 - Example module removed from the core; `modules/` ships empty.
 - Settings `show_if` supports `!=`.
 
-## 0.7.0 — Modules live outside the core
+## 0.7.0: Modules live outside the core
 - Forms, Site Migration and Auto CPT Generator moved to [slate-modules](https://github.com/narendersinghh/slate-modules),
   which is also the default registry: install them from **Modules → Available**. Slate itself ships only the
   `hello-world` example; installed modules are no longer tracked by the core repository, so `git pull` never touches them.
@@ -102,10 +102,9 @@
 - **Download** any installed module as an installable zip (Modules → Download, or `php bin/slate module:export <slug>`),
   so site-specific modules can stay on the server and still be reused elsewhere.
 
-## 0.6.0 — Open module system
+## 0.6.0: Open module system
 - **Install modules from anywhere**: upload a zip, paste a GitHub repository or a folder inside one
-  (`…/tree/main/my-module`, private repositories with a token), any zip URL, or one click from **registries** —
-  plain JSON lists anyone can publish (Modules → Sources). Modules → Available lists everything your registries offer,
+  (`…/tree/main/my-module`, private repositories with a token), any zip URL, or one click from **registries**, plain JSON lists anyone can publish (Modules → Sources). Modules → Available lists everything your registries offer,
   installed or not, with optional sha256 checksums.
 - **Updates** for modules from their registry or source, with automatic backup to `content/backups/modules/`, rollback
   on failure and one-click restore of previous versions. Delete modules (optionally running their `uninstall.php`).
@@ -113,8 +112,7 @@
   can do, then install. Developer guide: `docs/modules.md`.
 - **Code check** before install/activation: syntax errors are refused; a plain-language list shows what the code can do
   (shell commands, evaluated code, file writes, network calls, own tables…).
-- **Crash protection**: a module that fails while loading is switched off automatically and reported on the Modules page —
-  the site stays up. `content/safe-mode` (or `php bin/slate safe-mode:on`) starts without modules.
+- **Crash protection**: a module that fails while loading is switched off automatically and reported on the Modules page, the site stays up. `content/safe-mode` (or `php bin/slate safe-mode:on`) starts without modules.
 - Manifest: `depends` with version constraints (activated together, protected from deactivation), `requires_php`,
   PSR-4 `autoload`, `source`, `settings`, `tags`. Per-module `migrations/` run once on activation and after updates
   (also after a git pull or FTP upload).
@@ -123,7 +121,7 @@
 - CLI: `module:list|make|install|activate|deactivate|update|check|delete`, `safe-mode:on|off`.
 - `.htaccess`/nginx: `.phtml`, `.phar`, `.php5`, `.inc` files in core, modules, themes and content are blocked too.
 
-## 0.5.1 — Security hardening
+## 0.5.1: Security hardening
 - Security headers: cached pages now send exactly the same headers as uncached ones (HSTS was missing on cached pages, and
   switching headers off had no effect on them). New **Content-Security-Policy** setting (Settings → Security → Headers) with a
   safe default (`base-uri 'self'; object-src 'none'; frame-ancestors 'self'`), plus `Cross-Origin-Opener-Policy`.
@@ -133,7 +131,7 @@
 - PHP 8.4: no more deprecation warnings for session ID settings on every admin request.
 - Core docs and examples are now site-neutral.
 
-## 0.5.0 — Live templates
+## 0.5.0: Live templates
 - Templates engine: modules can add tags (`template_tag`), conditions (`template_lookup`) and loop blocks (`template_block`);
   `{{term.*}}` values and `{{#each term.field:…}}` on taxonomy archives; dotted paths (`{{item.fields.color}}`);
   templates for one specific item (target `page__home`); filters `|texturize` `|slug` `|pad2` `|host` `|strip` `|upper` `|number`.
@@ -142,7 +140,7 @@
 - Site Mirror: items created in Slate and listings rendered by Templates get the design's assets automatically.
 - Site modules can now render every page of a site from live content through Templates instead of frozen copies.
 
-## 0.4.0 — Forms, richer custom fields, brand-neutral mirror
+## 0.4.0: Forms, richer custom fields, brand-neutral mirror
 - **Forms module**: build forms under Content → Forms (text, email, phone, URL, number, paragraph, dropdown, radio, checkboxes,
   date, consent, hidden and text blocks; required, width, placeholder, help). Place a saved form anywhere with the **Form** button
   in any editor, a **Form** custom field, `{{form:slug}}` in Templates, `[form slug="…"]` or `slate_form('slug')` in themes.
@@ -174,7 +172,7 @@
 ## 0.3.1
 - Database layer reconnects and retries once when a shared host closes an idle MySQL connection ("server has gone away").
 
-## 0.3.0 — Templates, URL tokens, faithful Elementor Pro migration
+## 0.3.0: Templates, URL tokens, faithful Elementor Pro migration
 - **Templates** (sidebar → Templates): site-wide templates for every post type (single + archive), every taxonomy and the
   404 / search pages. HTML + safe tags (`{{title}}`, `{{field:name}}`, `{{#each field:repeater}}`, `{{#query …}}`, `{{#posts}}`,
   `{{#if}}`, filters like `|image` `|date` `|embed`), per-template CSS, starter generator that lists every custom field,
@@ -186,11 +184,11 @@
   and archive pages so dynamic layouts look identical; parallel page fetching; mirrored assets reused across pages.
 
 ## 0.2.1
-- `php bin/slate import:wordpress --url=… --user=…` — run the full WordPress import from the command line (SSH), with a hidden
+- `php bin/slate import:wordpress --url=… --user=…`, run the full WordPress import from the command line (SSH), with a hidden
   password prompt; activates the modules automatically and can be re-run to sync. Also `cache:clear` and `version`.
 - `bin/` is blocked from web access (.htaccess, nginx example, dev server).
 
-## 0.2.0 — WordPress migration, design system, new brand
+## 0.2.0: WordPress migration, design system, new brand
 - New brand: origami-bird-on-slate logo, Instrument Serif + Inter, #F26B2D palette; redesigned admin (light & dark).
 - **Design system** (Settings → Appearance → Design system): global colours, fonts, type scale, layout tokens and global CSS classes
   for the website, exposed as CSS variables and mapped to Elementor `--e-global-*` variables; optional "match the admin to my website".
@@ -207,7 +205,7 @@
 - Updater: falls back to tags when no release exists; disabled automatically on Git-deployed sites (updates arrive via push).
 - Hierarchical taxonomy URLs (/category/parent/child/), Posts::flush(), lazy options API for modules, PHP blocked under wp-content/.
 
-## 0.1.0 — Initial release
+## 0.1.0: Initial release
 - Core: PHP 8.2+, MySQL/MariaDB or SQLite, front controller, hooks, modules.
 - Admin: modern dashboard, command palette (⌘K), dark mode, responsive.
 - Roles & capabilities, Argon2id passwords, login rate limiting, TOTP two-factor, custom admin URL, CSRF, security headers, activity log.

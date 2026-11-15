@@ -23,7 +23,7 @@ $navItem = static function (string $href, string $iconName, string $label, bool 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title><?= e(($title ?? 'Dashboard') . ' ‹ ' . Options::get('site_title') . ' — Slate') ?></title>
+<title><?= e(($title ?? 'Dashboard') . ' ‹ ' . Options::get('site_title') . ' · Slate') ?></title>
 <link rel="preload" href="<?= e(url('admin/assets/fonts/inter.woff2')) ?>" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="<?= e(url('admin/assets/fonts/instrument-serif.woff2')) ?>" as="font" type="font/woff2" crossorigin>
 <link rel="icon" type="image/svg+xml" href="<?= e(url('admin/assets/brand/favicon.svg')) ?>">

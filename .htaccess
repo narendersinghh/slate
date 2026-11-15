@@ -1,4 +1,4 @@
-# Slate CMS — Apache configuration
+# Slate CMS, Apache configuration
 Options -Indexes
 DirectoryIndex index.php
 ServerSignature Off

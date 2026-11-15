@@ -178,7 +178,7 @@ function admin_dispatch(string $path): void
             'noalt' => (int)DB::val("SELECT COUNT(*) FROM {{media}} WHERE mime LIKE 'image/%' AND alt = ''")];
         $seoIssues = [];
         if (Options::get('seo_noindex_site')) {
-            $seoIssues[] = ['danger', 'The whole website is set to noindex — search engines will not index it.', admin_url('settings/seo/indexing')];
+            $seoIssues[] = ['danger', 'The whole website is set to noindex, search engines will not index it.', admin_url('settings/seo/indexing')];
         }
         $noDesc = (int)DB::val("SELECT COUNT(*) FROM {{posts}} WHERE status = 'publish' AND (seo IS NULL OR seo NOT LIKE '%\"description\":\"_%')");
         if ($noDesc) {
@@ -1142,7 +1142,7 @@ function admin_dispatch(string $path): void
         log_activity('settings_saved', "quick:$key=" . ($map[$key] ? '1' : '0'));
         json_response(['ok' => true, 'message' => match ($key) {
             'seo_noindex_site' => $on ? 'Search engines may index the site again.' : 'The whole site is now hidden from search engines.',
-            'maintenance_mode' => $on ? 'The site is online for everyone.' : 'Maintenance mode is on — visitors see a notice.',
+            'maintenance_mode' => $on ? 'The site is online for everyone.' : 'Maintenance mode is on, visitors see a notice.',
             default => $on ? 'Page cache is on.' : 'Page cache is off.',
         }]);
     });
@@ -1184,7 +1184,7 @@ function admin_dispatch(string $path): void
         }
         $newSlug = (string)Options::get('security_admin_slug', 'admin');
         if ($newSlug !== $oldSlug) {
-            Session::flash('warn', 'Your admin URL is now ' . url($newSlug) . ' — bookmark it.');
+            Session::flash('warn', 'Your admin URL is now ' . url($newSlug) . ', bookmark it.');
         }
         redirect(admin_url("settings/$tab/$section"));
     });
@@ -1325,7 +1325,7 @@ function admin_content_table(array $def): \Slate\ListTable
             $thumb = '<span class="row-thumb">' . ($m ? '<img src="' . e(Media::url($m, 'thumb')) . '" alt="" loading="lazy">' : icon('image', 14)) . '</span>';
         }
         $html = '<div class="row-main">' . $thumb . '<div><a class="row-title" href="' . e($base . '/' . $p['id']) . '">'
-            . ($p['parent_id'] ? '<span class="muted">— </span>' : '') . e($p['title'] ?: '(no title)') . '</a>';
+            . ($p['parent_id'] ? '<span class="muted">- </span>' : '') . e($p['title'] ?: '(no title)') . '</a>';
         if ($p['status'] !== 'publish') {
             $html .= ' <span class="status status-' . e($p['status']) . '">' . e($statuses[$p['status']] ?? $p['status']) . '</span>';
         }
@@ -1339,7 +1339,7 @@ function admin_content_table(array $def): \Slate\ListTable
     foreach ($taxes as $tx => $tdef) {
         $cols["tax_$tx"] = ['label' => $tdef['plural'], 'default' => $i++ < 3, 'render' => static function (array $p) use ($tx): string {
             $names = array_column($p['terms'][$tx] ?? [], 'name');
-            return $names ? e(implode(', ', $names)) : '<span class="muted">—</span>';
+            return $names ? e(implode(', ', $names)) : '<span class="muted">-</span>';
         }];
     }
     foreach (ContentModel::fieldsFor('post', $slug) as $name => $f) {
@@ -1349,7 +1349,7 @@ function admin_content_table(array $def): \Slate\ListTable
         $cols["field_$name"] = ['label' => $f['label'] ?? $name, 'default' => false, 'sort' => "field:$name", 'render' => static function (array $p) use ($name, $f): string {
             $v = $p['fields'][$name] ?? null;
             if ($v === null || $v === '' || $v === []) {
-                return '<span class="muted">—</span>';
+                return '<span class="muted">-</span>';
             }
             if (($f['type'] ?? '') === 'image' && is_numeric($v) && ($m = Media::find((int)$v))) {
                 return '<img class="cell-img" src="' . e(Media::url($m, 'thumb')) . '" alt="" loading="lazy">';
@@ -1364,7 +1364,7 @@ function admin_content_table(array $def): \Slate\ListTable
         }, 'export' => static fn(array $p) => is_array($p['fields'][$name] ?? null) ? json_encode($p['fields'][$name], JSON_UNESCAPED_UNICODE) : (string)($p['fields'][$name] ?? '')];
     }
     if (in_array('author', $supports, true)) {
-        $cols['author'] = ['label' => 'Author', 'sort' => 'author_id', 'render' => static fn(array $p) => e($authors[$p['author_id']] ?? '—'), 'export' => static fn(array $p) => (string)($authors[$p['author_id']] ?? '')];
+        $cols['author'] = ['label' => 'Author', 'sort' => 'author_id', 'render' => static fn(array $p) => e($authors[$p['author_id']] ?? '-'), 'export' => static fn(array $p) => (string)($authors[$p['author_id']] ?? '')];
     }
     $cols['seo'] = ['label' => 'SEO', 'render' => static function (array $p): string {
         $score = (int)!empty($p['seo']['title']) + (int)!empty($p['seo']['description']) + (int)!empty($p['featured_media_id']);
@@ -1476,7 +1476,7 @@ function admin_terms_screen(string $tax, ?int $id): void
     $postType = $def['post_types'][0] ?? null;
     $cols = [
         'name' => ['label' => 'Name', 'primary' => true, 'sort' => 'name', 'render' => static fn($o) => '<a class="row-title" href="' . e(admin_url("terms/$tax/{$o['id']}")) . '">'
-            . str_repeat('<span class="muted">— </span>', (int)($o['depth'] ?? 0)) . e($o['name']) . '</a>', 'export' => static fn($o) => (string)$o['name']],
+            . str_repeat('<span class="muted">- </span>', (int)($o['depth'] ?? 0)) . e($o['name']) . '</a>', 'export' => static fn($o) => (string)$o['name']],
         'slug' => ['label' => 'Slug', 'sort' => 'slug', 'render' => static fn($o) => '<code class="cell-code">' . e($o['slug']) . '</code>', 'export' => static fn($o) => (string)$o['slug']],
         'description' => ['label' => 'Description', 'default' => false, 'render' => static fn($o) => e(str_limit((string)$o['description'], 90)), 'export' => static fn($o) => (string)$o['description']],
     ];
@@ -1486,7 +1486,7 @@ function admin_terms_screen(string $tax, ?int $id): void
         }
         $cols["field_$name"] = ['label' => $f['label'] ?? $name, 'default' => false, 'render' => static function ($o) use ($name): string {
             $v = $o['fields'][$name] ?? null;
-            return $v === null || $v === '' ? '<span class="muted">—</span>' : e(str_limit(is_array($v) ? implode(', ', array_map('strval', array_filter($v, 'is_scalar'))) : (string)$v, 60));
+            return $v === null || $v === '' ? '<span class="muted">-</span>' : e(str_limit(is_array($v) ? implode(', ', array_map('strval', array_filter($v, 'is_scalar'))) : (string)$v, 60));
         }];
     }
     $cols['count'] = ['label' => 'Count', 'sort' => 'count', 'sort_dir' => 'desc', 'align' => 'right', 'render' => static fn($o) => $postType

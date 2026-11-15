@@ -29,6 +29,6 @@ $disk = @disk_free_space(SLATE_CONTENT);
   </ul>
   <?php else: ?><p class="muted small">No backups yet.</p><?php endif; ?>
   <p class="muted small">Backups are stored in <code>content/backups/</code> (never reachable from the web). Download them regularly and keep a copy somewhere else.
-    Downloads contain everything, including <code>config.php</code> secrets — store them safely.
+    Downloads contain everything, including <code>config.php</code> secrets, store them safely.
     To restore a database backup over SSH: <code>php bin/slate backup:restore site-…-db.sql.gz</code> (a safety backup is made first).</p>
 </div>

@@ -46,7 +46,7 @@ if ($f['type'] === 'tab'): ?>
       <?php break;
     case 'select': ?>
       <select class="input" id="<?= e($id) ?>" name="<?= e($name) ?>"<?= $req ?>>
-        <option value="">— Select —</option>
+        <option value="">Select…</option>
         <?php foreach ($opts as $o): [$v, $l] = $optPair($o); ?>
           <option value="<?= e($v) ?>"<?= (string)$value === $v ? ' selected' : '' ?>><?= e($l) ?></option>
         <?php endforeach; ?>
@@ -123,7 +123,7 @@ if ($f['type'] === 'tab'): ?>
       <?php break;
     case 'form': $forms = \Slate\ContentModel::type('form') ? \Slate\Posts::query(['type' => 'form', 'status' => 'publish', 'limit' => 200, 'count' => false, 'orderby' => 'title', 'order' => 'ASC'])['items'] : []; ?>
       <select class="input" id="<?= e($id) ?>" name="<?= e($name) ?>"<?= $req ?>>
-        <option value="">— No form —</option>
+        <option value="">No form</option>
         <?php foreach ($forms as $fm): ?><option value="<?= (int)$fm['id'] ?>"<?= (int)$value === (int)$fm['id'] ? ' selected' : '' ?>><?= e($fm['title']) ?></option><?php endforeach; ?>
       </select>
       <?php break;

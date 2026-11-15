@@ -1,4 +1,4 @@
-/* Slate visual builder — GrapesJS configured for Slate: design-system colours and fonts first, the media library,
+/* Slate visual builder, GrapesJS configured for Slate: design-system colours and fonts first, the media library,
    class-based styles, three breakpoints, saved blocks, HTML/CSS editing, and lean output (HTML + CSS only). */
 (() => {
   'use strict';
@@ -48,10 +48,10 @@
     { id: 'button', label: 'Button', category: 'Basic', media: I.button, content: '<a class="btn" href="#">Get started</a>' },
     { id: 'link', label: 'Link', category: 'Basic', media: I.link, content: { type: 'link', content: 'Link text', attributes: { href: '#' } } },
     { id: 'list', label: 'List', category: 'Basic', media: I.list, content: '<ul><li>First point</li><li>Second point</li><li>Third point</li></ul>' },
-    { id: 'quote', label: 'Quote', category: 'Basic', media: I.quote, content: '<blockquote><p>“A short, memorable quote.”</p><cite>— Someone</cite></blockquote>' },
+    { id: 'quote', label: 'Quote', category: 'Basic', media: I.quote, content: '<blockquote><p>“A short, memorable quote.”</p><cite>Someone</cite></blockquote>' },
     { id: 'video', label: 'Video', category: 'Basic', media: I.video, content: { type: 'video', src: '', style: { width: '100%', height: '360px' } } },
     { id: 'html', label: 'Custom HTML', category: 'Basic', media: I.code, content: '<div class="pb-html"><!-- your HTML --><p>Custom HTML</p></div>' },
-    // Sections (starting points — everything stays editable)
+    // Sections (starting points, everything stays editable)
     { id: 'hero', label: 'Hero', category: 'Sections', media: I.hero, content: `<section class="section" style="text-align:center"><div class="container"><p class="eyebrow">Welcome</p><h1>A clear headline that says what you do</h1><p style="max-width:640px;margin:16px auto 28px">One or two sentences that explain the value for the visitor.</p><a class="btn" href="#">Primary action</a> <a class="btn-outline" href="#">Learn more</a></div></section>` },
     { id: 'hero-split', label: 'Hero with image', category: 'Sections', media: I.cols2, content: `<section class="section"><div class="container" style="display:flex;flex-wrap:wrap;gap:40px;align-items:center"><div style="flex:1 1 320px"><p class="eyebrow">New</p><h1>Headline next to a picture</h1><p>Explain the offer in a sentence or two.</p><a class="btn" href="#">Get started</a></div><div style="flex:1 1 320px"><img src="${ph(640, 420)}" alt="" style="width:100%;height:auto;border-radius:var(--radius)"></div></div></section>` },
     { id: 'features', label: 'Features', category: 'Sections', media: I.cards, content: `<section class="section"><div class="container"><h2 style="text-align:center">Why people choose us</h2><div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:32px">${['Fast', 'Simple', 'Reliable'].map((t) => `<div style="flex:1 1 240px;padding:24px;border:1px solid rgba(0,0,0,.08);border-radius:var(--radius)"><h3>${t}</h3><p>Describe this benefit in one or two sentences.</p></div>`).join('')}</div></div></section>` },
@@ -160,8 +160,8 @@
     if (!host || qs('.pb-swatches')) return;
     const box = document.createElement('div');
     box.className = 'pb-swatches';
-    box.innerHTML = '<small class="muted">Site colours — click to apply as text, ⇧-click as background</small><div>' +
-      PB.colors.map((c) => `<button type="button" title="${esc(c.name)} — var(--color-${esc(c.id)})" data-var="--color-${esc(c.id)}" style="background:${esc(c.value)}"></button>`).join('') + '</div>';
+    box.innerHTML = '<small class="muted">Site colours, click to apply as text, ⇧-click as background</small><div>' +
+      PB.colors.map((c) => `<button type="button" title="${esc(c.name)}, var(--color-${esc(c.id)})" data-var="--color-${esc(c.id)}" style="background:${esc(c.value)}"></button>`).join('') + '</div>';
     box.addEventListener('click', (e) => {
       const b = e.target.closest('[data-var]');
       const sel = editor.getSelected();

@@ -149,8 +149,7 @@ final class Modules
             require_once $file;
             return true;
         } catch (\Error $e) {
-            // Syntax errors, missing classes/functions: the module cannot work, switch it off —
-            // unless the broken file is core code the module merely loaded (not the module's fault).
+            // Syntax errors, missing classes/functions: the module cannot work, switch it off, // unless the broken file is core code the module merely loaded (not the module's fault).
             if ($e instanceof \ParseError && self::slugFromPath($e->getFile()) !== $slug) {
                 throw $e;
             }
@@ -205,7 +204,7 @@ final class Modules
                 }
                 $body = $team
                     ? '<h1 style="font-size:22px">A module stopped working</h1><p>The module <strong>' . e($slug) . '</strong> caused an error and was switched off '
-                        . 'automatically. Reload the page — the site works without it.</p><p><a href="' . e(admin_url('modules')) . '">Back to Modules</a></p>'
+                        . 'automatically. Reload the page, the site works without it.</p><p><a href="' . e(admin_url('modules')) . '">Back to Modules</a></p>'
                     : '<h1 style="font-size:22px">Something went wrong</h1><p>Please reload the page.</p>';
                 echo '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Error</title>'
                     . '<div style="font:15px/1.5 system-ui,sans-serif;max-width:560px;margin:12vh auto;padding:0 20px">' . $body . '</div>';
@@ -449,7 +448,7 @@ final class Modules
     {
         if (!$force && ($deps = self::dependents($slug))) {
             $names = array_map(static fn($s) => self::get($s)['name'] ?? $s, $deps);
-            return 'Deactivate ' . implode(', ', $names) . ' first — ' . (count($deps) > 1 ? 'they need' : 'it needs') . ' this module.';
+            return 'Deactivate ' . implode(', ', $names) . ' first, ' . (count($deps) > 1 ? 'they need' : 'it needs') . ' this module.';
         }
         Hooks::action("module_deactivated_$slug");
         Options::set('active_modules', array_values(array_diff(self::active(), [$slug])));

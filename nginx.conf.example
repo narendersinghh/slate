@@ -1,4 +1,4 @@
-# Slate CMS — example nginx server block
+# Slate CMS, example nginx server block
 server {
     listen 80;
     server_name example.com;

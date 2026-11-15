@@ -39,7 +39,7 @@
         Object.entries(postTypes).map(([k, l]) => '<label class="choice"><input type="checkbox" data-p="' + path + '" data-k="post_type" value="' + k + '"' + (chosen.includes(k) ? ' checked' : '') + '> ' + esc(l) + '</label>').join('') + '</div></div>';
     }
     if (f.type === 'taxonomy') {
-      h += opt('taxonomy', 'Taxonomy', '<select class="input" data-p="' + path + '" data-k="taxonomy"><option value="">— Choose —</option>' + Object.entries(taxonomies).map(([k, l]) => '<option value="' + k + '"' + (f.taxonomy === k ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>');
+      h += opt('taxonomy', 'Taxonomy', '<select class="input" data-p="' + path + '" data-k="taxonomy"><option value="">Choose</option>' + Object.entries(taxonomies).map(([k, l]) => '<option value="' + k + '"' + (f.taxonomy === k ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>');
     }
     if (f.type === 'repeater' && !path.includes('.')) {
       f.sub_fields = f.sub_fields || [];

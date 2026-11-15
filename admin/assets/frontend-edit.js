@@ -73,7 +73,7 @@
         b.onclick = () => choose(m);
         grid.appendChild(b);
       });
-      if (!grid.children.length) grid.textContent = 'No images yet — upload one.';
+      if (!grid.children.length) grid.textContent = 'No images yet, upload one.';
     });
     wrap.querySelector('input[type=file]').addEventListener('change', async (e) => {
       const f = e.target.files[0];
@@ -100,7 +100,7 @@
       el.addEventListener('click', (e) => { if (e.target.closest('a')) e.preventDefault(); });
     });
     regions()[0]?.focus();
-    toast('Editing — click any outlined area');
+    toast('Editing, click any outlined area');
   });
   cancelBtn.addEventListener('click', () => { if (!Object.keys(changes).length || confirm('Discard your changes?')) location.reload(); });
   saveBtn.addEventListener('click', async () => {

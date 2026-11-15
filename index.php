@@ -1,6 +1,6 @@
 <?php
 /**
- * Slate CMS — front controller.
+ * Slate CMS, front controller.
  * Every request that is not a static file is routed through here.
  */
 declare(strict_types=1);

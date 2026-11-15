@@ -223,7 +223,7 @@
       try {
         const res = await fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' });
         data = await res.json();
-      } catch (e) { data = { ok: false, error: 'Network error — your changes were not saved.' }; }
+      } catch (e) { data = { ok: false, error: 'Network error, your changes were not saved.' }; }
       button?.classList.remove('is-loading');
       if (!data.ok) { if (state) state.textContent = 'Not saved'; toast(data.error || 'Save failed', 'error', 6000); return; }
       dirty = false;
@@ -337,7 +337,7 @@
       if (r.data.description) seoDesc.value = r.data.description;
       update();
       dirty = true;
-      toast('SEO title & description generated — review and save.');
+      toast('SEO title & description generated, review and save.');
     });
   }
 

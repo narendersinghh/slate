@@ -6,8 +6,7 @@ Slate is built so that the usual ways CMS sites get hacked are closed by default
 ## What Slate does out of the box
 
 - Passwords hashed with Argon2id; login rate limiting and lockout (also counts password-reset and API-key attempts).
-- Two-factor authentication: authenticator app (TOTP) or **passkeys** (Face ID, Touch ID, Windows Hello, security keys —
-  phishing-proof, user verification required); can be required for administrators.
+- Two-factor authentication: authenticator app (TOTP) or **passkeys** (Face ID, Touch ID, Windows Hello, security keys, phishing-proof, user verification required); can be required for administrators.
 - Email alert to administrators when they sign in from a new address.
 - CSRF protection on every form; strict, regenerated sessions; secrets (API keys, SMTP, 2FA) encrypted at rest.
 - No PHP execution in `content/` (uploads); PHP in `core/`, `modules/`, `themes/` can't be opened from the web.
@@ -25,9 +24,9 @@ Slate is built so that the usual ways CMS sites get hacked are closed by default
 A custom dashboard URL alone only hides the login from bots that try `/admin`. For real separation, run the
 dashboard on its own (sub)domain: Settings → Security → **Dashboard access** walks you through it.
 
-1. **Custom address** — *Dashboard access → Admin URL slug* (or `php bin/slate admin:url my-studio-x7`). `/admin`
+1. **Custom address**: *Dashboard access → Admin URL slug* (or `php bin/slate admin:url my-studio-x7`). `/admin`
    then returns 404.
-2. **Private dashboard domain** (strongest) — the dashboard only answers on a host name of its own, e.g.
+2. **Private dashboard domain** (strongest), the dashboard only answers on a host name of its own, e.g.
    `cms.yourdomain.com`, while visitors use `yourdomain.com`. On the public domain the dashboard, its login page and
    its files do not exist (plain 404), and your sign-in cookie is never sent to the public site.
    1. Create the subdomain in your hosting panel (Hostinger: *Domains → Subdomains*; cPanel: *Domains*). If the panel
@@ -44,18 +43,17 @@ dashboard on its own (sub)domain: Settings → Security → **Dashboard access**
    - On the admin host the public site is only shown to signed-in team members (preview and on-page editing there).
    - Prefer a name nobody can guess and never link to it. Certificate transparency logs list issued certificates, so a
      wildcard certificate (`*.yourdomain.com`) hides the name best if your host offers one.
-3. **IP allow-list** (optional) — *Dashboard access → IP allow-list* or `php bin/slate admin:ips "203.0.113.7 198.51.100.0/24"`
+3. **IP allow-list** (optional), *Dashboard access → IP allow-list* or `php bin/slate admin:ips "203.0.113.7 198.51.100.0/24"`
    (`off` removes it). Slate refuses a list that would lock out the address you are using.
 
 What keeps working with a separate admin domain: password resets and alert emails link to the admin host; previews and
 "View" links stay on the admin host, where the whole site is browsable with on-page editing; passkeys are bound to the
 parent domain (`example.com` for `cms.example.com`), so they survive host changes (override with `'passkey_rp_id'`);
-the dashboard's own scripts and styles (`admin/assets`) are hidden on the public host automatically (Apache/LiteSpeed —
-on nginx add `location ^~ /admin/ { if ($host != "cms.example.com") { return 404; } }`). The REST API, webhooks, the
+the dashboard's own scripts and styles (`admin/assets`) are hidden on the public host automatically (Apache/LiteSpeed, on nginx add `location ^~ /admin/ { if ($host != "cms.example.com") { return 404; } }`). The REST API, webhooks, the
 page cache and scheduled tasks keep working on the public domain. Team members simply bookmark the admin host;
 visitors never see a difference.
 
-Locked out? All three settings can be changed from SSH (`bin/slate`) or by editing `config.php` — never only in the database.
+Locked out? All three settings can be changed from SSH (`bin/slate`) or by editing `config.php`, never only in the database.
 
 ## Also recommended
 

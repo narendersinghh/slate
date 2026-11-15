@@ -7,8 +7,8 @@ namespace Slate;
  * Visual page builder (GrapesJS in the dashboard, plain HTML + CSS for visitors).
  *
  * A built item keeps its design in fields['_builder'] = [mode, layout, html, css, project, v]; post content holds the
- * same HTML so search, excerpts, feeds and the REST API keep working. Visitors get only HTML and CSS — no builder
- * JavaScript — and the result is page-cached like any other page. The HTML may contain template tags ({{title}},
+ * same HTML so search, excerpts, feeds and the REST API keep working. Visitors get only HTML and CSS no builder
+ * JavaScript and the result is page-cached like any other page. The HTML may contain template tags ({{title}},
  * {{field:x}}, {{#query}}…), rendered by the Templates engine.
  *
  * Optional at three levels: site-wide (Settings → Content & media → Visual builder), per content type, and per item

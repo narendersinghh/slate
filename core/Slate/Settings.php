@@ -41,12 +41,12 @@ final class Settings
                 ]],
                 'permalinks' => ['label' => 'Permalinks', 'fields' => [
                     ['key' => 'permalink_post', 'type' => 'select', 'label' => 'Post URL structure', 'default' => '/%slug%/', 'options' => [
-                        '/%slug%/' => 'Post name — /sample-post/',
-                        '/blog/%slug%/' => 'Blog prefix — /blog/sample-post/',
-                        '/%year%/%monthnum%/%slug%/' => 'Month and name — /2026/11/sample-post/',
-                        '/%year%/%monthnum%/%day%/%slug%/' => 'Day and name — /2026/11/03/sample-post/',
-                        '/%category%/%slug%/' => 'Category and name — /news/sample-post/',
-                        '/archives/%id%/' => 'Numeric — /archives/123/',
+                        '/%slug%/' => 'Post name, /sample-post/',
+                        '/blog/%slug%/' => 'Blog prefix, /blog/sample-post/',
+                        '/%year%/%monthnum%/%slug%/' => 'Month and name, /2026/11/sample-post/',
+                        '/%year%/%monthnum%/%day%/%slug%/' => 'Day and name, /2026/11/03/sample-post/',
+                        '/%category%/%slug%/' => 'Category and name, /news/sample-post/',
+                        '/archives/%id%/' => 'Numeric, /archives/123/',
                         'custom' => 'Custom structure',
                     ]],
                     ['key' => 'permalink_custom', 'type' => 'text', 'label' => 'Custom structure', 'default' => '/%slug%/',
@@ -164,7 +164,7 @@ final class Settings
                     ['key' => 'mail_from_email', 'type' => 'email', 'label' => 'From address', 'default' => '',
                         'help' => 'An address on your own domain (e.g. no-reply@yourdomain.com), so mail is not marked as spam. Defaults to no-reply@ your site domain.'],
                     ['key' => 'mail_transport', 'type' => 'select', 'label' => 'Send with', 'default' => 'auto',
-                        'options' => ['auto' => 'Automatic — SMTP when filled in below, otherwise this server', 'php' => 'This server only (PHP mail)', 'smtp' => 'SMTP only'],
+                        'options' => ['auto' => 'Automatic, SMTP when filled in below, otherwise this server', 'php' => 'This server only (PHP mail)', 'smtp' => 'SMTP only'],
                         'help' => 'Works out of the box with your host\'s mail. Add an SMTP mailbox for the best delivery (fewer spam-folder landings).'],
                     ['key' => 'smtp_host', 'type' => 'text', 'label' => 'SMTP host', 'default' => '', 'placeholder' => 'smtp.hostinger.com', 'show_if' => 'mail_transport!=php'],
                     ['key' => 'smtp_port', 'type' => 'number', 'label' => 'Port', 'default' => 465, 'min' => 1, 'max' => 65535, 'show_if' => 'mail_transport!=php'],
@@ -220,7 +220,7 @@ final class Settings
                         'help' => 'Both are instant, even with thousands of pages. "Smart" keeps other item pages cached; pages that show related items may show the old title/photo until their cache lifetime ends.'],
                     ['key' => 'cache_warm', 'type' => 'toggle', 'label' => 'Re-warm important pages in the background after changes', 'default' => true, 'show_if' => 'cache_pages=1'],
                     ['key' => 'cache_exclude', 'type' => 'textarea', 'label' => 'Never cache these paths', 'rows' => 3, 'default' => '', 'show_if' => 'cache_pages=1',
-                        'help' => 'One per line, * as wildcard — e.g. /cart*, /account/*, /checkout. For pages that must always be personal or live.'],
+                        'help' => 'One per line, * as wildcard, e.g. /cart*, /account/*, /checkout. For pages that must always be personal or live.'],
                     ['key' => 'cache_bypass_cookies', 'type' => 'text', 'label' => 'Skip the cache when these cookies are set', 'default' => '', 'show_if' => 'cache_pages=1',
                         'placeholder' => 'cart_id, member_*', 'help' => 'Comma-separated, * as wildcard. Signed-in team members always bypass the cache.'],
                     ['key' => 'cache_browser_assets', 'type' => 'toggle', 'label' => 'Long browser cache for theme assets & uploads', 'default' => true, 'help' => 'Handled by the bundled .htaccess / nginx config.'],
@@ -268,6 +268,8 @@ final class Settings
                     ['key' => 'ai_max_tokens', 'type' => 'number', 'label' => 'Max output tokens', 'default' => 2000, 'min' => 100, 'max' => 64000],
                 ]],
                 'voice' => ['label' => 'Brand voice', 'fields' => [
+                    ['key' => 'ai_no_em_dash', 'type' => 'toggle', 'label' => 'Never use em dashes', 'default' => true,
+                        'help' => 'Written text uses commas, colons or full stops instead of long dashes, which often read as machine-written.'],
                     ['key' => 'ai_system_prompt', 'type' => 'textarea', 'label' => 'Instructions for every request', 'rows' => 6,
                         'default' => 'You are a helpful content assistant for a website. Write clear, accurate, human-sounding copy. Avoid filler and clichés.',
                         'help' => 'Describe tone, audience, spelling (US/UK), words to avoid, etc.'],
@@ -291,7 +293,7 @@ final class Settings
                 ]],
                 'cron' => ['label' => 'Scheduled tasks', 'render' => 'cron', 'fields' => [
                     ['key' => 'cron_visitor_trigger', 'type' => 'toggle', 'label' => 'Run scheduled tasks automatically', 'default' => true,
-                        'help' => 'Tasks run in the background right after visits — nothing to set up, and visitors never wait. A server cron is optional; it only helps on sites with very few visitors.'],
+                        'help' => 'Tasks run in the background right after visits, nothing to set up, and visitors never wait. A server cron is optional; it only helps on sites with very few visitors.'],
                 ]],
                 'maintenance' => ['label' => 'Maintenance mode', 'fields' => [
                     ['key' => 'maintenance_mode', 'type' => 'toggle', 'label' => 'Enable maintenance mode', 'help' => 'Visitors get a 503 page; logged-in team members see the site.', 'default' => false],
@@ -381,7 +383,7 @@ final class Settings
             return $source;
         }
         return match ($source) {
-            'pages' => [0 => '— Select —'] + array_column(
+            'pages' => [0 => 'Select…'] + array_column(
                 DB::all("SELECT id, title FROM {{posts}} WHERE type = 'page' AND status = 'publish' ORDER BY title"),
                 'title',
                 'id'

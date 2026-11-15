@@ -2,29 +2,29 @@
 
 # Slate CMS
 
-A fast, secure, SEO-first content management system — the flexibility of WordPress without the bloat.
+A fast, secure, SEO-first content management system, the flexibility of WordPress without the bloat.
 
-- **Modern admin** — clean dashboard, command palette (⌘/Ctrl + K), dark mode, fully responsive.
-- **Content model built in** — custom post types, taxonomies and custom fields (20 field types incl. repeater, gallery, relationship). No plugins needed.
-- **SEO built in** — meta titles/descriptions with templates, live Google preview & on-page analysis, robots meta, *noindex the whole site*, canonical URLs, Open Graph/Twitter, JSON-LD schema graph (Organization, WebSite, Article, Breadcrumbs, FAQ…), XML sitemaps, virtual robots.txt, redirects (incl. regex & 410).
-- **Integrations** — Google Tag Manager, GA4, Search Console, Bing, Yandex, Pinterest, Meta Pixel, Microsoft Clarity, LinkedIn Insight, AdSense, plus custom header/body/footer code.
-- **Media** — library with automatic optimization **on by default**: WebP, 87% quality, longest edge 1600px, transparency preserved, SEO-friendly file names, editable alt/title/caption, rename files (links update automatically).
-- **AI assistant** — presets for Anthropic Claude, OpenAI, OpenRouter, Google Gemini, Groq, Mistral, DeepSeek, Ollama or any OpenAI-compatible endpoint. Improve/shorten/expand/fix text, generate FAQs, drafts, SEO meta, excerpts and image alt text.
-- **Frontend editing** — logged-in editors click *Edit on page* to change titles, content, text and image fields right on the live site.
-- **Speed** — one query loads all settings + content model; custom fields live on the row (no meta joins); full-page static cache serves visitors with **zero** database queries; HTML minification; lazy images with width/height.
-- **Security** — Argon2id passwords, login rate-limiting & lockout, TOTP two-factor auth, custom admin URL, CSRF protection on every write, strict session handling, security headers/HSTS, upload MIME validation & no-execute uploads folder, encrypted secrets (API keys, 2FA), HTML sanitizer for non-admin roles, activity log.
-- **Roles** — Administrator, Editor, Author, Contributor, Subscriber with granular capabilities.
-- **Revisions** — compare any saved version with the current one and restore it.
-- **Email** — SMTP or server mail for password resets, forms and modules; forgot-password by email.
-- **Backups** — database and files, scheduled with retention; restore from the command line.
-- **Scheduled tasks** — server cron or visitor-triggered; modules add their own jobs.
-- **REST API** — headless content API with per-user API keys (off by default).
-- **Modules** — Slate’s name for plugins. Install from a zip, GitHub or registries, create one with AI, update with rollback; crashing modules switch themselves off.
-- **Updates** — one-click core updates from GitHub Releases with automatic backup and rollback.
+- **Modern admin**: clean dashboard, command palette (⌘/Ctrl + K), dark mode, fully responsive.
+- **Content model built in**: custom post types, taxonomies and custom fields (20 field types incl. repeater, gallery, relationship). No plugins needed.
+- **SEO built in**: meta titles/descriptions with templates, live Google preview & on-page analysis, robots meta, *noindex the whole site*, canonical URLs, Open Graph/Twitter, JSON-LD schema graph (Organization, WebSite, Article, Breadcrumbs, FAQ…), XML sitemaps, virtual robots.txt, redirects (incl. regex & 410).
+- **Integrations**: Google Tag Manager, GA4, Search Console, Bing, Yandex, Pinterest, Meta Pixel, Microsoft Clarity, LinkedIn Insight, AdSense, plus custom header/body/footer code.
+- **Media**: library with automatic optimization **on by default**: WebP, 87% quality, longest edge 1600px, transparency preserved, SEO-friendly file names, editable alt/title/caption, rename files (links update automatically).
+- **AI assistant**: presets for Anthropic Claude, OpenAI, OpenRouter, Google Gemini, Groq, Mistral, DeepSeek, Ollama or any OpenAI-compatible endpoint. Improve/shorten/expand/fix text, generate FAQs, drafts, SEO meta, excerpts and image alt text.
+- **Frontend editing**: logged-in editors click *Edit on page* to change titles, content, text and image fields right on the live site.
+- **Speed**: one query loads all settings + content model; custom fields live on the row (no meta joins); full-page static cache serves visitors with **zero** database queries; HTML minification; lazy images with width/height.
+- **Security**: Argon2id passwords, login rate-limiting & lockout, TOTP two-factor auth, custom admin URL, CSRF protection on every write, strict session handling, security headers/HSTS, upload MIME validation & no-execute uploads folder, encrypted secrets (API keys, 2FA), HTML sanitizer for non-admin roles, activity log.
+- **Roles**: Administrator, Editor, Author, Contributor, Subscriber with granular capabilities.
+- **Revisions**: compare any saved version with the current one and restore it.
+- **Email**: SMTP or server mail for password resets, forms and modules; forgot-password by email.
+- **Backups**: database and files, scheduled with retention; restore from the command line.
+- **Scheduled tasks**: server cron or visitor-triggered; modules add their own jobs.
+- **REST API**: headless content API with per-user API keys (off by default).
+- **Modules** · Slate’s name for plugins. Install from a zip, GitHub or registries, create one with AI, update with rollback; crashing modules switch themselves off.
+- **Updates**: one-click core updates from GitHub Releases with automatic backup and rollback.
 
 ## Brand
 
-Logo files live in `admin/assets/brand/` — `logo.svg` (wordmark), `logo-white.svg`, `logo-mark.svg`, `logo-mark-light.svg`, `logo-glyph.svg`, `favicon.svg` and `brand-sheet.png`.
+Logo files live in `admin/assets/brand/`, `logo.svg` (wordmark), `logo-white.svg`, `logo-mark.svg`, `logo-mark-light.svg`, `logo-glyph.svg`, `favicon.svg` and `brand-sheet.png`.
 Logo: a faceted origami songbird perched on a chalk line on a slate. Colours: brand orange `#F26B2D` (scale `#FFF5EF` → `#5C2008`) and ink `#0D0D0E`. Type: **Instrument Serif** for headings, **Inter** for UI text (self-hosted).
 
 ## Forms
@@ -36,9 +36,9 @@ the email. Place it with the **☑ Form** button in any rich-text editor, a *For
 ## Templates
 
 **Templates** in the sidebar lets you design every page type without touching theme files: single pages for each post
-type, archives, taxonomy archives, 404 and search. Write HTML with simple tags — `{{title}}`, `{{{content}}}`,
+type, archives, taxonomy archives, 404 and search. Write HTML with simple tags, `{{title}}`, `{{{content}}}`,
 `{{field:tagline}}`, `{{field:photo|image}}`, `{{#each field:faqs}}{{item:question}}{{/each}}`,
-`{{#query type=product limit=6}}…{{/query}}`, `{{#posts}}…{{/posts}}` — plus optional CSS. “Reset to starter” builds a
+`{{#query type=product limit=6}}…{{/query}}`, `{{#posts}}…{{/posts}}`, plus optional CSS. “Reset to starter” builds a
 template that already shows every custom field. Preview it, then switch it **Active**.
 
 ## Migrating a WordPress site
@@ -56,8 +56,7 @@ php bin/slate import:wordpress --url=https://example.com --user=your-wp-admin
 ```
 
 Forms of the old site keep working: submissions appear under **Submissions**. Rebuild them under Content → Forms when convenient.
-After the domain switch, theme assets that were never requested during testing can no longer be fetched from the old server —
-browse the main pages on the Slate URL before switching DNS so everything is cached locally.
+After the domain switch, theme assets that were never requested during testing can no longer be fetched from the old server, browse the main pages on the Slate URL before switching DNS so everything is cached locally.
 
 ## Requirements
 
@@ -69,7 +68,7 @@ browse the main pages on the Slate URL before switching DNS so everything is cac
 
 1. Upload the files to your web root (or a sub-folder).
 2. Make the root folder and `content/` writable by PHP.
-3. Visit your site — the installer opens at `/install`. Choose MySQL or SQLite, create the admin account.
+3. Visit your site, the installer opens at `/install`. Choose MySQL or SQLite, create the admin account.
 4. Sign in at `/admin` (you can change this URL under **Settings → Security**).
 
 Local development:
@@ -116,14 +115,13 @@ content/             Uploads, cache, backups, SQLite DB (never touched by update
 
 Template hierarchy: `template-{name}` → `front-page` → `single-{type}-{slug}` → `single-{type}` / `page` → `single` → `index`; archives: `archive-{type}` → `archive`; taxonomies: `taxonomy-{tax}-{term}` → `taxonomy-{tax}` → `taxonomy` → `archive`. Also `home`, `search`, `404`, `maintenance`.
 
-Always call `slate_head()`, `slate_body_open()` and `slate_footer()` — they output SEO tags, schema, analytics, custom code and the admin bar.
+Always call `slate_head()`, `slate_body_open()` and `slate_footer()`, they output SEO tags, schema, analytics, custom code and the admin bar.
 
 ## Modules
 
 Modules are Slate's plugins: everything site-specific (a shop, bookings, a directory, an integration) lives in one.
 **Modules → Add new** installs a zip, a GitHub repository (or one folder of it) or any zip URL, creates a blank module, or
-has the AI assistant write one for you to review. **Modules → Available** lists every module offered by your registries —
-JSON files anyone can publish (Modules → Sources). Updates are backed up and roll back on failure; a module that crashes is
+has the AI assistant write one for you to review. **Modules → Available** lists every module offered by your registries, JSON files anyone can publish (Modules → Sources). Updates are backed up and roll back on failure; a module that crashes is
 switched off automatically so the site stays up.
 
 ```
@@ -140,11 +138,11 @@ Modules::adminPage('My module', 'my-module', fn() => print 'Hello from the dashb
 Modules::settings([['key' => 'my_module_greeting', 'type' => 'text', 'label' => 'Greeting', 'default' => 'Hi']]);
 ```
 
-Full guide — manifest, hooks, APIs, migrations, registries, CLI: **[docs/modules.md](docs/modules.md)**. Dashboard UI kit
+Full guide, manifest, hooks, APIs, migrations, registries, CLI: **[docs/modules.md](docs/modules.md)**. Dashboard UI kit
 (list tables, settings, page headers) so module screens match the core: **[docs/admin-ui.md](docs/admin-ui.md)**.
 
 Official modules (Forms, Site Migration, Auto CPT Generator) live in **[slate-modules](https://github.com/narendersinghh/slate-modules)**,
-which is also the default registry. Site-specific features belong in your own modules — kept on your server (no repository needed) or in a repository of your own, never in Slate itself.
+which is also the default registry. Site-specific features belong in your own modules, kept on your server (no repository needed) or in a repository of your own, never in Slate itself.
 
 ## Releasing updates
 

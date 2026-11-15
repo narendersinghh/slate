@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Passkeys (WebAuthn): sign in with Face ID, Touch ID, Windows Hello, an Android phone or a security key — no password,
+ * Passkeys (WebAuthn): sign in with Face ID, Touch ID, Windows Hello, an Android phone or a security key, no password,
  * nothing to phish. Users add passkeys under Profile → Passkeys; the login page offers "Sign in with a passkey".
  *
  * Verification follows the WebAuthn Level 2 spec for the parts that matter for security: challenge, origin, RP ID hash,

@@ -51,7 +51,7 @@ $tag = static fn(string $code, string $label = '') => '<button type="button" cla
         <textarea class="input code tpl-code" name="html" rows="26" spellcheck="false" data-code><?= e($t['html']) ?></textarea>
       </section>
       <section class="card">
-        <div class="card-head"><h2>CSS <small class="muted">(only loaded with this template — design-system variables like <code>var(--color-primary)</code> work here)</small></h2></div>
+        <div class="card-head"><h2>CSS <small class="muted">(only loaded with this template, design-system variables like <code>var(--color-primary)</code> work here)</small></h2></div>
         <textarea class="input code tpl-code" name="css" rows="10" spellcheck="false" placeholder=".field-tagline { font: var(--type-h4); color: var(--color-primary); }"><?= e($t['css']) ?></textarea>
       </section>
     </div>

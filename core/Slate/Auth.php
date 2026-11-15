@@ -230,8 +230,8 @@ final class Auth
             . '<p>Someone asked to reset the password for your account on <strong>' . e($site) . '</strong>. '
             . 'Use the button below within one hour to choose a new password.</p>'
             . '<p><a href="' . e($link) . '" style="display:inline-block;background:#F26B2D;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:600">Choose a new password</a></p>'
-            . '<p style="color:#666;font-size:13px">If you did not ask for this, ignore this email — your password stays the same.<br>Request from IP ' . e(self::ip()) . '.</p>';
-        Mailer::send($user['email'], "Reset your password — $site", $html);
+            . '<p style="color:#666;font-size:13px">If you did not ask for this, ignore this email, your password stays the same.<br>Request from IP ' . e(self::ip()) . '.</p>';
+        Mailer::send($user['email'], "Reset your password, $site", $html);
         log_activity('password_reset_requested', $user['username']);
     }
 

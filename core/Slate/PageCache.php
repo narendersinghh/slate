@@ -5,14 +5,13 @@ namespace Slate;
 
 /**
  * Optional full-page cache for anonymous visitors (Settings → Performance → Page cache). It is not static-site
- * generation: pages render dynamically and the cache simply keeps the result, so dynamic sites keep working —
- * signed-in users, forms, query strings, excluded paths and "bypass" cookies (e.g. a shop cart) always get fresh pages,
+ * generation: pages render dynamically and the cache simply keeps the result, so dynamic sites keep working, * signed-in users, forms, query strings, excluded paths and "bypass" cookies (e.g. a shop cart) always get fresh pages,
  * and modules can opt a request out with PageCache::skip().
  *
  * serve() runs BEFORE the database connection, so cached pages cost zero queries.
  *
  * Invalidation is O(1), however large the site: every cached file carries the "generation" it was built in, and a
- * purge only increments a counter — stale files are ignored on the next visit and swept up in the background.
+ * purge only increments a counter, stale files are ignored on the next visit and swept up in the background.
  *   - global generation: settings, menus, templates, modules… → every page
  *   - listing generation: home, archives, taxonomy pages, search, feeds → pages that list content
  *   - "smart" purge mode (large sites): editing one item refreshes only that item's page plus the listing pages,

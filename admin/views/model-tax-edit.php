@@ -32,7 +32,7 @@ $builtin = !empty($d['builtin']);
     <section class="card">
       <div class="card-head"><h2>Behaviour</h2></div>
       <div class="card-pad stack-sm">
-        <label class="switch-row"><input type="checkbox" class="switch" name="hierarchical" value="1"<?= $d['hierarchical'] ? ' checked' : '' ?>><span>Hierarchical <small class="muted">— like categories (checkboxes). Off = like tags.</small></span></label>
+        <label class="switch-row"><input type="checkbox" class="switch" name="hierarchical" value="1"<?= $d['hierarchical'] ? ' checked' : '' ?>><span>Hierarchical <small class="muted">like categories (checkboxes). Off = like tags.</small></span></label>
         <label class="switch-row"><input type="checkbox" class="switch" name="public" value="1"<?= $d['public'] ? ' checked' : '' ?>><span>Public archive pages</span></label>
       </div>
     </section>

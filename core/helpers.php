@@ -160,7 +160,7 @@ function local_date(?string $utc, ?string $format = null): string
 function time_ago(?string $utc): string
 {
     if (!$utc) {
-        return '—';
+        return '-';
     }
     $diff = time() - strtotime($utc . ' UTC');
     return match (true) {
@@ -233,7 +233,7 @@ function icon_logo(int $size = 32, string $variant = 'dark'): string
 
 /**
  * Typographic quotes and dashes in text (outside tags, scripts, code), like WordPress's wptexturize():
- * "x" → “x”, it's → it’s, ' - ' → ' – ', '--' → '–', '---' → '—', '...' → '…'.
+ * "x" → “x”, it's → it’s, ' - ' → ' – ', '--' → '–', '---' → '-', '...' → '…'.
  */
 /** Language code for <html lang>: the site language, adjustable by modules ("html_lang" filter). */
 function html_lang(?string $base = null): string
@@ -270,13 +270,13 @@ function texturize(string $html): string
             continue;
         }
         $t = html_entity_decode($p, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $t = str_replace(['---', ' -- ', '--', '...'], ['—', ' — ', '–', '…'], $t);
+        $t = str_replace(['---', ' -- ', '--', '...'], ['-', ', ', '–', '…'], $t);
         $t = preg_replace('/(?<=\s)-(?=\s)/u', '–', $t);
         $t = preg_replace("/'(?=\d\d(?!\d))/u", '’', $t);                    // '90, '90s
         $t = preg_replace("/(?<=[\p{L}\p{N}])'(?=[\p{L}\p{N}])/u", '’', $t); // it's, don't
         $t = ($prevEnd . $t);
-        $t = preg_replace('/(?<=[\s(\[{"\x{201C}\-—–])\'/u', '‘', $t);       // opening single
-        $t = preg_replace('/(?<=[\s(\[{\x{2018}\-—–])"/u', '“', $t);          // opening double
+        $t = preg_replace('/(?<=[\s(\[{"\x{201C}\--–])\'/u', '‘', $t);       // opening single
+        $t = preg_replace('/(?<=[\s(\[{\x{2018}\--–])"/u', '“', $t);          // opening double
         $t = str_replace(["'", '"'], ['’', '”'], $t);                          // the rest close
         $t = mb_substr($t, mb_strlen($prevEnd));
         $prevEnd = mb_substr($t, -1) ?: ' ';

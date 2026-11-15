@@ -5,8 +5,8 @@ namespace Slate;
 
 /**
  * Site backups in content/backups/ (never reachable from the web):
- *  - database: site-YYYYmmdd-His-db.sql.gz — every Slate table (core + modules), plain SQL, pure PHP (no mysqldump needed)
- *  - files:    site-YYYYmmdd-His-files.zip — config.php, modules/, custom themes and content/ (uploads etc.)
+ *  - database: site-YYYYmmdd-His-db.sql.gz, every Slate table (core + modules), plain SQL, pure PHP (no mysqldump needed)
+ *  - files:    site-YYYYmmdd-His-files.zip, config.php, modules/, custom themes and content/ (uploads etc.)
  * Scheduled backups and retention: Settings → System → Backups. Restore: `php bin/slate backup:restore <file>`.
  */
 final class Backup
@@ -270,7 +270,7 @@ final class Backup
             }
             $buf .= $line;
             // Statements written by Slate end with ";\n" at the end of a line; string values never end a line that way
-            // unless they literally contain ";\n" — so only cut when the accumulated statement parses as complete.
+            // unless they literally contain ";\n", so only cut when the accumulated statement parses as complete.
             if (str_ends_with(rtrim($buf, "\r\n"), ';') && self::complete($buf)) {
                 DB::pdo()->exec($buf);
                 $buf = '';

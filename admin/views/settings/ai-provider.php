@@ -4,7 +4,7 @@
   <div class="banner" data-ai-info>
     <?= icon('sparkles', 18) ?>
     <div>
-      <strong data-ai-label><?= e($preset['label']) ?></strong> · default model <code data-ai-model><?= e($preset['model'] ?: '—') ?></code>
+      <strong data-ai-label><?= e($preset['label']) ?></strong> · default model <code data-ai-model><?= e($preset['model'] ?: '-') ?></code>
       <span data-ai-keys><?= $preset['keys'] ? ' · <a href="' . e($preset['keys']) . '" target="_blank" rel="noopener">Get an API key</a>' : '' ?></span>
       <br><small class="muted">Suggested models: <span data-ai-models><?= e(implode(', ', $preset['models'])) ?></span></small>
     </div>

@@ -73,6 +73,16 @@ final class Ai
     /**
      * @return array{ok:bool, text?:string, error?:string}
      */
+    /** Replace em dashes the model still wrote (Settings → AI assistant → Brand voice). */
+    public static function noEmDash(string $text): string
+    {
+        if (!Options::get('ai_no_em_dash', true)) {
+            return $text;
+        }
+        $text = preg_replace('/\s*\x{2014}\s*/u', ', ', $text);
+        return str_replace([', ,', ',,'], ',', (string)$text);
+    }
+
     public static function complete(string $prompt, ?string $system = null, array $opts = []): array
     {
         $preset = self::preset();
@@ -83,7 +93,8 @@ final class Ai
         if ($base === '' || $model === '') {
             return ['ok' => false, 'error' => 'Set a base URL and model under Settings → AI.'];
         }
-        $system = trim(($system ?? (string)Options::get('ai_system_prompt')) . "\nSite: " . Options::get('site_title') . ' — ' . Options::get('tagline'));
+        $system = trim(($system ?? (string)Options::get('ai_system_prompt')) . "\nSite: " . Options::get('site_title') . ', ' . Options::get('tagline')
+            . (Options::get('ai_no_em_dash', true) ? "\nStyle: never use em dashes (—); use commas, colons, full stops or parentheses instead." : ''));
         $maxTokens = (int)($opts['max_tokens'] ?? Options::get('ai_max_tokens', 2000));
         $temperature = (float)($opts['temperature'] ?? Options::get('ai_temperature', 0.7));
 
@@ -104,7 +115,7 @@ final class Ai
                     $text .= $block['text'];
                 }
             }
-            return ['ok' => true, 'text' => trim($text)];
+            return ['ok' => true, 'text' => self::noEmDash(trim($text))];
         }
 
         $payload = [
@@ -131,7 +142,7 @@ final class Ai
         if (is_array($text)) {
             $text = implode('', array_map(static fn($p) => $p['text'] ?? '', $text));
         }
-        return ['ok' => true, 'text' => trim((string)$text)];
+        return ['ok' => true, 'text' => self::noEmDash(trim((string)$text))];
     }
 
     private static function errorMessage(array $r): string

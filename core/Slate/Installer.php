@@ -83,7 +83,7 @@ final class Installer
             return ['Installation failed: ' . $e->getMessage()];
         }
 
-        $php = "<?php\n// Slate configuration — generated " . gmdate('Y-m-d H:i') . " UTC. Keep this file private.\n"
+        $php = "<?php\n// Slate configuration, generated " . gmdate('Y-m-d H:i') . " UTC. Keep this file private.\n"
             . 'const SLATE_CONFIG = ' . var_export($config, true) . ";\n";
         if (file_put_contents(SLATE_ROOT . '/config.php', $php, LOCK_EX) === false) {
             return ['Could not write config.php. Make the Slate folder writable, or create config.php manually.'];

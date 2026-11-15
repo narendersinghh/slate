@@ -6,7 +6,7 @@ namespace Slate;
 /**
  * Outgoing email for core and modules: Mailer::send('a@b.com', 'Subject', '<p>HTML</p>').
  * Works with no setup: SMTP when a host is configured, otherwise the server's own mail() (Hostinger, cPanel and most
- * hosts provide it) — a built-in equivalent of PHPMailer (TLS/STARTTLS, AUTH LOGIN/PLAIN). Settings → General → Email.
+ * hosts provide it), a built-in equivalent of PHPMailer (TLS/STARTTLS, AUTH LOGIN/PLAIN). Settings → General → Email.
  * Modules can take over delivery entirely with the "mail_send" filter (return true when sent).
  */
 final class Mailer

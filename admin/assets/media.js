@@ -41,7 +41,7 @@
         '<select class="input" style="width:auto" data-filter><option value="">All files</option><option value="image">Images</option><option value="video">Videos</option><option value="document">Documents</option><option value="noalt">Images missing alt text</option></select>' +
         '<span class="muted" data-total></span>' +
         '<label class="btn btn-sm" style="margin-left:auto">Upload<input type="file" multiple hidden data-file></label></div>' +
-        '<div class="ml-drop" data-drop>Drop files here to upload — images are optimized automatically.</div>' +
+        '<div class="ml-drop" data-drop>Drop files here to upload, images are optimized automatically.</div>' +
         '<div class="ml-progress" data-progress></div>' +
         '<div class="ml-layout no-detail" data-layout><div><div class="ml-grid" data-grid></div><div class="ml-more" data-more hidden><button type="button" class="btn">Load more</button></div></div><aside class="ml-detail card" data-detail hidden></aside></div>';
       $('[data-filter]', this.root).value = this.filter;

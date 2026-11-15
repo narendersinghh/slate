@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Minimal CBOR (RFC 8949) decoder — enough for WebAuthn attestation objects and COSE keys:
+ * Minimal CBOR (RFC 8949) decoder, enough for WebAuthn attestation objects and COSE keys:
  * unsigned/negative integers, byte and text strings, arrays, maps, tags (ignored), true/false/null.
  * Byte strings are returned as PHP binary strings. Indefinite lengths and floats are rejected.
  */

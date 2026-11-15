@@ -67,7 +67,7 @@ $fontOptions = static function (string $current): string {
     </tbody>
   </table></div>
   <div class="stack-sm">
-    <label class="switch-row"><input type="checkbox" class="switch" name="ds[responsive]" value="1"<?= $ds['responsive'] ? ' checked' : '' ?>><span>Fluid sizes — large headings scale down on mobile</span></label>
+    <label class="switch-row"><input type="checkbox" class="switch" name="ds[responsive]" value="1"<?= $ds['responsive'] ? ' checked' : '' ?>><span>Fluid sizes, large headings scale down on mobile</span></label>
     <label class="switch-row"><input type="checkbox" class="switch" name="ds[apply_elements]" value="1"<?= $ds['apply_elements'] ? ' checked' : '' ?>><span>Apply typography to body &amp; h1–h6 automatically <small class="muted">(turn off for mirrored designs, which style their own elements)</small></span></label>
   </div>
 

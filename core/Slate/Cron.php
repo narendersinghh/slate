@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Scheduled tasks — automatic, no setup needed. Core and modules register jobs with the "cron_jobs" filter:
+ * Scheduled tasks, automatic, no setup needed. Core and modules register jobs with the "cron_jobs" filter:
  *
  *   Hooks::add('cron_jobs', fn(array $jobs) => $jobs + ['shop_sync' => ['every' => 3600, 'label' => 'Sync stock', 'run' => fn() => …]]);
  *

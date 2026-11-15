@@ -1,6 +1,6 @@
 <?php
 /**
- * Web installer — only reachable while config.php does not exist.
+ * Web installer, only reachable while config.php does not exist.
  */
 declare(strict_types=1);
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Data table for dashboard list screens — core and modules use the same one, so every list behaves alike:
+ * Data table for dashboard list screens, core and modules use the same one, so every list behaves alike:
  * search, filters, status views, sortable columns, a column chooser (show/hide/reorder, remembered per user),
  * comfortable/compact density, page size, page numbers, bulk actions (also on every matching row) and CSV export.
  *

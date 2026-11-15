@@ -133,7 +133,7 @@ final class DesignSystem
         return $f !== '' && (bool)preg_match('/^[A-Za-z0-9 \-]{2,60}$/', $f);
     }
 
-    /** Declarations only — no braces, no tags, no imports. */
+    /** Declarations only, no braces, no tags, no imports. */
     public static function cleanCss(string $css): string
     {
         $css = str_replace(["\r", '<', '>', '{', '}', '@import', 'expression(', 'javascript:'], ['', '', '', '', '', '', '', ''], $css);

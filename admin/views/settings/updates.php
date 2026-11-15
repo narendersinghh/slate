@@ -15,7 +15,7 @@ rsort($backups);
     </div>
     <?= icon('chevron-right', 20) ?>
     <div class="update-version">
-      <small class="muted">Latest release</small><strong><?= e($info['latest'] ?? '—') ?></strong>
+      <small class="muted">Latest release</small><strong><?= e($info['latest'] ?? '-') ?></strong>
       <?php if (!empty($info['checked_at'])): ?><small class="muted">checked <?= e(time_ago(gmdate('Y-m-d H:i:s', (int)$info['checked_at']))) ?></small><?php endif; ?>
     </div>
     <div class="update-actions">

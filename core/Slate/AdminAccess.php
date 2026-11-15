@@ -5,7 +5,7 @@ namespace Slate;
 
 /**
  * Where the dashboard can be reached. Set in config.php (not the database), so a lock-out is always fixable over
- * SSH/FTP — or with `php bin/slate admin:host` / `admin:ips` / `admin:url`.
+ * SSH/FTP, or with `php bin/slate admin:host` / `admin:ips` / `admin:url`.
  *
  *   'admin_host' => 'cms.example.com',              the dashboard answers ONLY on this host name; on every other host
  *                                                   the admin URL is a plain 404. On the admin host, the public site
@@ -123,7 +123,7 @@ final class AdminAccess
         $old = (string)file_get_contents($file);
         @file_put_contents(SLATE_CONTENT . '/backups/config-' . gmdate('Ymd-His') . '.bak', $old, LOCK_EX);
         @chmod(SLATE_CONTENT . '/backups/config-' . gmdate('Ymd-His') . '.bak', 0600);
-        $php = "<?php\n// Slate configuration — updated " . gmdate('Y-m-d H:i') . " UTC. Keep this file private.\n"
+        $php = "<?php\n// Slate configuration, updated " . gmdate('Y-m-d H:i') . " UTC. Keep this file private.\n"
             . 'const SLATE_CONFIG = ' . var_export($cfg, true) . ";\n";
         // Check the result parses before replacing the live file.
         try {

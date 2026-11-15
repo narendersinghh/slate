@@ -22,10 +22,10 @@ $add($slug === 'admin' ? 'warn' : 'ok', 'Dashboard address', $slug === 'admin'
 $host = AdminAccess::adminHost();
 $add($host ? 'ok' : 'info', 'Separate admin domain', $host
     ? 'The dashboard only answers on ' . e($host) . '; on the public domain it does not exist.'
-    : 'Optional, strongest protection: serve the dashboard on a private (sub)domain only — set <code>admin_host</code> in config.php or run <code>php bin/slate admin:host cms.yourdomain.com</code>.');
+    : 'Optional, strongest protection: serve the dashboard on a private (sub)domain only, set <code>admin_host</code> in config.php or run <code>php bin/slate admin:host cms.yourdomain.com</code>.');
 $ips = AdminAccess::allowedIps();
 $add($ips ? 'ok' : 'info', 'Dashboard IP allow-list', $ips ? 'Only ' . e(implode(', ', $ips)) . ' can reach the dashboard.'
-    : 'Optional: limit the dashboard to your own IP addresses — <code>php bin/slate admin:ips "1.2.3.4"</code>.');
+    : 'Optional: limit the dashboard to your own IP addresses, <code>php bin/slate admin:ips "1.2.3.4"</code>.');
 
 $admins = DB::all("SELECT u.username, u.totp_secret, (SELECT COUNT(*) FROM {{passkeys}} p WHERE p.user_id = u.id) AS passkeys FROM {{users}} u WHERE u.role = 'administrator' AND u.status = 'active'");
 $no2fa = array_column(array_filter($admins, static fn($u) => empty($u['totp_secret']) && !(int)$u['passkeys']), 'username');
@@ -93,7 +93,7 @@ $counts = array_count_values(array_column($checks, 'state'));
   <div class="row-between">
     <div><strong class="small-label">File integrity</strong>
       <p class="muted small"><?php if ($report): ?>Last check <?= e(time_ago(gmdate('Y-m-d H:i:s', (int)$report['time']))) ?> · <?= (int)($report['files'] ?? 0) ?> files ·
-        <?= !empty($report['official']) ? 'core verified against GitHub (' . e($report['official']) . ')' : 'official file list unavailable — compared with the trusted snapshot only' ?>
+        <?= !empty($report['official']) ? 'core verified against GitHub (' . e($report['official']) . ')' : 'official file list unavailable, compared with the trusted snapshot only' ?>
         <?php else: ?>Not checked yet.<?php endif; ?></p></div>
     <div class="row-between">
       <button class="btn" type="submit" formaction="<?= e(admin_url('system/integrity/check')) ?>" formnovalidate><?= icon('shield', 15) ?> Check now</button>

@@ -39,9 +39,9 @@ $builtin = !empty($d['builtin']);
     <section class="card">
       <div class="card-head"><h2>Behaviour</h2></div>
       <div class="card-pad stack-sm">
-        <label class="switch-row"><input type="checkbox" class="switch" name="public" value="1"<?= $d['public'] ? ' checked' : '' ?>><span>Public <small class="muted">— has URLs on the website</small></span></label>
-        <label class="switch-row"><input type="checkbox" class="switch" name="has_archive" value="1"<?= $d['has_archive'] ? ' checked' : '' ?>><span>Archive page <small class="muted">— list at /<?= e($d['rewrite'] ?: 'base') ?>/</small></span></label>
-        <label class="switch-row"><input type="checkbox" class="switch" name="hierarchical" value="1"<?= $d['hierarchical'] ? ' checked' : '' ?>><span>Hierarchical <small class="muted">— parent/child like pages</small></span></label>
+        <label class="switch-row"><input type="checkbox" class="switch" name="public" value="1"<?= $d['public'] ? ' checked' : '' ?>><span>Public <small class="muted">has URLs on the website</small></span></label>
+        <label class="switch-row"><input type="checkbox" class="switch" name="has_archive" value="1"<?= $d['has_archive'] ? ' checked' : '' ?>><span>Archive page <small class="muted">list at /<?= e($d['rewrite'] ?: 'base') ?>/</small></span></label>
+        <label class="switch-row"><input type="checkbox" class="switch" name="hierarchical" value="1"<?= $d['hierarchical'] ? ' checked' : '' ?>><span>Hierarchical <small class="muted">parent/child like pages</small></span></label>
         <label class="switch-row"><input type="hidden" name="show_in_menu" value="0"><input type="checkbox" class="switch" name="show_in_menu" value="1"<?= $d['show_in_menu'] ? ' checked' : '' ?>><span>Show in admin menu</span></label>
         <div class="field"><label>Menu position</label><input class="input" type="number" name="menu_position" value="<?= (int)$d['menu_position'] ?>"></div>
       </div>

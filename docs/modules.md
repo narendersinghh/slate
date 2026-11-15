@@ -68,7 +68,7 @@ Hooks::add('routes', function (Router $r): void {
 });
 
 // Admin pages: label, slug (URL /admin/m/<slug>), render, capability, icon, section ("main" | "settings" | "hidden"), badge.
-// They appear in the sidebar under Modules → <your module>. Build them with ListTable / AdminUi — see docs/admin-ui.md.
+// They appear in the sidebar under Modules → <your module>. Build them with ListTable / AdminUi, see docs/admin-ui.md.
 Modules::adminPage('Orders', 'my-shop-orders', function (): void {
     echo \Slate\AdminUi::header('Orders', 'Everything people bought.', 'cart');
 }, 'manage_settings', 'cart');
@@ -98,7 +98,7 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `permalink`, `term_link` | filter | url of a post / term |
 | `menu_item` | filter | `$item, ?$post, ?$term` → one resolved menu item (url, label, children) |
 | `html_lang`, `html_dir` | filter | `<html lang>` / `dir` (themes print `<html <?= html_attrs() ?>>`) |
-| `route_resolved` | action | `$kind, $vars` — the URL is resolved, nothing rendered yet: redirect or 404 here |
+| `route_resolved` | action | `$kind, $vars`, the URL is resolved, nothing rendered yet: redirect or 404 here |
 | `frontend_vars` | filter | `$vars, $kind` → variables passed to the theme/template |
 | `sitemap_posts`, `sitemap_entry`, `sitemap_urlset` | filter | rows of a sitemap page; lines of one `<url>` entry (return `[]` to drop it); the opening `<urlset>` tag |
 | `posts_query_args` | filter | change `Posts::query()` arguments (e.g. default filters) |
@@ -114,7 +114,7 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `modules_loaded` | action | every active module is loaded |
 | `webhook_events` | filter | add events (then `Webhooks::dispatch('shop.order_paid', $data)`) |
 | `page_cacheable` | filter | return `false` to keep the current response out of the page cache (or call `PageCache::skip()`) |
-| `page_cache_kind` | filter | `'single'` or `'listing'` — mark pages that list other content as listings so "smart" purges refresh them |
+| `page_cache_kind` | filter | `'single'` or `'listing'`, mark pages that list other content as listings so "smart" purges refresh them |
 | `cache_warm_paths` | filter | paths the background task re-warms after a purge |
 | `cron_jobs` | filter | `['name' => ['every' => 3600, 'label' => '…', 'run' => fn() => …]]`: scheduled tasks |
 | `api_routes` | action | `Router $r`: extra REST endpoints under `/api/v1/…` |

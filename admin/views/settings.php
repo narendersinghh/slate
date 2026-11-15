@@ -112,7 +112,7 @@ $tabDef = $tabs[$tab] ?? null;
               <?php break;
             case 'secret': $has = (string)$val !== ''; ?>
               <span class="input-group">
-                <input class="input" type="password" id="s_<?= e($key) ?>" name="<?= e($name) ?>" value="" placeholder="<?= $has ? '•••••••••••• (saved — leave empty to keep)' : 'Not set' ?>" autocomplete="new-password">
+                <input class="input" type="password" id="s_<?= e($key) ?>" name="<?= e($name) ?>" value="" placeholder="<?= $has ? '•••••••••••• (saved, leave empty to keep)' : 'Not set' ?>" autocomplete="new-password">
                 <?php if ($has): ?><label class="btn btn-ghost btn-sm"><input type="checkbox" name="s[<?= e($key) ?>__clear]" value="1"> Clear</label><?php endif; ?>
               </span>
               <?php break;

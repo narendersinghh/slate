@@ -111,12 +111,12 @@ final class Templates
         if ($kind === 'single' && str_contains($target, '__')) {
             [$ty, $slug] = explode('__', $target, 2);
             $p = Posts::findBySlug($ty, $slug, false);
-            return (ContentModel::type($ty)['singular'] ?? ucfirst($ty)) . ' “' . ($p['title'] ?? $slug) . '” — single';
+            return (ContentModel::type($ty)['singular'] ?? ucfirst($ty)) . ' “' . ($p['title'] ?? $slug) . '”, single';
         }
         return match ($kind) {
-            'single' => (ContentModel::type($target)['singular'] ?? ucfirst($target)) . ' — single',
-            'archive' => (ContentModel::type($target)['plural'] ?? ucfirst($target)) . ' — archive',
-            'term' => (ContentModel::taxonomy($target)['singular'] ?? ucfirst($target)) . ' — archive',
+            'single' => (ContentModel::type($target)['singular'] ?? ucfirst($target)) . ', single',
+            'archive' => (ContentModel::type($target)['plural'] ?? ucfirst($target)) . ', archive',
+            'term' => (ContentModel::taxonomy($target)['singular'] ?? ucfirst($target)) . ', archive',
             default => self::SPECIAL[$target] ?? ucfirst($target),
         };
     }

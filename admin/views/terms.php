@@ -6,7 +6,7 @@ $t = $term ?? ['id' => 0, 'name' => '', 'slug' => '', 'description' => '', 'pare
 ?>
 <div class="page-head">
   <div><h1><?= e($term ? 'Edit ' . strtolower($tax['singular']) : $tax['plural']) ?></h1>
-    <p class="muted">Used by: <?= e(implode(', ', array_map(static fn($pt) => \Slate\ContentModel::type($pt)['plural'] ?? $pt, $tax['post_types']))) ?: '—' ?></p></div>
+    <p class="muted">Used by: <?= e(implode(', ', array_map(static fn($pt) => \Slate\ContentModel::type($pt)['plural'] ?? $pt, $tax['post_types']))) ?: '-' ?></p></div>
   <?php if ($term): ?><div class="page-actions"><a class="btn" href="<?= e(admin_url("terms/$slug")) ?>">← All <?= e(strtolower($tax['plural'])) ?></a><a class="btn btn-ghost" href="<?= e(Terms::link($term)) ?>" target="_blank"><?= icon('eye', 16) ?> View</a></div><?php endif; ?>
 </div>
 
@@ -21,7 +21,7 @@ $t = $term ?? ['id' => 0, 'name' => '', 'slug' => '', 'description' => '', 'pare
       <?php if ($tax['hierarchical']): ?>
       <div class="field"><label>Parent</label>
         <select class="input" name="parent_id"><option value="">None</option>
-          <?php foreach ($terms as $o): if ($o['id'] === $t['id']) continue; ?><option value="<?= $o['id'] ?>"<?= (int)$t['parent_id'] === $o['id'] ? ' selected' : '' ?>><?= str_repeat('— ', $o['depth'] ?? 0) . e($o['name']) ?></option><?php endforeach; ?>
+          <?php foreach ($terms as $o): if ($o['id'] === $t['id']) continue; ?><option value="<?= $o['id'] ?>"<?= (int)$t['parent_id'] === $o['id'] ? ' selected' : '' ?>><?= str_repeat('- ', $o['depth'] ?? 0) . e($o['name']) ?></option><?php endforeach; ?>
         </select></div>
       <?php endif; ?>
       <div class="field"><label>Description</label><textarea class="input" name="description" rows="3"><?= e($t['description']) ?></textarea></div>

@@ -35,7 +35,7 @@ Field types: `text`, `email`, `url`, `number` (`min`, `max`, `step`, `suffix`), 
 shows a field only when another field matches. Values are read with `Options::get('key')`.
 Prefix every key with your module (`shop_`), and keep labels short with the detail in `help`.
 
-## Page building blocks — `Slate\AdminUi`
+## Page building blocks, `Slate\AdminUi`
 
 ```php
 use Slate\AdminUi;
@@ -50,7 +50,7 @@ echo AdminUi::emptyState('No orders yet', 'Orders appear here as soon as someone
 echo AdminUi::pill('Paid', 'success');   // tones: success, warn, danger, info
 ```
 
-## Lists — `Slate\ListTable`
+## Lists, `Slate\ListTable`
 
 Every list of records uses `ListTable`: search, status views, filters, sortable columns, a column chooser that
 each user can reorder/hide (remembered), compact/comfortable density, page size, numbered pages, bulk actions
@@ -75,7 +75,7 @@ $t = new \Slate\ListTable('shop.orders', [
     'row_actions' => fn($o) => '<a href="…">View</a><a href="…">Refund</a>',
     'empty' => ['icon' => 'cart', 'title' => 'No orders yet', 'text' => 'Orders appear here after checkout.'],
 ]);
-$s = $t->state();   // q, view, filters, sort, dir, page, per, offset — whitelisted, safe to use
+$s = $t->state();   // q, view, filters, sort, dir, page, per, offset, whitelisted, safe to use
 // Query with $s (map 'sort' through your own whitelist of columns; never interpolate user input).
 if ($t->exporting()) { $t->exportCsv($allMatchingRows); }
 echo $t->render($rows, $total);
@@ -98,4 +98,4 @@ Handle the bulk POST at the top of your page callback (`Csrf::check()` is done b
 | `progress` with an inner `<span style="width:40%">` | Progress bar |
 
 Keep screens simple: one primary action per page, short labels, explanations in `help` text or a `muted` line,
-no walls of options — put rarely changed options in settings, not on the working screen.
+no walls of options, put rarely changed options in settings, not on the working screen.

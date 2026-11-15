@@ -8,7 +8,7 @@ $urls = array_column($hooks, 'url', 'id');
 ?>
 <div class="card-pad stack">
   <?php if ($secret): ?>
-    <div class="alert alert-success stack-sm"><strong><?= icon('check', 16) ?> Signing secret — copy it now, it is not shown again:</strong>
+    <div class="alert alert-success stack-sm"><strong><?= icon('check', 16) ?> Signing secret, copy it now, it is not shown again:</strong>
       <code class="secret" style="user-select:all;word-break:break-all"><?= e($secret) ?></code>
       <small>Verify each request: <code>X-Webhook-Signature</code> must equal <code>sha256=</code>HMAC-SHA256(secret, <code>X-Webhook-Timestamp</code> + "." + raw body).</small></div>
   <?php endif; ?>

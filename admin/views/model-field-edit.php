@@ -23,7 +23,7 @@ $g = $group ?? ['id' => '', 'title' => '', 'position' => 'main', 'location' => [
       <section class="card">
         <div class="card-head"><h2>Fields</h2><button type="button" class="btn btn-sm btn-primary" data-add-field><?= icon('plus', 15) ?> Add field</button></div>
         <div class="fb-list" data-fields></div>
-        <div class="card-pad muted center" data-fields-empty>No fields yet — add your first field.</div>
+        <div class="card-pad muted center" data-fields-empty>No fields yet, add your first field.</div>
       </section>
     </div>
     <div class="stack">

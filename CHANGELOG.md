@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.13.0 — Cleaner dashboard
+- **Sidebar**: Content, Modules (each module's pages grouped under its name, with counts), Design (Templates, Menus,
+  Theme & styles) and Administration. Groups expand without leaving the page.
+- **Settings reorganised**: one navigation with every category and section, a search box that finds any setting,
+  an overview page, and new categories (Content & media, Email, Dashboard access). Old addresses redirect.
+- **Site status** on the dashboard and settings overview: search-engine visibility, maintenance, page cache, email,
+  backups, core files, dashboard address and your sign-in security, with quick switches.
+- **List tables** (content, users, taxonomy terms, modules): column chooser with drag-to-reorder (remembered per user),
+  custom-field columns, sortable columns, filters per taxonomy/author/month/search-engine visibility, compact or
+  comfortable rows, page size, numbered pages, bulk actions on every matching row (publish, draft, add/remove term,
+  change author, show/hide in search engines, trash), CSV export and **Quick edit**.
+- **Private dashboard domain, guided**: Settings → Security → Dashboard access checks that the subdomain reaches this
+  site, switches, and signs you in there with a one-time link; a **bridge kit** covers hosts that give subdomains
+  their own folder; IP allow-list editor that refuses to lock you out.
+- **For modules**: `Modules::settings()` (declarative settings, shown under Settings → Modules), `Slate\ListTable`,
+  `Slate\AdminUi` (header, tabs, KPIs, empty states, pills), `icon` in module.json, page sections
+  `main` / `settings` / `hidden`, `checkboxes` settings field, `Posts::query()` `month`, `noindex` and
+  `orderby => 'field:name'`. Guide: docs/admin-ui.md.
+- Modules list redesigned (filter by active/inactive/updates, Open and Settings links); phones get a settings jump
+  menu and collapsible filters.
+
 ## 0.12.0 — Hooks for modules
 - `<html>` language and direction from `html_attrs()` / `html_lang` / `html_dir` filters (themes and Templates use it).
 - Routing: `Frontend::resolving()`, `route_resolved` action (redirect/404 before rendering), `frontend_vars` filter.

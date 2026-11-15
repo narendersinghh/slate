@@ -347,6 +347,9 @@ final class ListTable
     /** Stream the given rows as CSV with the visible columns, then exit. */
     public function exportCsv(iterable $rows, string $filename = ''): never
     {
+        while (ob_get_level() > 0) {
+            ob_end_clean(); // anything the page printed before the export must not end up in the file
+        }
         $cols = $this->visible();
         $name = $filename ?: preg_replace('/[^a-z0-9-]+/', '-', strtolower($this->id)) . '-' . gmdate('Y-m-d') . '.csv';
         header('Content-Type: text/csv; charset=utf-8');

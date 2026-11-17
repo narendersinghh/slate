@@ -116,12 +116,21 @@ if ($f['type'] === 'tab'): ?>
       <?php break;
     case 'taxonomy': $sel = array_map('intval', (array)$value); $taxDef = \Slate\ContentModel::taxonomy((string)($f['taxonomy'] ?? '')); ?>
       <?php if (!$taxDef): ?><p class="muted small">Choose a taxonomy for this field in Content model › Custom fields.</p><?php else: ?>
-      <div class="choice-list choice-scroll" data-term-filter>
+      <?php $opts = \Slate\Terms::all((string)$f['taxonomy']); ?>
+      <div class="term-pick" data-term-filter>
         <input type="hidden" name="<?= e($name) ?>[]" value="">
-        <input class="input input-sm" type="search" placeholder="Filter <?= e(strtolower($taxDef['plural'])) ?>…" data-term-filter-input>
-        <?php foreach (\Slate\Terms::all((string)$f['taxonomy']) as $term): ?>
-          <label class="choice"><input type="checkbox" name="<?= e($name) ?>[]" value="<?= (int)$term['id'] ?>"<?= in_array((int)$term['id'], $sel, true) ? ' checked' : '' ?>> <?= e($term['name']) ?></label>
-        <?php endforeach; ?>
+        <?php if (count($opts) > 8): ?>
+        <div class="term-pick-head">
+          <label class="term-find"><?= icon('search', 14) ?><input class="input input-sm" type="search" placeholder="Find <?= e(strtolower($taxDef['plural'])) ?>" data-term-filter-input aria-label="Find <?= e(strtolower($taxDef['plural'])) ?>"></label>
+          <small class="muted" data-term-count></small>
+        </div>
+        <?php endif; ?>
+        <div class="term-pick-list">
+          <?php foreach ($opts as $term): ?>
+            <label class="choice"><input type="checkbox" name="<?= e($name) ?>[]" value="<?= (int)$term['id'] ?>"<?= in_array((int)$term['id'], $sel, true) ? ' checked' : '' ?>> <span><?= e($term['name']) ?></span></label>
+          <?php endforeach; ?>
+          <p class="muted small" hidden data-term-none>Nothing matches.</p>
+        </div>
       </div>
       <?php endif; ?>
       <?php break;

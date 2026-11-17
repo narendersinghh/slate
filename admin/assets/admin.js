@@ -516,9 +516,18 @@
   // ---------- Filter long term lists ----------
   $$('[data-term-filter]').forEach((box) => {
     const inp = $('[data-term-filter-input]', box);
+    const count = $('[data-term-count]', box);
+    const none = $('[data-term-none]', box);
+    const tally = () => { if (count) { const n = $$('.choice input:checked', box).length; count.textContent = n ? n + ' selected' : ''; } };
+    box.addEventListener('change', tally);
+    tally();
+    if (!inp) return;
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
     inp.addEventListener('input', () => {
       const q = inp.value.trim().toLowerCase();
-      $$('.choice', box).forEach((c) => { c.hidden = q !== '' && !c.textContent.toLowerCase().includes(q); });
+      let shown = 0;
+      $$('.choice', box).forEach((c) => { c.hidden = q !== '' && !c.textContent.toLowerCase().includes(q) && !$('input', c).checked; if (!c.hidden) shown++; });
+      if (none) none.hidden = shown > 0;
     });
   });
 

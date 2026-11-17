@@ -62,8 +62,11 @@ function can_frontend_edit(): bool
 function slate_head(): void
 {
     echo Seo::head(), "\n";
-    echo \Slate\DesignSystem::head(), "\n";
-    if (can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
+    $ownDesign = \Slate\HtmlPages::$rendering;
+    if (!$ownDesign) {
+        echo \Slate\DesignSystem::head(), "\n"; // imported/AI pages keep exactly their own styles
+    }
+    if (!$ownDesign && can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
         echo '<link rel="stylesheet" href="' . e(asset_url('admin/assets/frontend-edit.css')) . '">' . "\n";
     }
     \Slate\Hooks::action('head');
@@ -78,9 +81,7 @@ function slate_body_open(): void
         echo '<div id="slate-bar" role="toolbar" aria-label="Slate admin bar">'
             . '<a class="sb-logo" href="' . e(admin_url()) . '">' . \Slate\Icons::logo(22) . ' Slate</a>'
             . ($edit ? '<a href="' . e($edit) . '">' . icon('edit', 15) . ' Edit in dashboard</a>' : '')
-            . ($p && $edit && \Slate\Builder::active($p)
-                ? '<a class="sb-primary" href="' . e($edit . '/builder') . '">' . icon('layers', 15) . ' Edit design</a>' : '')
-            . ($p && !\Slate\Builder::active($p) && can_frontend_edit() && ContentModel::supports($p['type'], 'frontend_edit')
+            . ($p && !\Slate\HtmlPages::$rendering && can_frontend_edit() && ContentModel::supports($p['type'], 'frontend_edit')
                 ? '<button type="button" id="sb-edit" data-id="' . (int)$p['id'] . '">' . icon('sparkles', 15) . ' Edit on page</button>'
                 . '<button type="button" id="sb-save" hidden>' . icon('check', 15) . ' Save changes</button>'
                 . '<button type="button" id="sb-cancel" hidden>Cancel</button>' : '')
@@ -95,7 +96,7 @@ function slate_body_open(): void
 function slate_footer(): void
 {
     echo Seo::footer(), "\n";
-    if (can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
+    if (!\Slate\HtmlPages::$rendering && can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
         echo '<script>window.SLATE={api:' . json_encode(admin_url('api')) . ',csrf:' . json_encode(Csrf::token())
             . ',media:' . json_encode(admin_url('api/media')) . '};</script>';
         echo '<script src="' . e(asset_url('admin/assets/frontend-edit.js')) . '" defer></script>';

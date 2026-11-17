@@ -14,6 +14,26 @@ $greet = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good ev
   </div>
 </div>
 
+<?php
+$aiReady = \Slate\Ai::enabled();
+$pageCount = (int)\Slate\DB::val("SELECT COUNT(*) FROM {{posts}} WHERE type = 'page' AND status <> 'trash'");
+if (Auth::can('use_ai') && Auth::can('edit_posts') && (!$aiReady || $pageCount < 3)): ?>
+<section class="ai-start" data-ai-start>
+  <div>
+    <h2><?= icon('sparrow', 20) ?> Build your site with Goraiya</h2>
+    <ol>
+      <li><?= $aiReady ? '<s>Connect an AI provider</s> done' : 'Connect an AI provider (Claude, OpenAI, Gemini or a local model)' ?></li>
+      <li>Tell Goraiya about your business: it writes the pages in your site's style, as drafts</li>
+      <li>Open a page and click any text or image to change it</li>
+    </ol>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-primary" type="button" data-goraiya-open><?= icon('sparrow', 16) ?> <?= $aiReady ? 'Open Goraiya' : 'Connect AI' ?></button>
+    <?php if (Auth::can('unfiltered_html')): ?><a class="btn" href="<?= e(admin_url('import')) ?>"><?= icon('upload', 16) ?> Import HTML pages</a><?php endif; ?>
+  </div>
+</section>
+<?php endif; ?>
+
 <?php if (\Slate\Auth::can('manage_updates') && ($ir = \Slate\Integrity::report()) && ($bad = count(array_filter($ir['issues'], static fn($i) => $i['level'] === 'danger')))): ?>
 <div class="banner banner-danger"><span class="ic"><?= icon('shield', 18) ?></span>
   <div><strong><?= $bad ?> file<?= $bad === 1 ? '' : 's' ?> changed unexpectedly.</strong> The file integrity check found changes nobody made through Slate.</div>

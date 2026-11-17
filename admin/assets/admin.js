@@ -641,4 +641,155 @@
   // ---------- File fields: highlight while a file is dragged over ----------
   document.addEventListener('dragenter', (e) => { if (e.target.matches?.('input[type=file]')) e.target.classList.add('is-over'); });
   ['dragleave', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => { if (e.target.matches?.('input[type=file]')) e.target.classList.remove('is-over'); }));
+
+  // ---------- Import pages: zip, files or a whole folder (relative paths kept) ----------
+  $$('[data-import-form]').forEach((form) => {
+    const files = $('[data-import-files]', form);
+    const folder = $('[data-import-folder]', form);
+    const drop = $('[data-import-drop]', form);
+    const picked = $('[data-import-picked]', form);
+    const msg = $('[data-import-msg]', form);
+    let chosen = [];
+    const show = () => { picked.textContent = chosen.length ? chosen.length + ' file' + (chosen.length === 1 ? '' : 's') + ' ready' : ''; };
+    const take = (list) => { chosen = Array.from(list).map((f) => ({ file: f, path: f.webkitRelativePath || f._path || f.name })); show(); };
+    files.addEventListener('change', () => take(files.files));
+    folder.addEventListener('change', () => take(folder.files));
+    ['dragover', 'dragenter'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('is-over'); }));
+    ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove('is-over')));
+    drop.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const items = Array.from(e.dataTransfer.items || []).map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+      if (!items.length) { take(e.dataTransfer.files); return; }
+      const out = [];
+      const walk = (entry, prefix) => new Promise((resolve) => {
+        if (entry.isFile) entry.file((f) => { f._path = prefix + f.name; out.push(f); resolve(); });
+        else {
+          const reader = entry.createReader();
+          const all = [];
+          const read = () => reader.readEntries(async (batch) => {
+            if (!batch.length) { for (const c of all) await walk(c, prefix + entry.name + '/'); resolve(); return; }
+            all.push(...batch); read();
+          });
+          read();
+        }
+      });
+      for (const it of items) await walk(it, '');
+      take(out);
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!chosen.length) { msg.hidden = false; msg.className = 'alert alert-error'; msg.textContent = 'Choose a .zip, some files or a folder first.'; return; }
+      const fd = new FormData();
+      fd.append('_csrf', S.csrf);
+      chosen.forEach((c) => fd.append('files[]', c.file, c.path));
+      const btn = $('[data-import-go]', form);
+      btn.disabled = true;
+      msg.hidden = false; msg.className = 'alert'; msg.textContent = 'Uploading ' + chosen.length + ' file(s)…';
+      try {
+        const r = await fetch(form.action, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': S.csrf } });
+        const d = await r.json().catch(() => ({ ok: false, error: 'Upload failed (' + r.status + '). The files may be larger than the server allows.' }));
+        if (!d.ok) throw new Error(d.error || 'Upload failed.');
+        location.href = d.next;
+      } catch (err) { msg.className = 'alert alert-error'; msg.textContent = err.message; btn.disabled = false; }
+    });
+  });
+  $$('[data-check-all-import]').forEach((all) => all.addEventListener('change', () => {
+    $$('input[name="paths[]"]', all.closest('form')).forEach((c) => { c.checked = all.checked; });
+  }));
+
+  // ---------- Goraiya: the AI drawer ----------
+  (() => {
+    const box = $('#goraiya');
+    if (!box) return;
+    const log = $('[data-goraiya-log]', box);
+    const form = $('[data-goraiya-form]', box);
+    const text = $('[data-goraiya-text]', box);
+    const welcome = $('[data-goraiya-welcome]', box);
+    const store = 'goraiya_' + box.dataset.user;
+    let history = [];
+    try { history = JSON.parse(sessionStorage.getItem(store) || '[]'); } catch (e) { history = []; }
+    const keep = () => { try { sessionStorage.setItem(store, JSON.stringify(history.slice(-30))); } catch (e) {} };
+    const open = () => { box.hidden = false; document.documentElement.classList.add('goraiya-open'); setTimeout(() => text && !form.hidden && text.focus(), 50); };
+    const close = () => { box.hidden = true; document.documentElement.classList.remove('goraiya-open'); };
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-goraiya-open]')) { box.hidden ? open() : close(); }
+      else if (e.target.closest('[data-goraiya-close]')) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !box.hidden) close();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); box.hidden ? open() : close(); }
+    });
+    const bubble = (role, html) => {
+      const el = document.createElement('div');
+      el.className = 'goraiya-msg goraiya-' + role;
+      el.innerHTML = html;
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+      return el;
+    };
+    const resultCard = (r) => r.ok
+      ? '<div class="goraiya-result"><strong>' + esc(r.title || '') + '</strong><small>' + esc(r.message || '') + '</small><span>'
+        + (r.preview ? '<a class="btn btn-sm btn-primary" href="' + esc(r.preview) + '" target="_blank" rel="noopener">Preview and edit</a>' : '')
+        + (r.edit ? '<a class="btn btn-sm btn-ghost" href="' + esc(r.edit) + '">Open</a>' : '') + '</span></div>'
+      : '<div class="goraiya-result is-error">' + esc(r.error || 'That did not work.') + '</div>';
+    const replay = () => history.forEach((m) => bubble(m.role, m.role === 'user' ? esc(m.text) : esc(m.text).replace(/\n/g, '<br>') + (m.results || []).map(resultCard).join('')));
+    if (history.length) { welcome.hidden = true; replay(); }
+    $('[data-goraiya-new]', box).addEventListener('click', () => {
+      history = []; keep();
+      $$('.goraiya-msg', log).forEach((m) => m.remove());
+      if (box.dataset.ready === '1') welcome.hidden = false;
+    });
+    $$('[data-goraiya-chip]', box).forEach((c) => c.addEventListener('click', () => { text.value = c.textContent; text.focus(); }));
+    const send = async () => {
+      const msg = text.value.trim();
+      if (!msg) return;
+      welcome.hidden = true;
+      bubble('user', esc(msg));
+      text.value = '';
+      const wait = bubble('assistant', '<span class="goraiya-typing"><i></i><i></i><i></i></span> Working on it… a full page can take a minute.');
+      const btn = $('button[type=submit]', form);
+      btn.disabled = true;
+      try {
+        const r = await fetch(box.dataset.url, { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': S.csrf, 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ message: msg, history: history.map((h) => ({ role: h.role, text: h.text })), context: { post_id: +box.dataset.post || 0, path: location.pathname } }) });
+        const d = await r.json().catch(() => ({ ok: false, error: 'Unexpected response (' + r.status + ').' }));
+        if (!d.ok) throw new Error(d.error || 'Goraiya could not answer.');
+        wait.innerHTML = esc(d.reply || 'Done.').replace(/\n/g, '<br>') + (d.results || []).map(resultCard).join('');
+        history.push({ role: 'user', text: msg }, { role: 'assistant', text: d.reply || '', results: d.results || [] });
+        keep();
+      } catch (err) {
+        wait.classList.add('is-error');
+        wait.textContent = err.message;
+      }
+      btn.disabled = false;
+      log.scrollTop = log.scrollHeight;
+    };
+    form.addEventListener('submit', (e) => { e.preventDefault(); send(); });
+    text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+
+    // Quick setup
+    const setup = $('[data-goraiya-setup]', box);
+    if (setup) {
+      const prov = $('[data-goraiya-provider]', setup);
+      const keys = $('[data-goraiya-keys]', setup);
+      const sync = () => { if (!prov || !keys) return; const u = prov.selectedOptions[0].dataset.keys; keys.href = u || '#'; keys.hidden = !u; };
+      if (prov) { prov.addEventListener('change', sync); sync(); }
+      const go = $('[data-goraiya-connect]', setup);
+      if (go) go.addEventListener('click', async () => {
+        const msgEl = $('[data-goraiya-setup-msg]', setup);
+        go.disabled = true; msgEl.hidden = false; msgEl.className = 'alert'; msgEl.textContent = 'Checking the connection…';
+        try {
+          const r = await fetch(box.dataset.connect, { method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': S.csrf, 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ provider: prov.value, key: $('[data-goraiya-key]', setup).value }) });
+          const d = await r.json().catch(() => ({ ok: false, error: 'Unexpected response.' }));
+          if (!d.ok) throw new Error(d.error);
+          setup.remove(); box.dataset.ready = '1'; welcome.hidden = false; form.hidden = false; text.focus();
+          toast('Goraiya is ready.');
+        } catch (err) { msgEl.className = 'alert alert-error'; msgEl.textContent = err.message; go.disabled = false; }
+      });
+    }
+    if (location.hash === '#goraiya') open();
+  })();
 })();

@@ -1,0 +1,4 @@
+body{font-family:Georgia,serif;margin:0;color:#222}.top{display:flex;justify-content:space-between;padding:16px}.logo{height:32px}
+.hero{padding:80px 24px;background-size:cover;color:#fff;text-align:center}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px}
+.feature{border:1px solid #eee;padding:16px;border-radius:8px}.button{background:#0a7;color:#fff;padding:10px 18px;border-radius:6px}
+.swiper-slide img{width:100%}.imported-marker{color:rgb(1, 2, 3)}

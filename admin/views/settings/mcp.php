@@ -16,7 +16,7 @@ $snippet = static fn(string $label, string $code) => '<div class="stack-sm"><spa
     <strong class="small-label">Endpoint</strong>
     <span class="row-between"><code style="word-break:break-all"><?= e($endpoint) ?></code>
       <button type="button" class="btn btn-sm" data-copy="<?= e($endpoint) ?>"><?= icon('copy', 14) ?> Copy</button></span>
-    <p class="muted small">Streamable HTTP, JSON-RPC over POST. Agents can read the site and its design system, write drafts, design pages in the visual builder,
+    <p class="muted small">Streamable HTTP, JSON-RPC over POST. Agents can read the site and its design system, write drafts, write complete designed pages,
       import images and restore revisions.</p>
   </div>
   <ol class="small stack-sm" style="padding-left:1.2em;margin:0">

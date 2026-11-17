@@ -170,7 +170,7 @@ final class Mcp
         return "You manage the Slate CMS website “{$site}” (" . site_url() . "), as user “" . (Auth::user()['display_name'] ?? '') . "” with a $write key.\n"
             . "1. Call get_site first: content types with their custom fields and taxonomies, the active theme and the design system (colour, font and spacing CSS variables, utility classes).\n"
             . "2. Content: list_content / get_content / search, then create_content or update_content. New content is a DRAFT unless you pass publish:true (and the user may publish). Ask the user before publishing. Every update keeps a revision (get_revisions, restore_revision).\n"
-            . "3. Designed pages: design_page saves HTML + CSS as an editable visual-builder design. Write semantic HTML using the design system: <section class=\"section\"><div class=\"container\">…</div></section>, h1–h6 and body text are already styled, .btn and .btn-outline for button links, .eyebrow for small labels above headings, colours via var(--color-primary) etc. or .text-{id} / .bg-{id}. Extra styling goes in the css argument as class-based rules (no IDs, no element resets, media queries welcome). No <script>, no inline event handlers, no external stylesheets or fonts.\n"
+            . "3. Designed pages: write_page saves a complete HTML document (its own <head> with styles, and <body>) as a page that keeps exactly that design; people then edit texts, images and repeating parts by clicking on the live page. Use the design-system CSS variables from get_site so the page matches the site. Write responsive CSS, real copy, alt text on images.\n"
             . "4. Images: upload_media_from_url, then use the returned url in <img src> with alt text.\n"
             . "Template tags work in designs and templates: {{site.name}}, {{title}}, {{field:name}}, {{#query type=\"post\" limit=\"3\"}}<a href=\"{{url}}\">{{title}}</a>{{/query}}.";
     }
@@ -315,15 +315,12 @@ final class Mcp
         ];
         $ro = ['readOnlyHint' => true, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false];
         $rw = ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => false];
-        $designHelp = 'Save a visual design (HTML + CSS) for a page or other item; it becomes an editable design in Slate\'s visual builder and is what visitors see. '
-            . 'Pass id to redesign an existing item, or title (and type, default "page") to create a new draft. Always saves a revision first; the item stays a draft unless publish:true. '
-            . 'HTML rules: body content only (no <html>/<head>/<body>, no <script>, no inline event handlers). Build with the design system from get_site: '
-            . 'sections as <section class="section"><div class="container">…</div></section>; headings h1–h6 and text are styled already; '
-            . '<a class="btn" href="…"> and <a class="btn-outline" …> for buttons; <p class="eyebrow"> for small labels; colours via CSS variables (var(--color-primary), var(--color-text), …) '
-            . 'or .text-{colour-id} / .bg-{colour-id}; fonts var(--font-heading) / var(--font-body); spacing var(--section-space), radius var(--radius). '
-            . 'For layout and custom looks give elements short descriptive classes (e.g. "hero", "feature-grid", "card") and style them in css with class-based rules only '
-            . '(no IDs, no global element resets, no @import); use flex/grid with flex-wrap or media queries (max-width: 992px / 768px) so it works on mobile. '
-            . 'Images: upload_media_from_url first, then <img src="URL" alt="…">. Template tags work: {{site.name}}, {{title}}, {{field:name}}, {{#query type="post" limit="3"}}…{{/query}}.';
+        $designHelp = 'Create or replace a page that keeps its own design: pass a complete HTML document (<!doctype html><html><head>…styles…</head><body>…</body></html>). '
+            . 'Visitors get exactly that page (with Slate\'s SEO tags); texts, images, icons and repeating groups (card lists, sliders) become click-to-edit on the live page. '
+            . 'Pass id to replace an existing item\'s page, or title (and type, default "page") to create a new draft. Always saves a revision first; the item stays a draft unless publish:true. '
+            . 'Rules: put CSS in <style> in the head (or <link> to public https stylesheets/fonts), make it responsive, use the design-system CSS variables from get_site '
+            . '(var(--color-primary), var(--font-heading), …) so it matches the site, real copy (no lorem ipsum), alt text on images. Scripts are kept only for users allowed to use unfiltered HTML. '
+            . 'Images: upload_media_from_url first, then <img src="URL" alt="…">. Template tags work for live content: {{site.name}}, {{title}}, {{#query type="post" limit="3"}}<a href="{{url}}">{{title}}</a>{{/query}}.';
         $tools = [
             'get_site' => ['title' => 'Site overview', 'annotations' => $ro,
                 'description' => 'Overview of the website: name, URL, active theme, content types with their custom fields and taxonomies (with terms), the design system (colour, font, type-scale and layout CSS variables and the utility classes such as .container .section .btn .btn-outline .eyebrow) and what this key may do. Call this first.',
@@ -343,27 +340,25 @@ final class Mcp
                 'description' => 'Everything about one item: title, slug, status, content HTML, excerpt, custom fields, terms, SEO, URL, its visual design (if any) and revision count.',
                 'inputSchema' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['id'], 'properties' => ['id' => $id]]],
             'create_content' => ['title' => 'Create content', 'annotations' => $rw, 'write' => true,
-                'description' => 'Create a new item (post, page or any custom type). It is saved as a DRAFT unless publish is true and the user may publish. For a designed landing page use design_page instead.',
+                'description' => 'Create a new item (post, page or any custom type). It is saved as a DRAFT unless publish is true and the user may publish. For a designed landing page use write_page instead.',
                 'inputSchema' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['type', 'title'], 'properties' => [
                     'type' => ['type' => 'string', 'description' => 'Content type slug (see get_site).'],
                     'title' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 255],
                 ] + $common + ['publish' => ['type' => 'boolean', 'description' => 'Publish right away (only when the user asked for it). Default false = draft.']]]],
             'update_content' => ['title' => 'Update content', 'annotations' => array_merge($rw, ['idempotentHint' => true]), 'write' => true,
-                'description' => 'Change an existing item; send only what changes. The previous version is kept as a revision. Custom fields are merged (fields not sent stay as they are); terms replace the current terms of each taxonomy sent. If the item has a visual design, change its look with design_page (content edits are kept but visitors see the design).',
+                'description' => 'Change an existing item; send only what changes. The previous version is kept as a revision. Custom fields are merged (fields not sent stay as they are); terms replace the current terms of each taxonomy sent. If the item has a visual design, change its look with write_page (content edits are kept but visitors see the design).',
                 'inputSchema' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['id'], 'properties' => [
                     'id' => $id,
                     'title' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 255],
                 ] + $common + ['status' => ['type' => 'string', 'enum' => ['draft', 'pending', 'publish', 'private'], 'description' => 'publish/private need a user who may publish. Only change when the user asked for it.']]]],
-            'design_page' => ['title' => 'Design a page (visual builder)', 'annotations' => $rw, 'write' => true,
+            'write_page' => ['title' => 'Write a designed page (full HTML)', 'annotations' => $rw, 'write' => true,
                 'description' => $designHelp,
                 'inputSchema' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['html'], 'properties' => [
                     'id' => $id + ['description' => 'Existing item to redesign. Omit to create a new item.'],
                     'title' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 255, 'description' => 'Title for a new item (required without id).'],
                     'type' => ['type' => 'string', 'description' => 'Content type for a new item. Default "page".'],
                     'slug' => ['type' => 'string', 'maxLength' => 200, 'description' => 'URL slug for a new item.'],
-                    'html' => ['type' => 'string', 'minLength' => 1, 'maxLength' => self::MAX_HTML, 'description' => 'Page body HTML (see rules above).'],
-                    'css' => ['type' => 'string', 'maxLength' => 262144, 'description' => 'Class-based CSS for this page only.'],
-                    'layout' => ['type' => 'string', 'enum' => ['theme', 'blank'], 'description' => '"theme" (default): inside the site header and footer. "blank": the design is the whole page.'],
+                    'html' => ['type' => 'string', 'minLength' => 1, 'maxLength' => self::MAX_HTML, 'description' => 'Complete HTML document (see rules above).'],
                     'publish' => ['type' => 'boolean', 'description' => 'Publish as well (only when the user asked for it). Default false.'],
                 ]]],
             'list_templates' => ['title' => 'List templates', 'annotations' => $ro,
@@ -599,10 +594,9 @@ final class Mcp
 
     private static function summary(array $p): array
     {
-        $b = Builder::data($p);
         return ['id' => (int)$p['id'], 'type' => $p['type'], 'title' => $p['title'], 'slug' => $p['slug'], 'status' => $p['status'],
             'url' => Posts::permalink($p, true), 'updated_at' => self::iso($p['updated_at']), 'published_at' => self::iso($p['published_at']),
-            'parent_id' => $p['parent_id'] ? (int)$p['parent_id'] : null, 'visual_design' => $b !== null && Builder::active($p)];
+            'parent_id' => $p['parent_id'] ? (int)$p['parent_id'] : null, 'designed_page' => HtmlPages::active($p)];
     }
 
     private static function full(array $p): array
@@ -614,8 +608,8 @@ final class Mcp
             }
         }
         $fields = (array)$p['fields'];
-        unset($fields['_builder']);
-        $b = Builder::data($p);
+        unset($fields['_html']);
+        $b = HtmlPages::data($p);
         $out = self::summary($p) + [
             'excerpt' => (string)$p['excerpt'],
             'content' => (string)$p['content'],
@@ -634,10 +628,8 @@ final class Mcp
             $out['preview_url'] = Posts::permalink($p, true) . '?preview=' . (int)$p['id'];
         }
         if ($b) {
-            $out['design'] = ['active' => Builder::active($p), 'mode' => $b['mode'] ?? 'builder', 'layout' => $b['layout'] ?? 'theme',
-                'html' => (string)($b['html'] ?? ''), 'css' => (string)($b['css'] ?? ''),
-                'note' => 'Visitors see this design (html + css). content holds its text without template logic. Change it with design_page.',
-                'builder_url' => self::absAdmin("content/{$p['type']}/{$p['id']}/builder")];
+            $out['design'] = ['source' => $b['source'] ?? 'import', 'head' => (string)($b['head'] ?? ''), 'body' => (string)($b['body'] ?? ''),
+                'note' => 'Visitors see this page (head + body). content holds its text. Replace it with write_page; people edit it by clicking on the live page.'];
         }
         return $out;
     }
@@ -660,7 +652,7 @@ final class Mcp
             $counts = Posts::counts($slug);
             $types[] = ['slug' => $slug, 'singular' => $t['singular'] ?? $slug, 'plural' => $t['plural'] ?? $slug,
                 'hierarchical' => !empty($t['hierarchical']), 'has_archive' => !empty($t['has_archive']), 'supports' => array_values((array)($t['supports'] ?? [])),
-                'visual_builder' => Builder::forType($slug), 'taxonomies' => array_keys(ContentModel::taxonomiesFor($slug)),
+                'taxonomies' => array_keys(ContentModel::taxonomiesFor($slug)),
                 'fields' => array_values(array_map([self::class, 'fieldDef'], array_filter(ContentModel::fieldsFor('post', $slug),
                     static fn($f) => !in_array($f['type'] ?? '', ContentModel::LAYOUT_TYPES, true)))),
                 'counts' => ['publish' => $counts['publish'], 'draft' => $counts['draft'], 'pending' => $counts['pending']]];
@@ -689,7 +681,6 @@ final class Mcp
             'language' => (string)Options::get('language', 'en'), 'timezone' => (string)Options::get('timezone', 'UTC'), 'slate_version' => SLATE_VERSION,
             'homepage' => $front ? ['type' => 'page', 'id' => $front] : ['type' => 'latest_posts'],
             'theme' => ['slug' => Theme::active(), 'name' => (string)(Theme::meta()['name'] ?? Theme::active()), 'version' => (string)(Theme::meta()['version'] ?? '')],
-            'visual_builder' => ['enabled' => Builder::enabled(), 'default_layout' => (string)Options::get('builder_default_layout', 'theme')],
             'content_types' => $types,
             'taxonomies' => $taxes,
             'design_system' => [
@@ -811,8 +802,8 @@ final class Mcp
                 $data['status'] = $a['status'];
             }
         }
-        if (isset($data['content']) && Builder::active($post)) {
-            $warnings[] = 'This item is shown with its visual design, so the new content is stored but visitors still see the design. Use design_page to change what visitors see.';
+        if (isset($data['content']) && HtmlPages::active($post)) {
+            $warnings[] = 'This item is shown as a designed page, so the new content is stored but visitors still see the page. Use write_page to change what visitors see.';
         }
         if (!$data) {
             throw new ToolError('Nothing to change: send at least one field to update.');
@@ -831,7 +822,7 @@ final class Mcp
         if (isset($a['content'])) {
             $in['content'] = Auth::can('unfiltered_html') ? self::cleanHtml((string)$a['content'], $css) : (string)$a['content'];
             if (!empty($css)) {
-                $warnings[] = '<style> blocks are not kept in content; use design_page for styled layouts.';
+                $warnings[] = '<style> blocks are not kept in content; use write_page for styled layouts.';
             }
         }
         if (!empty($in['featured_media_id']) && !Media::find((int)$in['featured_media_id'])) {
@@ -889,52 +880,42 @@ final class Mcp
         return $in;
     }
 
-    public static function toolDesignPage(array $a): array
+    public static function toolWritePage(array $a): array
     {
         self::requireCap('edit_posts', 'edit content');
-        if (!Builder::enabled()) {
-            throw new ToolError('The visual builder is switched off on this site (Settings → Content & media → Visual builder).');
-        }
         $warnings = [];
         $created = false;
+        $html = (string)$a['html'];
+        if (!preg_match('#<body\b#i', $html)) {
+            $html = '<!doctype html><html><head></head><body>' . $html . '</body></html>';
+            $warnings[] = 'No <body> found: the HTML was used as the page body.';
+        }
+        $parsed = HtmlPages::fromDocument($html, null, 'ai');
+        $data = $parsed['data'];
+        $data['head'] = HtmlPages::stripScripts((string)preg_replace('#<link\b[^>]*href=["\']?(?!https://|/)[^>]*>#i', '', $data['head']));
+        if (!Auth::can('unfiltered_html')) {
+            $data['body'] = HtmlPages::stripScripts($data['body']);
+            $warnings[] = 'Scripts and event handlers were removed (this user may not use unfiltered HTML).';
+        }
+        if (trim(HtmlPages::text($data['body'])) === '' && !preg_match('#<(img|video|iframe|svg)#i', $data['body'])) {
+            throw new ToolError('The HTML has no visible content.');
+        }
         if (isset($a['id'])) {
             $post = self::findPost((int)$a['id'], true);
         } else {
-            if (trim((string)($a['title'] ?? '')) === '') {
-                throw new ToolError('Pass id to redesign an item, or title (and type) to create a new one.');
+            $title = trim((string)($a['title'] ?? '')) ?: $parsed['title'];
+            if ($title === '') {
+                throw new ToolError('Pass id to replace an item, or title (and type) to create a new one.');
             }
             $type = (string)($a['type'] ?? 'page');
             self::type($type);
-            if (!Builder::forType($type)) {
-                throw new ToolError("The visual builder is not available for $type (Settings → Content & media → Visual builder).");
-            }
-            $id = Posts::save(['type' => $type, 'title' => trim((string)$a['title']), 'slug' => trim((string)($a['slug'] ?? '')), 'status' => 'draft', 'content' => '']);
+            $id = Posts::save(['type' => $type, 'title' => $title, 'slug' => trim((string)($a['slug'] ?? '')), 'status' => 'draft', 'content' => '']);
             $post = Posts::find($id);
             $created = true;
         }
-        if (!Builder::forType((string)$post['type'])) {
-            throw new ToolError("The visual builder is not available for {$post['type']} (Settings → Content & media → Visual builder).");
-        }
-        $html = self::cleanHtml((string)$a['html'], $extraCss);
-        if ($extraCss !== '') {
-            $warnings[] = 'Moved <style> blocks from the HTML into the page CSS.';
-        }
-        if (trim(strip_tags($html, '<img><iframe><video><hr>')) === '' && !str_contains($html, '{{')) {
-            throw new ToolError('The HTML has no visible content.');
-        }
-        $css = trim($extraCss . "\n" . (string)($a['css'] ?? ''));
-        if (preg_match('/@import|url\(\s*["\']?\s*javascript:/i', $css)) {
-            $warnings[] = '@import and javascript: URLs were removed from the CSS.';
-        }
-        $prev = Builder::data($post);
-        $layout = (string)($a['layout'] ?? ($prev['layout'] ?? Options::get('builder_default_layout', 'theme')));
         $before = Revisions::count((int)$post['id']);
-        if ($err = Builder::saveHtml((int)$post['id'], $html, $css, $layout === 'blank' ? 'blank' : 'theme')) {
-            if ($created) {
-                Posts::delete((int)$post['id'], true);
-            }
-            throw new ToolError($err);
-        }
+        $extra = $parsed['description'] !== '' && empty($post['seo']['description']) ? ['seo' => ['description' => $parsed['description']]] : [];
+        HtmlPages::save((int)$post['id'], $data, $extra);
         if (!empty($a['publish'])) {
             if (self::canPublish()) {
                 Posts::save(['status' => 'publish'], (int)$post['id']);
@@ -942,13 +923,10 @@ final class Mcp
                 $warnings[] = 'Saved, but not published: the user of this key may not publish.';
             }
         }
-        if (!Auth::can('unfiltered_html')) {
-            $warnings[] = 'The HTML was sanitised (this user may not use unfiltered HTML): only basic tags and the class attribute are kept.';
-        }
         $now = Posts::find((int)$post['id']);
-        log_activity('mcp_page_designed', "{$now['type']}:{$now['title']} ({$now['status']})");
+        log_activity('mcp_page_written', "{$now['type']}:{$now['title']} ({$now['status']})");
         $out = self::full($now);
-        unset($out['content'], $out['design']['html']);
+        unset($out['content'], $out['design']['body'], $out['design']['head']);
         return ['saved' => true, 'created' => $created, 'revision_saved' => Revisions::count((int)$post['id']) > $before] + $out + ($warnings ? ['warnings' => $warnings] : []);
     }
 
@@ -982,7 +960,7 @@ final class Mcp
                 'inside_theme' => !empty($t['wrap']), 'updated_at' => self::iso($t['updated_at'] ?? null)];
         }
         return ['items' => $items, 'total' => count($items),
-            'note' => 'Without an active template, items render with the theme. Items with a visual design (design_page) use that design instead of the single template.'];
+            'note' => 'Without an active template, items render with the theme. Items with a visual design (write_page) use that design instead of the single template.'];
     }
 
     public static function toolGetTemplate(array $a): array
@@ -1200,8 +1178,8 @@ final class Mcp
                 throw new ToolError("Revision {$a['revision_id']} does not belong to item {$post['id']}.");
             }
             $fields = (array)$r['fields'];
-            $design = isset($fields['_builder']) && is_array($fields['_builder']) ? ['layout' => $fields['_builder']['layout'] ?? 'theme', 'css' => (string)($fields['_builder']['css'] ?? '')] : null;
-            unset($fields['_builder']);
+            $design = isset($fields['_html']) && is_array($fields['_html']) ? ['head' => (string)($fields['_html']['head'] ?? ''), 'body' => (string)($fields['_html']['body'] ?? '')] : null;
+            unset($fields['_html']);
             $changes = [];
             foreach (Revisions::diff((string)$r['content'], (string)$post['content']) as [$op, $line]) {
                 if ($op !== '=' && count($changes) < 200) {

@@ -15,7 +15,7 @@ server {
     # Old WordPress media & mirrored assets: serve if present, otherwise let Slate redirect / fetch them
     location ^~ /wp-content/ { try_files $uri /index.php?$query_string; }
     location ^~ /wp-includes/ { try_files $uri /index.php?$query_string; }
-    location ~* ^/admin/(views|install\.php|routes\.php|api\.php) { return 404; }
+    location ~* ^/admin/(views|routes|install\.php|routes\.php|api\.php) { return 404; }
     location ^~ /content/cache/   { return 404; }
     location ^~ /bin/ { return 404; }
     location ~ ^/(scripts|tests|node_modules)/ { return 404; }

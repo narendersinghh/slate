@@ -52,6 +52,7 @@ final class Icons
         'cart' => '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>',
         'inbox' => '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
         'translate' => '<path d="M5 8h8M9 5v3M6.5 8c.5 3 2.5 5.5 5.5 6.5M11.5 8c-.5 3-3 6-6.5 7.5M13 20l4-9 4 9M14.3 17h5.4"/>',
+        'sparrow' => '<path d="M3 13c3.5.2 6-1.3 7.6-4.2C11.9 6.4 13.9 5 16.5 5c1.7 0 3 .8 3.9 2l1.6.6-1.5.9c0 4.6-3.6 8.5-8.5 8.5H7.5L4 20l1-3.3C3.7 15.9 3 14.6 3 13Z"/><circle cx="16.5" cy="8.3" r=".6" fill="currentColor"/><path d="M9.5 13.5c1.3-.2 2.6-1 3.4-2.2"/>',
         'chevron-down' => '<path d="m6 9 6 6 6-6"/>',
         'chevron-right' => '<path d="m9 18 6-6-6-6"/>',
         'chevron-left' => '<path d="m15 18-6-6 6-6"/>',

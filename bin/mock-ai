@@ -12,7 +12,23 @@ foreach ((array)($in['messages'] ?? []) as $m) {
         $prompt = is_string($m['content']) ? $m['content'] : json_encode($m['content']);
     }
 }
-if (str_contains($prompt, 'Rewrite this part')) {
+$system = (string)($in['system'] ?? '');
+foreach ((array)($in['messages'] ?? []) as $m) {
+    if (($m['role'] ?? '') === 'system') {
+        $system .= is_string($m['content']) ? $m['content'] : '';
+    }
+}
+if (str_contains($prompt, 'Reply with the single word: ready')) {
+    $html = 'ready';
+} elseif (str_contains($system, 'You are Goraiya')) {
+    $page = '<!doctype html><html lang="en"><head><title>Our Services</title><meta name="description" content="What we offer.">'
+        . '<style>body{font-family:var(--font-body,system-ui);margin:0}.hero{padding:64px 24px;text-align:center;background:var(--color-primary,#f26b2d);color:#fff}'
+        . '.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;padding:40px 24px}.card{border:1px solid #ddd;border-radius:12px;padding:20px}</style>'
+        . '<script>window.bad=1</script></head><body><section class="hero"><h1>Services that grow your business</h1><p>Clear plans, honest prices.</p><a class="btn" href="#contact">Talk to us</a></section>'
+        . '<section class="cards"><div class="card"><h3>Strategy</h3><p>We map your next steps.</p></div><div class="card"><h3>Design</h3><p>Pages people trust.</p></div>'
+        . '<div class="card"><h3>Growth</h3><p>More of the right visitors.</p></div></section></body></html>';
+    $html = json_encode(['reply' => 'I made a Services page as a draft. Open it to check the copy.', 'actions' => [['type' => 'create_page', 'title' => 'Services', 'html' => $page]]]);
+} elseif (str_contains($prompt, 'Rewrite this part')) {
     $html = '<div class="edited-by-ai" style="display:flex;gap:16px;flex-wrap:wrap"><p style="flex:1 1 200px">Edited by AI: shorter and clearer.</p></div>';
 } elseif (str_contains($prompt, 'Design ONE new section')) {
     $html = '<section class="section"><div class="container"><h2>What our clients say</h2><blockquote style="margin:0">"Fast, friendly and on time."</blockquote></div></section>';

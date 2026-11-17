@@ -5,7 +5,8 @@
 A fast, secure, SEO-first content management system, the flexibility of WordPress without the bloat.
 
 - **Modern admin**: clean dashboard, command palette (⌘/Ctrl + K), dark mode, fully responsive.
-- **Visual page builder**: drag and drop with responsive styles and your design system; visitors get plain HTML + CSS. See [docs/builder.md](docs/builder.md).
+- **AI first: Goraiya**: the built-in AI (✦ in the top bar) writes complete pages in your style and designs templates, as drafts. Works with Claude, OpenAI, Gemini or local models.
+- **Import pages**: bring HTML/CSS/JS pages (a zip or a folder) into Slate with exactly the same design; then edit any text, image, icon or slider by clicking on the live page.
 - **Content model built in**: custom post types, taxonomies and custom fields (20 field types incl. repeater, gallery, relationship). No plugins needed.
 - **SEO built in**: meta titles/descriptions with templates, live Google preview & on-page analysis, robots meta, *noindex the whole site*, canonical URLs, Open Graph/Twitter, JSON-LD schema graph (Organization, WebSite, Article, Breadcrumbs, FAQ…), XML sitemaps, virtual robots.txt, redirects (incl. regex & 410).
 - **Integrations**: Google Tag Manager, GA4, Search Console, Bing, Yandex, Pinterest, Meta Pixel, Microsoft Clarity, LinkedIn Insight, AdSense, plus custom header/body/footer code.
@@ -20,7 +21,7 @@ A fast, secure, SEO-first content management system, the flexibility of WordPres
 - **Backups**: database and files, scheduled with retention; restore from the command line.
 - **Scheduled tasks**: server cron or visitor-triggered; modules add their own jobs.
 - **REST API**: headless content API with per-user API keys (off by default).
-- **AI agents (MCP)**: built-in Model Context Protocol server, so Claude, ChatGPT, Cursor and other agents can read the site, write drafts and design pages in the visual builder with a scoped API key (off by default). See [docs/mcp.md](docs/mcp.md).
+- **AI agents (MCP)**: built-in Model Context Protocol server, so Claude, ChatGPT, Cursor and other agents can read the site, write drafts and complete designed pages with a scoped API key (off by default). See [docs/mcp.md](docs/mcp.md).
 - **Modules** · Slate’s name for plugins. Install from a zip, GitHub or registries, create one with AI, update with rollback; crashing modules switch themselves off.
 - **Updates**: one-click core updates from GitHub Releases with automatic backup and rollback.
 

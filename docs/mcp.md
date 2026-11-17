@@ -2,7 +2,7 @@
 
 Slate has a built-in [Model Context Protocol](https://modelcontextprotocol.io) server. AI agents such as Claude Code,
 Claude Desktop, ChatGPT, Cursor or VS Code can connect to it and build or manage the site: read the content model and
-design system, write drafts, design pages in the visual builder, import images and undo changes.
+design system, write drafts, write complete designed pages (click-to-edit on the live site), import images and undo changes.
 
 - Endpoint: `https://your-site.com/api/mcp` (Streamable HTTP, JSON-RPC 2.0 over POST, stateless)
 - Off by default. It does not depend on the REST API switch.
@@ -61,15 +61,15 @@ npx @modelcontextprotocol/inspector --cli https://your-site.com/api/mcp --transp
 | Tool | What it does | Needs |
 |---|---|---|
 | `get_site` | Name, URL, theme, content types with custom fields and taxonomies (with terms), design system (colour, font, type and layout CSS variables, utility classes), what the key may do. | any key |
-| `list_content` | Items of one or all types: status, URL, visual design yes/no. Filters: status, search, order, paging. | any key |
-| `get_content` | One item in full: content, excerpt, fields, terms, SEO, URL, visual design (HTML + CSS), revision count. | any key |
+| `list_content` | Items of one or all types: status, URL, designed page yes/no. Filters: status, search, order, paging. | any key |
+| `get_content` | One item in full: content, excerpt, fields, terms, SEO, URL, designed page (head + body), revision count. | any key |
 | `search` | Content, terms, media and templates at once. | any key |
 | `list_templates`, `get_template` | Site templates (Templates screen), read-only. | `manage_content_model` |
 | `list_media` | Media library: URL, size, alt text. | `edit_posts` |
 | `get_revisions` | Earlier versions of an item; with `revision_id` one version in full plus a diff to the current one. | can edit the item |
 | `create_content` | New item of any public type with content, excerpt, fields, terms, SEO, parent, featured image. Draft unless `publish: true`. | write key, `edit_posts` |
 | `update_content` | Change only what is sent. Fields merge, terms replace per taxonomy sent. `status` can publish/unpublish. | write key, can edit the item |
-| `design_page` | Save HTML + CSS as a visual-builder design (new item or existing one), layout `theme` or `blank`. Opens in the builder as editable parts. | write key, can edit the item, builder enabled for the type |
+| `write_page` | Save a complete HTML document as a page that keeps its own design (new item or existing one). Texts, images and repeating parts become click-to-edit on the live page. | write key, `edit_posts` |
 | `upload_media_from_url` | Import a public file into the media library (optimised like any upload), with alt text and file name. | write key, `upload_media` |
 | `restore_revision` | Put an earlier version back; the replaced version becomes a revision too. | write key, can edit the item |
 
@@ -79,19 +79,12 @@ as JSON-RPC error `-32602`.
 
 ### Designing pages
 
-`design_page` stores the design exactly like the visual builder: the page opens in **Design with the visual builder**
-with every section, heading, card and button as an editable part, CSS rules kept as written (CSS variables included)
-and template logic such as `{{#query}}…{{/query}}` in a locked code block. Agents are told to:
-
-- build with sections: `<section class="section"><div class="container">…</div></section>`;
-- rely on the design system: headings and text are styled, `.btn` / `.btn-outline` for buttons, `.eyebrow` for small
-  labels, colours as `var(--color-primary)` etc. or `.text-{id}` / `.bg-{id}`, fonts `var(--font-heading)` /
-  `var(--font-body)`, spacing `var(--section-space)`, radius `var(--radius)`;
-- put extra styling in `css` as class-based rules (no IDs, no global resets, no `@import`), with media queries for mobile;
-- never use scripts, inline event handlers or external stylesheets.
-
-`<style>` blocks inside the HTML are moved into the page CSS; `<script>`, event attributes and `javascript:` URLs are
-always removed, even for administrators.
+`write_page` takes a complete HTML document (`<!doctype html><html><head>…</head><body>…</body></html>`) and stores it as
+a page that keeps exactly that design (the same format as imported pages and pages made by Goraiya). Visitors get the
+page with Slate's SEO tags; editable texts, images, icons and repeating groups (card lists, sliders) are marked so people
+can change them by clicking on the live page, and lists can be connected to live content. Agents are told to put CSS in
+the head, make it responsive, use the design-system CSS variables from `get_site`, write real copy and alt texts; scripts
+are kept only for users allowed to use unfiltered HTML.
 
 ## Safety model
 
@@ -101,8 +94,7 @@ always removed, even for administrators.
   (Contributors' content always stays a draft). The server instructions tell agents to ask before publishing.
 - **Revisions**: every update, design and restore keeps the previous version (Settings → General → Writing decides how
   many). `restore_revision` or the dashboard's Revisions screen undoes any agent change.
-- **Sanitising**: users without `unfiltered_html` get the same HTML sanitiser as in the dashboard; builder CSS is
-  cleaned like in the builder. No tool can delete content, change settings, users, modules or templates.
+- **Sanitising**: users without `unfiltered_html` cannot store scripts or event handlers. No tool can delete content, change settings, users, modules or templates.
 - **Media imports**: only public http(s) addresses on standard ports; private, loopback and reserved networks are
   refused, the resolved address is pinned for the download and every redirect is checked again. File type and size
   limits of the media library apply.

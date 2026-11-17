@@ -72,6 +72,9 @@ window.SLATE = <?= json_encode([
       <?php if (Auth::can('upload_media')): ?>
         <?= $navItem(admin_url('media'), 'image', 'Media', $is('/media')) ?>
       <?php endif; ?>
+      <?php if (Auth::can('edit_posts') && Auth::can('unfiltered_html')): ?>
+        <?= $navItem(admin_url('import'), 'upload', 'Import pages', $is('/import')) ?>
+      <?php endif; ?>
 
       <?php
       // Modules: one entry per module, its pages (and settings) underneath.
@@ -166,6 +169,9 @@ window.SLATE = <?= json_encode([
         <?= icon('search', 16) ?><span>Search or jump to…</span><kbd>⌘K</kbd>
       </button>
       <div class="topbar-actions">
+        <?php if (Auth::can('use_ai') && Auth::can('edit_posts')): ?>
+        <button class="btn btn-sm goraiya-btn" type="button" data-goraiya-open aria-label="Open Goraiya, your AI assistant"><?= icon('sparrow', 17) ?> <span class="hide-sm">Goraiya</span></button>
+        <?php endif; ?>
         <a class="btn btn-ghost btn-sm hide-sm" href="<?= e(url()) ?>" target="_blank" rel="noopener"><?= icon('external', 15) ?> View site</a>
         <?php if (Auth::can('edit_posts')): ?>
         <div class="dropdown">
@@ -214,6 +220,48 @@ window.SLATE = <?= json_encode([
     <div class="toast toast-<?= e($f['type']) ?>"><?= icon($f['type'] === 'error' ? 'alert' : ($f['type'] === 'success' ? 'check' : 'info'), 16) ?><span><?= e($f['message']) ?></span></div>
   <?php endforeach; ?>
 </div>
+
+<?php if (Auth::can('use_ai') && Auth::can('edit_posts')):
+    $aiReady = \Slate\Ai::enabled();
+    $postId = preg_match('#/content/[a-z0-9_-]+/(\d+)#', $current, $pm) ? (int)$pm[1] : 0; ?>
+<aside class="goraiya" id="goraiya" hidden aria-label="Goraiya, AI assistant" data-url="<?= e(admin_url('goraiya')) ?>" data-connect="<?= e(admin_url('goraiya/connect')) ?>"
+       data-ready="<?= $aiReady ? '1' : '0' ?>" data-post="<?= $postId ?>" data-user="<?= (int)$user['id'] ?>">
+  <header class="goraiya-head">
+    <span class="goraiya-logo"><?= icon('sparrow', 20) ?></span>
+    <div><strong>Goraiya</strong><small>Builds pages and templates with you</small></div>
+    <button class="icon-btn" type="button" data-goraiya-new title="New conversation" aria-label="New conversation"><?= icon('plus', 16) ?></button>
+    <button class="icon-btn" type="button" data-goraiya-close aria-label="Close"><?= icon('x', 16) ?></button>
+  </header>
+  <div class="goraiya-body" data-goraiya-log>
+    <?php if (!$aiReady): ?>
+    <div class="goraiya-setup" data-goraiya-setup>
+      <p><strong>Connect an AI to start.</strong> Goraiya writes complete pages in your site's style, designs templates, and keeps everything as drafts for you to check.</p>
+      <?php if (Auth::can('manage_settings')): ?>
+      <label class="field"><span>Provider</span><select class="input" data-goraiya-provider>
+        <?php foreach (\Slate\Ai::PRESETS as $k => $pr): if ($k === 'custom') continue; ?><option value="<?= e($k) ?>" data-keys="<?= e($pr['keys'] ?? '') ?>"><?= e($pr['label']) ?></option><?php endforeach; ?>
+      </select></label>
+      <label class="field"><span>API key</span><input class="input" type="password" autocomplete="off" data-goraiya-key placeholder="Paste your key"></label>
+      <a class="small" href="#" target="_blank" rel="noopener" data-goraiya-keys>Get a key</a>
+      <div class="alert" data-goraiya-setup-msg hidden></div>
+      <button class="btn btn-primary" type="button" data-goraiya-connect>Connect</button>
+      <p class="muted small">Stored encrypted. Change it any time in Settings, AI assistant.</p>
+      <?php else: ?>
+      <p class="muted">Ask an administrator to connect an AI provider.</p>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+    <div class="goraiya-welcome" data-goraiya-welcome<?= $aiReady ? '' : ' hidden' ?>>
+      <p>Hi, I'm Goraiya. Tell me about your site and I'll build the pages, or ask me to design a template. Everything starts as a draft.</p>
+      <div class="goraiya-chips"><?php foreach (\Slate\Goraiya::suggestions() as $sg): ?><button type="button" class="chip" data-goraiya-chip><?= e($sg) ?></button><?php endforeach; ?></div>
+      <p class="muted small">Already have a design? <a href="<?= e(admin_url('import')) ?>">Import your HTML pages</a>, then edit them by clicking on the page.</p>
+    </div>
+  </div>
+  <form class="goraiya-input" data-goraiya-form<?= $aiReady ? '' : ' hidden' ?>>
+    <textarea class="input" rows="2" placeholder="Describe a page, a template or a change…" data-goraiya-text></textarea>
+    <button class="btn btn-primary" type="submit" aria-label="Send"><?= icon('arrow-up', 16) ?></button>
+  </form>
+</aside>
+<?php endif; ?>
 
 <div class="palette" id="palette" hidden>
   <div class="palette-box" role="dialog" aria-label="Command palette">

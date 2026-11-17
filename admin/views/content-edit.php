@@ -53,37 +53,10 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
       </div>
       <?php endif; ?>
 
-      <?php if ($supports('editor')):
-          $canBuild = \Slate\Builder::forType($slug);
-          $built = $post && \Slate\Builder::active($post);
-          $hasDesign = $post && \Slate\Builder::data($post); ?>
-      <?php if ($built): ?>
-        <div class="builder-note card">
-          <span class="builder-note-icon"><?= icon('layers', 20) ?></span>
-          <div><strong>Designed with the visual builder</strong><p class="muted">Visitors see the visual design. Open the builder to change the layout, text and images.</p></div>
-          <div class="builder-note-actions">
-            <a class="btn btn-primary" href="<?= e(admin_url("content/$slug/{$p['id']}/builder")) ?>"><?= icon('edit', 15) ?> Open visual builder</a>
-            <button class="btn btn-ghost btn-sm" type="submit" formaction="<?= e(admin_url("content/$slug/{$p['id']}/builder/mode")) ?>" name="mode" value="classic" formnovalidate
-                    data-confirm="Use the classic editor for this item? Its content goes back to how it was before the visual design; the design is kept and you can switch back.">Use classic editor</button>
-          </div>
-        </div>
-        <textarea name="content" hidden><?= e($p['content']) ?></textarea>
-      <?php else: ?>
-        <?php if ($canBuild): ?>
-        <div class="builder-switch">
-          <?php if ($post): ?>
-            <a class="btn btn-sm" href="<?= e(admin_url("content/$slug/{$p['id']}/builder")) ?>"<?= !$hasDesign && \Slate\Builder::hasTemplateLogic((string)$p['content'])
-                ? ' data-confirm="This content contains template logic (loops, conditions or tags inside attributes). The visual builder shows it as text and may not keep it exactly. A revision is saved first and &quot;Use classic editor&quot; restores the current version. Continue?"' : '' ?>><?= icon('layers', 15) ?> <?= $hasDesign ? 'Back to the visual design' : 'Design with the visual builder' ?></a>
-          <?php else: ?>
-            <button class="btn btn-sm" type="submit" name="then" value="builder" formaction="<?= e(admin_url("content/$slug/save")) ?>" formnovalidate><?= icon('layers', 15) ?> Design with the visual builder</button>
-          <?php endif; ?>
-          <small class="muted">Drag & drop layout, responsive styles, reusable blocks.</small>
-        </div>
-        <?php endif; ?>
+      <?php if ($supports('editor')): ?>
       <div class="editor" data-editor data-main-editor>
         <textarea name="content" hidden><?= e($p['content']) ?></textarea>
       </div>
-      <?php endif; ?>
       <?php endif; ?>
 
       <?php foreach ($mainGroups as $g): ?>

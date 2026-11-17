@@ -20,7 +20,7 @@ ServerSignature Off
     RewriteRule ^themes/.*\.(php\d?|phtml|phar|inc)$ - [R=404,L,NC]
     RewriteRule ^(wp-content|wp-includes)/.*\.(php\d?|phtml|phar)$ - [R=404,L,NC]
     RewriteRule ^(bin|scripts|tests|node_modules)(/.*)?$ - [R=404,L,NC]
-    RewriteRule ^admin/(views|install\.php|routes\.php|api\.php)(/.*)?$ - [R=404,L,NC]
+    RewriteRule ^admin/(views|routes|install\.php|routes\.php|api\.php)(/.*)?$ - [R=404,L,NC]
 
     # Serve existing static files directly
     RewriteCond %{REQUEST_FILENAME} -f

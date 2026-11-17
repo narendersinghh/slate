@@ -1,0 +1,67 @@
+<?php
+// Fake Google Indexing / Search Console / IndexNow endpoints for tests. Never used by a real site.
+//   php -S 0.0.0.0:8197 bin/mock-indexing
+// Then add to the test site's config.php:
+//   'seo_endpoints' => ['google_token' => 'http://127.0.0.1:8197/token', 'google_publish' => 'http://127.0.0.1:8197/publish',
+//       'google_metadata' => 'http://127.0.0.1:8197/metadata', 'google_webmasters' => 'http://127.0.0.1:8197/webmasters',
+//       'indexnow' => 'http://127.0.0.1:8197/indexnow'],
+// GET /log returns every recorded request as JSON; POST /reset clears it.
+declare(strict_types=1);
+
+$log = sys_get_temp_dir() . '/slate-mock-indexing.jsonl';
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$path = (string)parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$raw = (string)file_get_contents('php://input');
+header('Content-Type: application/json');
+
+if ($path === '/log') {
+    $rows = is_file($log) ? array_map(static fn($l) => json_decode($l, true), array_filter(explode("\n", (string)file_get_contents($log)))) : [];
+    echo json_encode(array_values($rows), JSON_UNESCAPED_SLASHES);
+    return;
+}
+if ($path === '/reset') {
+    @unlink($log);
+    echo '{"ok":true}';
+    return;
+}
+
+$entry = ['method' => $method, 'path' => $path, 'query' => $_SERVER['QUERY_STRING'] ?? '', 'auth' => $_SERVER['HTTP_AUTHORIZATION'] ?? '',
+    'body' => json_decode($raw, true) ?? $raw];
+if ($path === '/token') {
+    parse_str($raw, $form);
+    $parts = explode('.', (string)($form['assertion'] ?? ''));
+    $claims = count($parts) === 3 ? json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true) : null;
+    $entry['body'] = ['grant_type' => $form['grant_type'] ?? '', 'claims' => $claims, 'signed' => count($parts) === 3 && strlen($parts[2]) > 100];
+    file_put_contents($log, json_encode($entry, JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX);
+    if (!$claims || ($form['grant_type'] ?? '') !== 'urn:ietf:params:oauth:grant-type:jwt-bearer') {
+        http_response_code(400);
+        echo '{"error":"invalid_grant","error_description":"Bad assertion"}';
+        return;
+    }
+    echo json_encode(['access_token' => 'mock-token-' . substr(md5((string)$claims['iat']), 0, 6), 'expires_in' => 3600, 'token_type' => 'Bearer']);
+    return;
+}
+file_put_contents($log, json_encode($entry, JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX);
+if (!str_starts_with($path, '/indexnow') && !str_starts_with((string)$entry['auth'], 'Bearer mock-token-')) {
+    http_response_code(401);
+    echo '{"error":{"code":401,"message":"Missing token"}}';
+    return;
+}
+switch (true) {
+    case $path === '/publish':
+        echo json_encode(['urlNotificationMetadata' => ['url' => $entry['body']['url'] ?? '', 'latestUpdate' => ['type' => $entry['body']['type'] ?? '', 'notifyTime' => gmdate('c')]]]);
+        break;
+    case $path === '/metadata':
+        http_response_code(404);
+        echo '{"error":{"code":404,"message":"Requested entity was not found."}}';
+        break;
+    case str_starts_with($path, '/webmasters/'):
+        http_response_code(204);
+        break;
+    case $path === '/indexnow':
+        http_response_code(202);
+        break;
+    default:
+        http_response_code(404);
+        echo '{"error":"unknown"}';
+}

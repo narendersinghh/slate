@@ -46,6 +46,9 @@ final class Frontend
         if ($path === '/robots.txt') {
             self::send(Seo::robotsTxt(), 'text/plain');
         }
+        if (preg_match('#^/([a-zA-Z0-9-]{8,128})\.txt$#', $path, $m) && ($key = Indexing::indexNowKey()) !== '' && hash_equals($key, $m[1])) {
+            self::send($key, 'text/plain'); // IndexNow key file
+        }
         if (Options::get('seo_sitemap_enabled', true)) {
             if ($path === '/sitemap.xml' || $path === '/sitemap_index.xml') {
                 self::send(Sitemap::index(), 'application/xml');
@@ -176,7 +179,7 @@ final class Frontend
                     continue;
                 }
                 $result = Posts::query(['type' => $tax['post_types'] ?: ['post'], 'term' => [$term['id']], 'page' => $page, 'with_terms' => true]);
-                Seo::$ctx = ['kind' => 'term', 'term' => $term, 'page' => $page];
+                Seo::$ctx = ['kind' => 'term', 'term' => $term, 'page' => $page, 'items' => $result['items'], 'per_page' => (int)Options::get('posts_per_page', 10)];
                 self::output('taxonomy', ['result' => $result, 'term' => $term, 'taxonomy' => $tax, 'title' => $term['name']],
                     ["taxonomy-$slug-{$term['slug']}", "taxonomy-$slug", 'taxonomy', 'archive']);
                 return true;

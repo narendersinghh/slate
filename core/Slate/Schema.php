@@ -158,6 +158,24 @@ final class Schema
                 created_at DATETIME NOT NULL
             )$tail",
             "CREATE INDEX idx_webhook_due ON {{webhook_deliveries}} (status, next_at)",
+            // v4: search engine indexing queue and log (Indexing)
+            "CREATE TABLE IF NOT EXISTS {{seo_indexing}} (
+                id $pk,
+                engine VARCHAR(20) NOT NULL,
+                action VARCHAR(20) NOT NULL DEFAULT 'URL_UPDATED',
+                url VARCHAR(2048) NOT NULL,
+                post_id $int NULL,
+                source VARCHAR(20) NOT NULL DEFAULT 'auto',
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                attempts INT NOT NULL DEFAULT 0,
+                next_at DATETIME NOT NULL,
+                response_code INT NULL,
+                response TEXT NULL,
+                created_at DATETIME NOT NULL,
+                sent_at DATETIME NULL
+            )$tail",
+            "CREATE INDEX idx_seo_indexing_due ON {{seo_indexing}} (status, next_at)",
+            "CREATE INDEX idx_seo_indexing_sent ON {{seo_indexing}} (engine, sent_at)",
         ];
     }
 
@@ -191,6 +209,9 @@ final class Schema
             },
             3 => static function (): void {
                 self::install(); // adds passkeys + webhook_deliveries
+            },
+            4 => static function (): void {
+                self::install(); // adds seo_indexing
             },
         ];
         foreach ($migrations as $version => $fn) {

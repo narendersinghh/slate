@@ -312,10 +312,15 @@ final class Posts
             return;
         }
         Options::set('_scheduled_check', time());
-        $n = DB::query("UPDATE {{posts}} SET status = 'publish' WHERE status = 'scheduled' AND published_at <= :now", ['now' => now()])->rowCount();
-        if ($n) {
-            PageCache::clear();
+        $ids = DB::col("SELECT id FROM {{posts}} WHERE status = 'scheduled' AND published_at <= :now", ['now' => now()]);
+        if (!$ids) {
+            return;
         }
+        [$in, $params] = DB::in(array_map('intval', $ids));
+        DB::query("UPDATE {{posts}} SET status = 'publish' WHERE status = 'scheduled' AND id IN ($in)", $params);
+        self::flush();
+        PageCache::clear();
+        Hooks::action('scheduled_published', array_map('intval', $ids));
     }
 
     public static function permalink(array $post, bool $absolute = false): string

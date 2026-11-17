@@ -35,6 +35,7 @@ final class App
         self::headers();
         Cron::maybeRunAfterRequest();
         Webhooks::boot();
+        Indexing::boot();
 
         Modules::boot();
         Theme::boot();

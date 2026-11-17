@@ -1851,6 +1851,7 @@ function admin_settings_save(string $tab, string $section): never
         'redirects' => admin_save_redirects(),
         'menus' => admin_save_menus(),
         'design-system' => admin_save_design(),
+        'seo-schema', 'seo-indexing' => admin_seo_save($def['render']), // admin/routes/seo.php
         default => null,
     };
     log_activity('settings_saved', "$tab/$section");

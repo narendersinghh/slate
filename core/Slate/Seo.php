@@ -11,7 +11,10 @@ final class Seo
 {
     public const SCHEMA_TYPES = ['WebPage' => 'Web page', 'Article' => 'Article', 'BlogPosting' => 'Blog post', 'NewsArticle' => 'News article',
         'Product' => 'Product', 'Service' => 'Service', 'Event' => 'Event', 'Recipe' => 'Recipe', 'FAQPage' => 'FAQ page',
-        'AboutPage' => 'About page', 'ContactPage' => 'Contact page', 'CollectionPage' => 'Collection page', 'None' => 'No schema'];
+        'AboutPage' => 'About page', 'ContactPage' => 'Contact page', 'CollectionPage' => 'Collection page',
+        'LocalBusiness' => 'Local business', 'Organization' => 'Organization', 'Person' => 'Person', 'Place' => 'Place',
+        'JobPosting' => 'Job posting', 'Course' => 'Course', 'Book' => 'Book', 'Movie' => 'Movie', 'CreativeWork' => 'Creative work',
+        'None' => 'No schema'];
 
     /** Request context set by the frontend router. */
     public static array $ctx = ['kind' => 'home'];
@@ -92,8 +95,8 @@ final class Seo
             'home' => (string)Options::get('seo_home_description') ?: (string)Options::get('tagline'),
             'single' => ($c['post']['seo']['description'] ?? '') ?: (self::isFrontPage($c['post']) && Options::get('seo_home_description')
                 ? (string)Options::get('seo_home_description')
-                : ($auto ? Posts::excerpt($c['post'], 158) : '')),
-            'term' => ($c['term']['seo']['description'] ?? '') ?: ($auto ? str_limit((string)$c['term']['description'], 158) : ''),
+                : ($auto ? self::excerpt($c['post'], 158) : '')),
+            'term' => ($c['term']['seo']['description'] ?? '') ?: ($auto ? str_limit(self::stripCodes((string)$c['term']['description']), 158) : ''),
             default => '',
         };
         return Hooks::filter('seo_description', self::vars($d), $c);
@@ -158,11 +161,28 @@ final class Seo
         $c = self::$ctx;
         $id = 0;
         if ($c['kind'] === 'single') {
-            $id = (int)($c['post']['seo']['og_image'] ?? 0) ?: (int)($c['post']['featured_media_id'] ?? 0);
+            $id = (int)($c['post']['seo']['og_image'] ?? 0) ?: (int)($c['post']['featured_media_id'] ?? 0)
+                ?: StructuredData::typeImage((string)$c['post']['type']);
         }
         $id = $id ?: (int)Options::get('seo_og_default_image');
         $m = $id ? Media::find($id) : null;
         return $m ? ['url' => site_url('content/uploads/' . $m['path']), 'width' => $m['width'], 'height' => $m['height'], 'alt' => $m['alt'], 'mime' => $m['mime']] : null;
+    }
+
+    /** Shortcodes ([form slug="x"], [/x]) and template tags ({{form:x}}) never belong in descriptions. */
+    public static function stripCodes(string $text): string
+    {
+        if (!str_contains($text, '[') && !str_contains($text, '{{')) {
+            return $text;
+        }
+        $text = (string)preg_replace('/\{\{.*?\}\}/s', ' ', $text);
+        return (string)preg_replace('/\[\/?[a-z][a-z0-9_-]*(?:\s[^\]]*)?\]/i', ' ', $text);
+    }
+
+    /** Posts::excerpt() without shortcodes and template tags, for meta, social and schema descriptions. */
+    public static function excerpt(array $post, int $length = 160): string
+    {
+        return str_limit(self::stripCodes((string)($post['excerpt'] ?: $post['content'])), $length);
     }
 
     public static function isFrontPage(array $post): bool
@@ -320,25 +340,44 @@ final class Seo
             if (in_array($type, ['AboutPage', 'ContactPage', 'FAQPage', 'CollectionPage'], true)) {
                 $page['@type'] = $type;
             } elseif ($type !== 'WebPage' && $type !== 'None') {
-                $node = ['@type' => $type, '@id' => $canonical . '#' . strtolower($type), 'mainEntityOfPage' => ['@id' => $canonical . '#webpage']];
-                if (in_array($type, ['Article', 'BlogPosting', 'NewsArticle'], true)) {
-                    $author = $post['author_id'] ? DB::row('SELECT display_name, username FROM {{users}} WHERE id = :id', ['id' => (int)$post['author_id']]) : null;
-                    $node += ['headline' => mb_substr($post['title'], 0, 110), 'datePublished' => $page['datePublished'], 'dateModified' => $page['dateModified'],
-                        'publisher' => ['@id' => $entityId], 'author' => ['@type' => 'Person', 'name' => $author['display_name'] ?? $author['username'] ?? (string)Options::get('site_title')]];
-                } else {
-                    $node['name'] = $post['title'];
-                }
-                if ($d = self::description()) {
-                    $node['description'] = $d;
-                }
-                if ($img) {
-                    $node['image'] = $img['url'];
+                // Mapped schema types (SEO › Schema by type). Null: a pre-existing type without a mapping keeps its original output.
+                $node = StructuredData::node($type, $post, $canonical, $entityId);
+                if ($node === null) {
+                    $node = ['@type' => $type, '@id' => $canonical . '#' . strtolower($type), 'mainEntityOfPage' => ['@id' => $canonical . '#webpage']];
+                    if (in_array($type, ['Article', 'BlogPosting', 'NewsArticle'], true)) {
+                        $author = $post['author_id'] ? DB::row('SELECT display_name, username FROM {{users}} WHERE id = :id', ['id' => (int)$post['author_id']]) : null;
+                        $node += ['headline' => mb_substr($post['title'], 0, 110), 'datePublished' => $page['datePublished'], 'dateModified' => $page['dateModified'],
+                            'publisher' => ['@id' => $entityId], 'author' => ['@type' => 'Person', 'name' => $author['display_name'] ?? $author['username'] ?? (string)Options::get('site_title')]];
+                    } else {
+                        $node['name'] = $post['title'];
+                    }
+                    if ($d = self::description()) {
+                        $node['description'] = $d;
+                    }
+                    if ($img) {
+                        $node['image'] = $img['url'];
+                    }
                 }
                 $graph[] = Hooks::filter('seo_schema_node', $node, $post);
+            }
+            // FAQ found in the content (question headings ending in "?"), when turned on.
+            if ($type !== 'None' && Options::get('seo_schema_faq') && ($faq = StructuredData::faq((string)$post['content']))) {
+                if ($page['@type'] === 'FAQPage') {
+                    $page['mainEntity'] = $faq;
+                } else {
+                    $graph[] = ['@type' => 'FAQPage', '@id' => $canonical . '#faq', 'isPartOf' => ['@id' => $canonical . '#webpage'], 'mainEntity' => $faq];
+                }
             }
             if ($type === 'None') {
                 $page = null;
             }
+        }
+        if ($page && $c['kind'] === 'term' && StructuredData::taxMode((string)$c['term']['taxonomy']) === 'itemlist'
+            && ($list = StructuredData::itemList((array)($c['items'] ?? []), $canonical, (int)($c['page'] ?? 1), (int)($c['per_page'] ?? 0)))) {
+            $page['mainEntity'] = ['@id' => $list['@id']];
+            $graph[] = array_filter($page, static fn($v) => $v !== null);
+            $graph[] = $list;
+            $page = null;
         }
         if ($page) {
             $graph[] = array_filter($page, static fn($v) => $v !== null);
@@ -395,6 +434,16 @@ final class Seo
                 $crumbs[] = ['label' => $post['title'], 'url' => Posts::permalink($post, true)];
             }
         } elseif ($c['kind'] === 'term') {
+            if (Options::get('seo_breadcrumb_parents') && !empty($c['term']['parent_id'])) {
+                $chain = [];
+                $t = Terms::find((int)$c['term']['parent_id']);
+                $guard = 0;
+                while ($t && $guard++ < 10) {
+                    array_unshift($chain, ['label' => $t['name'], 'url' => Terms::link($t, true)]);
+                    $t = $t['parent_id'] ? Terms::find((int)$t['parent_id']) : null;
+                }
+                $crumbs = array_merge($crumbs, $chain);
+            }
             $crumbs[] = ['label' => $c['term']['name'], 'url' => Terms::link($c['term'], true)];
         } elseif ($c['kind'] === 'archive') {
             $crumbs[] = ['label' => $c['title'] ?? '', 'url' => $c['url'] ?? ''];

@@ -28,6 +28,7 @@ final class Cron
             'cache_warm' => ['every' => 300, 'label' => 'Re-warm the page cache after changes', 'run' => static fn() => PageCache::warm()],
             'cache_sweep' => ['every' => 3600, 'label' => 'Remove outdated cached pages', 'run' => static fn() => PageCache::sweep()],
             'webhooks' => ['every' => 60, 'label' => 'Send queued webhook deliveries and retries', 'run' => [Webhooks::class, 'run']],
+            'seo_indexing' => ['every' => 60, 'label' => 'Send search engine indexing requests (SEO › Instant indexing)', 'run' => [Indexing::class, 'cron']],
             'integrity' => ['every' => 86400, 'label' => 'File integrity check (emails administrators about tampering)', 'run' => [Integrity::class, 'scheduled']],
         ];
         $jobs = Hooks::filter('cron_jobs', $jobs);

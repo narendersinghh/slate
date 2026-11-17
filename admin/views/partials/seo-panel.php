@@ -48,6 +48,16 @@ $ogm = $seo['og_image'] ? Media::find((int)$seo['og_image']) : null;
       <?php if (\Slate\Ai::enabled() && \Slate\Auth::can('use_ai')): ?>
         <button type="button" class="btn btn-sm btn-ai" data-ai-seo><?= icon('sparkles', 15) ?> Generate with AI</button>
       <?php endif; ?>
+      <?php if ($kind === 'post' && !empty($post['id']) && \Slate\Indexing::enabled() && \Slate\Auth::can('publish_posts')):
+        $idxLast = \Slate\Indexing::lastFor((int)$post['id']);
+        $idxBlocked = \Slate\Indexing::blocked($post); ?>
+        <link rel="stylesheet" href="<?= e(asset_url('admin/assets/seo.css')) ?>">
+        <script src="<?= e(asset_url('admin/assets/seo.js')) ?>" defer></script>
+        <div class="seo-request-row">
+          <button type="button" class="btn btn-sm" data-seo-request data-id="<?= (int)$post['id'] ?>" data-url="<?= e(admin_url('seo/tools/request')) ?>"<?= $idxBlocked ? ' disabled title="' . e($idxBlocked) . '"' : '' ?>><?= icon('globe', 15) ?> Request indexing</button>
+          <span class="small muted" data-seo-request-out><?php if ($idxBlocked): ?><?= e($idxBlocked) ?><?php elseif ($idxLast): ?>Last <?= $idxLast['engine'] === 'google' ? 'Google' : 'IndexNow' ?> submission: <?= e($idxLast['status'] === 'pending' ? 'waiting' : $idxLast['status']) ?>, <?= e(time_ago($idxLast['sent_at'] ?: $idxLast['created_at'])) ?>.<?php else: ?>Ask search engines to crawl this page now.<?php endif; ?></span>
+        </div>
+      <?php endif; ?>
     </div>
 
     <div data-tab-panel="seo-social" hidden>

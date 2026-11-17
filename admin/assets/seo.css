@@ -1,0 +1,27 @@
+/* SEO screens: Instant indexing, Schema by type, the editor's Request indexing button. */
+.seo-idx .seo-box, .seo-sd .seo-box { border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.seo-box-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 600; }
+.seo-note { display: flex; gap: 8px; align-items: flex-start; margin: 0; }
+.seo-note .ic, .seo-note svg { flex: none; margin-top: 2px; }
+.seo-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seo-actions .input-sm { width: auto; max-width: 100%; }
+.seo-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.seo-details > summary { cursor: pointer; font-weight: 550; font-size: 13px; padding: 4px 0; }
+.seo-details[open] > summary { margin-bottom: 10px; }
+.seo-types-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; }
+.seo-log td { vertical-align: top; }
+.seo-log-url { max-width: 360px; overflow-wrap: anywhere; }
+.seo-row-actions { white-space: nowrap; text-align: right; }
+.seo-row-actions .btn + .btn { margin-left: 6px; }
+.seo-map td:first-child { width: 42%; }
+.seo-map-src { display: flex; gap: 8px; flex-wrap: wrap; }
+.seo-map-src .input { flex: 1 1 200px; min-width: 0; }
+.seo-jsonld { max-height: 420px; font-size: 12px; }
+.seo-sd .text-warn, .seo-idx .text-warn { color: var(--warn); }
+.seo-request-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.seo-request-row .is-error { color: var(--danger); }
+.seo-request-row .is-ok { color: var(--success); }
+@media (max-width: 640px) {
+  .seo-row-actions { white-space: normal; text-align: left; }
+  .seo-map td:first-child { width: auto; }
+}

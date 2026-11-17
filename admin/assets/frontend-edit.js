@@ -53,7 +53,7 @@
   function pickImage(el) {
     const wrap = document.createElement('div');
     wrap.id = 'slate-picker';
-    wrap.innerHTML = '<div class="box"><div class="head"><strong>Choose an image</strong><span><label>Upload<input type="file" accept="image/*" hidden></label> &nbsp; <button type="button" data-x>✕</button></span></div><div class="grid">Loading…</div></div>';
+    wrap.innerHTML = '<div class="box"><div class="head"><strong>Choose an image</strong><span><label>Upload<input type="file" accept="image/*" hidden></label> &nbsp; <button type="button" data-x aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></span></div><div class="grid">Loading…</div></div>';
     document.body.appendChild(wrap);
     const close = () => wrap.remove();
     wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-x]')) close(); });

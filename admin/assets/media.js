@@ -104,7 +104,7 @@
         '<b>Size</b><span>' + esc(m.size_h) + (m.saved > 0 ? ' <span class="ml-saved">−' + m.saved + '%</span> <small>(was ' + esc(m.original_size_h) + ')</small>' : '') + '</span>' +
         (m.width ? '<b>Dimensions</b><span>' + m.width + ' × ' + m.height + '</span>' : '') +
         '<b>Type</b><span>' + esc(m.mime) + '</span><b>Uploaded</b><span>' + esc(m.date) + '</span></div>' +
-        (m.is_image ? '<label class="field"><span>Alt text ' + (S.ai ? '<button type="button" class="link" data-ai-alt>✨ Generate</button>' : '') + '</span><textarea class="input" rows="2" data-m="alt" placeholder="Describe the image for screen readers & SEO">' + esc(m.alt) + '</textarea></label>' : '') +
+        (m.is_image ? '<label class="field"><span>Alt text ' + (S.ai ? '<button type="button" class="link" data-ai-alt><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg> Generate</button>' : '') + '</span><textarea class="input" rows="2" data-m="alt" placeholder="Describe the image for screen readers & SEO">' + esc(m.alt) + '</textarea></label>' : '') +
         '<label class="field"><span>Title</span><input class="input" data-m="title" value="' + esc(m.title) + '"></label>' +
         '<label class="field"><span>Caption</span><textarea class="input" rows="2" data-m="caption">' + esc(m.caption || '') + '</textarea></label>' +
         '<label class="field"><span>File name (URL slug)</span><span class="input-group"><input class="input" data-m="filename" value="' + esc(m.filename) + '"><code>.' + esc(m.ext) + '</code></span><small class="help">Renaming updates links inside your content automatically.</small></label>' +
@@ -128,7 +128,7 @@
         const b = e.currentTarget;
         b.textContent = '…';
         const r = await api('/ai', { body: { action: 'alt', title: m.title + ' (' + m.filename + ')', input: m.caption || document.title } });
-        b.textContent = '✨ Generate';
+        b.innerHTML = '<svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg> Generate';
         if (r.ok) $('[data-m="alt"]', d).value = r.text.replace(/^"|"$/g, ''); else toast(r.error, 'error');
       });
     }

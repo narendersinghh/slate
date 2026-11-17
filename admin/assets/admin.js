@@ -35,7 +35,7 @@
     const m = document.createElement('div');
     m.className = 'modal ' + (size ? 'modal-' + size : '');
     m.innerHTML = '<div class="modal-box" role="dialog" aria-modal="true"><div class="modal-head"><h2>' + esc(title) +
-      '</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div><div class="modal-body"></div>' +
+      '</h2><button type="button" class="icon-btn" data-close aria-label="Close"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div><div class="modal-body"></div>' +
       (foot !== null ? '<div class="modal-foot"></div>' : '') + '</div>';
     if (typeof body === 'string') $('.modal-body', m).innerHTML = body; else $('.modal-body', m).appendChild(body);
     if ($('.modal-foot', m)) { if (typeof foot === 'string') $('.modal-foot', m).innerHTML = foot; else if (foot) $('.modal-foot', m).appendChild(foot); }

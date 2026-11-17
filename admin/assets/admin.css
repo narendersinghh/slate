@@ -869,7 +869,7 @@ label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; c
 .rr-rich-area { min-height: 90px; max-height: 320px; overflow: auto; white-space: normal; }
 .rr-rich-area p { margin: 0 0 .6em; }
 .repeater-row label.field[hidden] { display: none; }
-.ed-form-widget::before { content: "☑ Form widget · "; color: var(--accent); }
+.ed-form-widget::before { content: "Form widget · "; color: var(--accent); }
 
 /* Revisions */
 .revisions-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }

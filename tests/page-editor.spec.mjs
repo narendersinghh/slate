@@ -169,16 +169,19 @@ test('image: upload through the panel, alt, aspect ratio, fit, focus', async ({ 
   expect(img).toMatch(/data-media-id="\d+"/);
 });
 
-test('AI rewrite and alt suggestion (mock provider)', async ({ page }) => {
+test('Goraiya rewrite of a whole text and alt suggestion (mock provider)', async ({ page }) => {
   await login(page);
   await page.goto(`${BASE}${PAGE.url}`);
   const cfg = await page.evaluate(() => JSON.parse(document.getElementById('se-config').textContent));
   test.skip(!cfg.ai, 'AI is not configured on this site');
   await page.click('#se-toggle');
   await page.click('.hero p.lead');
-  await page.click('.se-toolbar [data-pop="ai"]');
+  await page.click('.se-toolbar [data-act="g-el"]');
+  await expect(page.locator('.se-gpop .se-ghead')).toContainText('This text');
+  await page.click('.se-gpop [data-g="shorter"]');
+  await expect(page.locator('.se-gprev')).toContainText('sweet');
   await page.screenshot({ path: `${SHOTS}/pe-ai-menu.png` });
-  await page.click('.se-toolbar [data-ai="shorter"]');
+  await page.click('.se-gpop [data-g="accept"]');
   await expect(page.locator('.hero p.lead')).toContainText('sweet');
   const lead = await page.locator('.hero p.lead').innerHTML();
   expect(lead).not.toContain('\u2014');
@@ -231,7 +234,7 @@ test('make dynamic (posts) and static again', async ({ page }) => {
   await openEditor(page);
   await page.click('.cards article:nth-child(2) h3');
   await page.click('.se-toolbar [data-act="loop"]');
-  await page.click('.se-dyn summary');
+  await page.click('.se-dynform summary');
   await page.selectOption('#se-dsrc', 'posts:post');
   await page.fill('#se-dlim', '2');
   await page.selectOption('#se-dord', 'title:asc');
@@ -572,4 +575,102 @@ test('shared template: notice with the number of pages, change shows on every pa
   const raw = await (await p2.request.get(`${BASE}${S.url}`)).text();
   expect(raw).not.toMatch(/data-se="te\d+"/);
   await ctx.close();
+});
+
+// ---------------------------------------------------------------- Goraiya in the page editor (mock AI provider)
+
+async function goraiyaReady(page, url) {
+  await login(page);
+  await page.goto(`${BASE}${url}`);
+  const cfg = await page.evaluate(() => JSON.parse(document.getElementById('se-config').textContent));
+  test.skip(!cfg.ai, 'Goraiya (AI) is not configured on this site');
+  await page.click('#se-toggle');
+}
+
+test('Goraiya: rewrite selected text with a preview, then accept', async ({ page }) => {
+  await goraiyaReady(page, PAGE.theme.url);
+  // The guide explains how to use Goraiya.
+  await page.click('.se-bar [data-act="goraiya"]');
+  await expect(page.locator('#se-panel-title')).toHaveText('Goraiya');
+  await expect(page.locator('.se-guide')).toContainText('select some words');
+  await page.keyboard.press('Escape');
+  const p = '.entry-content p:has-text("Kept paragraph")';
+  await page.click(p);
+  await page.evaluate((s) => {
+    const el = document.querySelector('.entry-content p a').parentElement;
+    const t = el.firstChild; const r = document.createRange(); r.setStart(t, 0); r.setEnd(t, 4);
+    const g = getSelection(); g.removeAllRanges(); g.addRange(r);
+  }, p);
+  await expect(page.locator('.se-gsel')).toBeVisible();
+  await page.click('.se-gsel');
+  await expect(page.locator('.se-gpop')).toBeVisible();
+  await expect(page.locator('.se-gpop .se-ghead')).toContainText('Selected text');
+  await page.click('.se-gpop [data-g="shorter"]');
+  await expect(page.locator('.se-gprev')).toContainText('Short, and sweet');
+  const prev = await page.locator('.se-gprev').innerHTML();
+  expect(prev).not.toContain('script');
+  expect(prev).not.toContain('\u2014');
+  await page.screenshot({ path: `${SHOTS}/pe-goraiya-selection.png` });
+  await page.click('.se-gpop [data-g="accept"]');
+  await expect(page.locator('.se-gpop')).toBeHidden();
+  const html = await page.locator('.entry-content p:has(a)').innerHTML();
+  expect(html.startsWith('Short, and <strong>sweet</strong> paragraph with')).toBe(true);
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/save')), page.keyboard.press('Control+s')]);
+  await expect(page.locator('.se-count')).toHaveText('No changes');
+  expect(await visitorAt(PAGE.theme.url)).toContain('Short, and <strong>sweet</strong> paragraph with <a href="/x?a=1&amp;b=2">a link</a>');
+});
+
+test('Goraiya: revamp a section with a preview of every change, accept, save', async ({ page }) => {
+  await goraiyaReady(page, PAGE.url);
+  const hero = await page.locator('section.hero').boundingBox();
+  await page.mouse.click(hero.x + 6, hero.y + 6);
+  await expect(page.locator('#se-panel-title')).toHaveText('Section');
+  await page.click('[data-sec="revamp"]');
+  await expect(page.locator('.se-diff li')).toHaveCount(3); // heading, lead, button
+  const diff = await page.locator('.se-diff').innerHTML();
+  expect(diff).toContain('<del>');
+  expect(diff).not.toContain('<script');
+  expect(diff).not.toContain('onerror');
+  await page.screenshot({ path: `${SHOTS}/pe-goraiya-section.png` });
+  await page.click('[data-sec="accept"]');
+  await expect(page.locator('section.hero a.button')).toContainText('Revamped:');
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/save')), page.keyboard.press('Control+s')]);
+  const html = await visitorAt(PAGE.url);
+  const heroHtml = html.match(/<section class="hero">[\s\S]*?<\/section>/)[0];
+  expect(heroHtml.match(/Revamped:/g).length).toBe(3);
+  expect(heroHtml).toContain('<strong>now</strong>');
+  expect(html).not.toContain('alert(1)');
+  // A change that adds an item to a repeating group (cards): preview, accept, the page saves and reloads.
+  const before = await page.locator('.cards > article').count();
+  await page.click('.cards article:nth-child(1) h3');
+  await page.click('.se-toolbar [data-act="loop"]');
+  await page.click('[data-act="g-loop"]');
+  await page.fill('#se-secask', 'add a third card');
+  await page.click('[data-sec="change"]');
+  await expect(page.locator('.se-diff')).toContainText('Add an item');
+  await Promise.all([page.waitForEvent('load'), page.click('[data-sec="accept"]')]);
+  await expect(page.locator('.cards > article')).toHaveCount(before + 1);
+});
+
+test('Goraiya: delete a section, undo it, delete again and save', async ({ page }) => {
+  await goraiyaReady(page, PAGE.url);
+  await page.evaluate(() => window.scrollTo(0, document.querySelector('div.swiper').getBoundingClientRect().top + window.scrollY - 200));
+  const box = await page.locator('div.swiper').boundingBox();
+  await page.mouse.click(box.x + 4, box.y + 4);
+  await expect(page.locator('#se-panel-title')).toHaveText('Section');
+  await page.click('[data-sec="delete"]');
+  await expect(page.locator('div.swiper')).toHaveCount(0);
+  await expect(page.locator('.se-count')).toHaveText('1 unsaved change');
+  await page.locator('.se-toast-act', { hasText: 'Undo' }).click();
+  await expect(page.locator('div.swiper')).toHaveCount(1);
+  await expect(page.locator('.se-count')).toHaveText('No changes');
+  await page.evaluate(() => window.scrollTo(0, document.querySelector('div.swiper').getBoundingClientRect().top + window.scrollY - 200));
+  const box2 = await page.locator('div.swiper').boundingBox();
+  await page.mouse.click(box2.x + 4, box2.y + 4);
+  await page.click('[data-sec="delete"]');
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/save')), page.keyboard.press('Control+s')]);
+  await expect(page.locator('.se-count')).toHaveText('No changes');
+  const html = await visitorAt(PAGE.url);
+  expect(html).not.toContain('class="swiper"');
+  expect(html).toContain('class="cards"');
 });

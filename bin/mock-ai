@@ -28,6 +28,21 @@ if (str_contains($prompt, 'Reply with the single word: ready')) {
         . '<section class="cards"><div class="card"><h3>Strategy</h3><p>We map your next steps.</p></div><div class="card"><h3>Design</h3><p>Pages people trust.</p></div>'
         . '<div class="card"><h3>Growth</h3><p>More of the right visitors.</p></div></section></body></html>';
     $html = json_encode(['reply' => 'I made a Services page as a draft. Open it to check the copy.', 'actions' => [['type' => 'create_page', 'title' => 'Services', 'html' => $page]]]);
+} elseif (str_contains($prompt, 'You edit one section of a web page') && preg_match('/^PARTS: (.+)$/m', $prompt, $pm)) {
+    // Page editor, Goraiya on a section: rewrite every text (one with HTML the editor must strip), alt texts, and add a list item when asked.
+    $parts = json_decode($pm[1], true) ?: [];
+    $texts = $alts = [];
+    $lists = [];
+    foreach ($parts as $i => $p) {
+        if ($p['type'] === 'text') {
+            $texts[$p['id']] = 'Revamped: ' . trim(strip_tags($p['text'])) . ($i === 0 ? ' <strong>now</strong><script>alert(1)</script><img src=x onerror=alert(1)>' : '');
+        } elseif ($p['type'] === 'image') {
+            $alts[$p['id']] = 'Revamped alt';
+        } elseif ($p['type'] === 'list' && str_contains($prompt, 'add a') && $p['items'] > 0) {
+            $lists[] = ['id' => $p['id'], 'action' => 'duplicate', 'index' => 0];
+        }
+    }
+    $html = "Here you go:\n" . json_encode(['texts' => $texts, 'alts' => $alts, 'lists' => $lists]);
 } elseif (str_contains($prompt, 'This is a single element of a web page')) {
     $html = "Short \u{2014} and <strong>sweet</strong><script>alert(1)</script>";
 } elseif (str_contains($prompt, 'Write alt text for an image')) {

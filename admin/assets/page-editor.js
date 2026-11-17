@@ -1,4 +1,4 @@
-/* Slate on-page editor for imported / AI-written pages (core/Slate/PageEditor.php).
+/* Slate on-page editor (core/Slate/PageEditor.php), with Goraiya for texts and sections.
    Click "Edit page" in the admin bar, then click any text, image, icon or repeating group on the page.
    Changes are kept as small operations and saved in one batch (one revision per save). */
 (function () {
@@ -27,7 +27,7 @@
   let hoverEl = null;
   let saving = false;
   let leaving = false;
-  const P = { text: new Map(), tag: new Map(), style: new Map(), attr: new Map(), image: new Map(), icon: new Map(), remove: new Map(), bind: new Map() };
+  const P = { text: new Map(), tag: new Map(), style: new Map(), attr: new Map(), image: new Map(), icon: new Map(), remove: new Map(), bind: new Map(), section: new Map() };
   // 'html': designed page (fields._html). 'content': stored content + the item's title/fields shown by a template or the theme. 'term': a term page.
   const MODE = C.mode || 'html';
   const BINDS = C.binds || {};
@@ -64,6 +64,7 @@
     close: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     up: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>',
     down: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+    sparrow: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 19.6A8.6 8.6 0 1 0 4.3 16L2.5 21.5Z"/><path d="M19.35 7.9 22.6 9.2l-2.25 1.5"/><circle cx="15.2" cy="9.6" r="1.05" fill="currentColor" stroke="none"/></svg>',
     copy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>',
   };
 
@@ -79,12 +80,15 @@
     + '<div class="se-toolbar" role="toolbar" aria-label="Text formatting" hidden></div>'
     + '<aside class="se-panel" role="dialog" aria-modal="false" aria-labelledby="se-panel-title" hidden></aside>'
     + '<div class="se-bar" role="region" aria-label="Page editor">'
+    + '<button type="button" class="se-btn se-ghost se-gbtn" data-act="goraiya" title="How to use Goraiya on this page">' + ico.sparrow + '<span>Goraiya</span></button>'
     + '<span class="se-count" aria-live="polite">No changes</span>'
     + '<button type="button" class="se-btn se-ghost" data-act="undo-tpl" hidden title="Undo the last change saved to this page\'s template">Undo template change</button>'
     + '<button type="button" class="se-btn se-ghost" data-act="discard">Discard</button>'
     + '<button type="button" class="se-btn se-primary" data-act="save">Save</button>'
     + '<button type="button" class="se-btn se-ghost se-icon" data-act="done" aria-label="Stop editing" title="Stop editing">' + ico.close + '</button>'
     + '</div>'
+    + '<button type="button" class="se-gsel" hidden aria-label="Goraiya: rewrite the selected text" title="Goraiya: rewrite the selected text">' + ico.sparrow + '</button>'
+    + '<div class="se-gpop" role="dialog" aria-label="Goraiya" hidden></div>'
     + '</div>'
     + '<div class="se-toasts" aria-live="assertive"></div>';
   const $ = (s) => root.querySelector(s);
@@ -95,6 +99,8 @@
   const panel = $('.se-panel');
   const sbar = $('.se-bar');
   const countEl = $('.se-count');
+  const gsel = $('.se-gsel');
+  const gpop = $('.se-gpop');
 
   function mount() {
     d.body.appendChild(host);
@@ -161,6 +167,10 @@
     }
     on = v;
     d.documentElement.classList.toggle('se-editing', on);
+    // Room under the page so its last section can scroll above the save bar.
+    let spacer = d.getElementById('se-spacer');
+    if (on && !spacer) { spacer = d.createElement('div'); spacer.id = 'se-spacer'; spacer.setAttribute('aria-hidden', 'true'); spacer.style.cssText = 'height:160px;clear:both'; d.body.appendChild(spacer); }
+    if (!on && spacer) spacer.remove();
     ui.hidden = !on;
     mount.toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
     mount.toggle.querySelector('span').textContent = on ? 'Editing' : 'Edit page';
@@ -213,19 +223,33 @@
       const k = marks.get(n);
       if (k === 'list') {
         const it = itemOf(t);
-        if (it) return { text: 'Comes from “' + it.title + '”: edit it there', links: [['Open “' + it.title + '”', it.url]].concat(it.edit ? [['Edit in dashboard', it.edit]] : []) };
-        return { text: 'Part of a list: it repeats for each item', links: TPL ? [['Open the template', TPL.edit]] : [] };
+        if (it) return { kind: 'list', text: 'Comes from “' + it.title + '”: edit it there', links: [['Open “' + it.title + '”', it.url]].concat(it.edit ? [['Edit in dashboard', it.edit]] : []) };
+        return { kind: 'list', text: 'Part of a list: it repeats for each item', links: TPL ? [['Open the template', TPL.edit]] : [] };
       }
-      if (k === 'mod') return { text: 'Added by a module', links: [] };
+      if (k === 'mod') return { kind: 'mod', text: 'Added by a module', links: [] };
       if (k === 'content') return { text: 'Layout of the page content: edit it in the dashboard', links: C.dashboard ? [['Edit in dashboard', C.dashboard]] : [] };
       if (k === 'tpl') return { text: 'Part of ' + where() + ' with values or logic in it: edit it in Templates', links: TPL ? [['Open the template', TPL.edit]] : [] };
     }
     if (MODE === 'html') return null;
-    return { text: 'Part of the site theme (header, menu or footer): menus are changed in Appearance › Menus', links: C.menus ? [['Open Appearance › Menus', C.menus]] : [] };
+    return { text: 'Site theme (header, menu or footer): menus are in Appearance › Menus', links: C.menus ? [['Open Appearance › Menus', C.menus]] : [] };
   }
   function showHint(h) {
     deselect();
     openPanel('Not editable here', '<p>' + esc(h.text) + '.</p>' + (h.links.length ? '<div class="se-row">' + h.links.map(([l, u], i) => '<a class="se-btn ' + (i ? 'se-ghost' : 'se-primary') + '" href="' + esc(u) + '">' + esc(l) + '</a>').join('') + '</div>' : ''));
+  }
+
+  // ---------- sections: a block holding several editable parts (Goraiya can revamp, change or delete it)
+  const BLOCKS = ['section', 'article', 'div', 'header', 'footer', 'main', 'aside', 'ul', 'ol', 'li', 'figure', 'nav', 'blockquote', 'form', 'table', 'tbody', 'tr', 'td'];
+  function sectionOf(t) {
+    if (!(t instanceof Element) || host.contains(t)) return null;
+    const bar = d.getElementById('slate-bar');
+    for (let n = t; n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
+      if (bar && bar.contains(n)) return null;
+      if (n.closest('[data-se-source]')) return null;
+      if (!BLOCKS.includes(tagOf(n)) || n.hasAttribute('data-se')) continue;
+      if (n.querySelectorAll('[data-se]').length >= 2) return n;
+    }
+    return null;
   }
 
   function kindOf(el) {
@@ -267,6 +291,13 @@
     box.classList.toggle('se-label-below', r.top < 26);
   }
 
+  // Top of the save bar (or of the admin bar), so floating parts stay above them.
+  function floorY() {
+    let y = window.innerHeight;
+    const sb = sbar.getBoundingClientRect();
+    if (sb.height) y = Math.min(y, sb.top);
+    return y;
+  }
   function placeToolbar() {
     if (toolbar.hidden || !sel) return;
     let r = sel.getBoundingClientRect();
@@ -278,7 +309,8 @@
     toolbar.classList.remove('se-docked');
     let top = r.top - tb.height - 30; // clear the element's name label
     if (top < 8) top = r.bottom + 12;
-    if (top + tb.height > vh - 80) top = Math.max(8, Math.min(r.top + 8, vh - tb.height - 80));
+    const limit = floorY() - 8; // never under the save bar
+    if (top + tb.height > limit) top = Math.max(8, Math.min(r.top + 8, limit - tb.height));
     let left = Math.max(8, Math.min(r.left, vw - tb.width - 8));
     toolbar.style.transform = 'translate(' + Math.round(left) + 'px,' + Math.round(top) + 'px)';
   }
@@ -308,6 +340,11 @@
       return;
     }
     const hint = hintFor(e.target);
+    const sec = hint && (hint.kind === 'list' || hint.kind === 'mod') ? null : sectionOf(e.target);
+    if (sec) {
+      if (sec !== hoverEl) { hoverEl = sec; hoverBox.classList.remove('se-hint'); hoverBox.querySelector('.se-tagname').textContent = 'Section: click for Goraiya'; }
+      return;
+    }
     const t = hint ? e.target : null;
     if (t !== hoverEl) {
       hoverEl = t;
@@ -335,8 +372,10 @@
     }
     const el = pickable(e.target);
     if (!el) {
-      deselect();
       const hint = hintFor(e.target);
+      const sec = hint && (hint.kind === 'list' || hint.kind === 'mod') ? null : sectionOf(e.target);
+      if (sec) { selectSection(sec); return; }
+      deselect();
       if (hint) showHint(hint);
       return;
     }
@@ -353,6 +392,7 @@
     }
     if (!on) return;
     if (e.key === 'Escape') {
+      if (!gpop.hidden) { closeGoraiya(); e.preventDefault(); return; }
       const pop = root.querySelector('.se-pop:not([hidden])');
       if (pop) { pop.hidden = true; e.preventDefault(); return; }
       if (sel) { e.preventDefault(); deselect(); }
@@ -384,6 +424,8 @@
   function deselect() {
     if (sel && selKind === 'text') stopText(sel);
     if (sel && selKind === 'bind') stopBind(sel);
+    if (!gpop.hidden) closeGoraiya();
+    gsel.hidden = true;
     sel = null;
     selKind = '';
     toolbar.hidden = true;
@@ -457,8 +499,8 @@
         + '<button type="button" class="se-tb" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button>'
         + '<button type="button" class="se-tb" data-pop="link" title="Link" aria-label="Link" aria-haspopup="true">' + ico.link + '</button>';
     }
-    if (C.ai) h += '<span class="se-sep"></span><button type="button" class="se-tb se-ai" data-pop="ai" title="Rewrite with AI" aria-label="Rewrite with AI" aria-haspopup="true">✦</button>';
-    h += linkPop() + aiPop();
+    h += '<span class="se-sep"></span><button type="button" class="se-tb se-ai" data-act="g-el" title="Goraiya: rewrite this text" aria-label="Goraiya: rewrite this text" aria-haspopup="dialog">' + ico.sparrow + '</button>';
+    h += linkPop();
     toolbar.innerHTML = h;
     toolbar.hidden = false;
     placeToolbar();
@@ -615,10 +657,137 @@
   function removeEl(el) {
     const id = idOf(el);
     deselect();
+    const parent = el.parentNode;
+    const next = el.nextSibling;
     P.remove.set(id, el);
     el.remove();
     update();
-    toast('Removed. Discard to bring it back.');
+    toast('Removed.', '', 8000, { label: 'Undo', fn: () => { parent.insertBefore(el, next && next.parentNode === parent ? next : null); P.remove.delete(id); update(); } });
+  }
+
+  // ------------------------------------------------------------------ sections: Goraiya revamp / change / delete
+  let secEl = null;
+  function selectSection(el) {
+    deselect();
+    secEl = el;
+    sel = el;
+    selKind = 'section';
+    selBox.querySelector('.se-tagname').textContent = 'Section';
+    selBox.classList.remove('se-dyn');
+    openSection(el);
+  }
+
+  /** Editable parts inside a section, for Goraiya: outermost texts, images (alt), static repeating groups. */
+  function sectionParts(el) {
+    const parts = [];
+    const texts = [];
+    const loops = [el, ...el.querySelectorAll('[data-se-loop]')].filter((n) => n.hasAttribute && n.hasAttribute('data-se-loop') && !n.hasAttribute('data-se-source'));
+    loops.forEach((l) => { const data = loopData(l); if (data && !data.dynamic) parts.push({ id: data.id, type: 'list', items: data.items.length, el: l }); });
+    el.querySelectorAll('[data-se]').forEach((n) => {
+      const k = kindOf(n);
+      if (k === 'image') { const img = imgOf(n); if (img) parts.push({ id: idOf(n), type: 'image', alt: img.getAttribute('alt') || '', el: n }); return; }
+      if (k !== 'text' || texts.some((t) => t.contains(n))) return;
+      texts.push(n);
+      parts.push({ id: idOf(n), type: 'text', tag: tagOf(n), text: cleanHtml(n), el: n });
+    });
+    return parts;
+  }
+
+  function openSection(el) {
+    const parts = sectionParts(el);
+    const tplParts = parts.filter((p) => /^t/.test(p.id));
+    let h = '';
+    if (tplParts.length && TPL) h += '<div class="se-notice' + (TPL.shared ? ' se-shared' : '') + '">' + esc(tplNotice()) + '</div>';
+    const n = (t) => parts.filter((p) => p.type === t).length;
+    const what = [[n('text'), 'text', 'texts'], [n('image'), 'image', 'images'], [n('list'), 'repeating group', 'repeating groups']]
+      .filter(([c]) => c > 0).map(([c, one, many]) => c + ' ' + (c === 1 ? one : many));
+    h += '<p class="se-hint">This section holds ' + (what.length ? what.join(', ') : 'no editable parts') + '.</p>';
+    h += '<div class="se-gblock"><div class="se-ghead">' + ico.sparrow + '<strong>Goraiya</strong></div>';
+    if (C.ai) {
+      h += '<button type="button" class="se-btn se-primary se-full" data-sec="revamp">' + ico.sparrow + ' Revamp this section</button>'
+        + '<p class="se-hint">Rewrites every text in the section in one go. You see the changes before anything is applied.</p>'
+        + '<label class="se-label" for="se-secask">Change it</label><textarea id="se-secask" class="se-input" rows="2" placeholder="e.g. Make this more formal, add a third card"></textarea>'
+        + '<div class="se-row"><button type="button" class="se-btn se-ghost" data-sec="change">Change</button></div>';
+    } else {
+      h += notConnected();
+    }
+    h += '</div><div class="se-secres"></div>'
+      + '<div class="se-foot"><button type="button" class="se-btn se-danger-btn" data-sec="delete">' + ico.trash + ' Delete section</button></div>';
+    openPanel('Section', h);
+    panel.onclick = async (e) => {
+      const b = e.target.closest('[data-sec]');
+      if (!b || sel !== el) return;
+      const a = b.dataset.sec;
+      if (a === 'delete') { deleteSection(el); return; }
+      if (a === 'discard') { panel.querySelector('.se-secres').innerHTML = ''; return; }
+      if (a === 'accept') { applySection(el, b._result, parts); return; }
+      const prompt = a === 'change' ? (panel.querySelector('#se-secask').value || '').trim() : '';
+      if (a === 'change' && !prompt) { panel.querySelector('#se-secask').focus(); return; }
+      const out = panel.querySelector('.se-secres');
+      out.innerHTML = '<p class="se-hint se-busy">Goraiya is working on the section</p>';
+      const r = await json(C.ai, { action: 'section', mode: a, prompt, parts: parts.map(({ el: _e, ...p }) => p) });
+      if (sel !== el) return;
+      if (!r.ok) { out.innerHTML = '<p class="se-gerr">' + esc(r.error || 'Goraiya could not answer. Try again.') + '</p>'; return; }
+      out.innerHTML = sectionPreview(r, parts);
+      const acc = out.querySelector('[data-sec="accept"]');
+      if (acc) acc._result = r;
+    };
+  }
+
+  function sectionPreview(r, parts) {
+    const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+    const rows = [];
+    Object.entries(r.texts || {}).forEach(([id, html]) => {
+      const p = byId[id];
+      if (!p) return;
+      rows.push('<li><span class="se-dlabel">' + esc(NAMES[p.tag] || 'Text') + '</span><del>' + esc(p.el.textContent.trim()) + '</del><ins>' + html + '</ins></li>');
+    });
+    Object.entries(r.alts || {}).forEach(([id, alt]) => { if (byId[id]) rows.push('<li><span class="se-dlabel">Image alt text</span><del>' + esc(byId[id].alt) + '</del><ins>' + esc(alt) + '</ins></li>'); });
+    (r.lists || []).forEach((l) => rows.push('<li><span class="se-dlabel">Repeating group</span><ins>' + (l.action === 'duplicate' ? 'Add an item (a copy of item ' + (l.index + 1) + ')' : 'Remove item ' + (l.index + 1)) + '</ins></li>'));
+    if (!rows.length) return '<p class="se-hint">Goraiya suggests no changes.</p>';
+    return '<span class="se-label">Changes</span><ul class="se-diff">' + rows.join('') + '</ul>'
+      + ((r.lists || []).length ? '<p class="se-hint">Adding or removing items saves the page and reloads it.</p>' : '')
+      + '<div class="se-row"><button type="button" class="se-btn se-primary" data-sec="accept">Accept</button><button type="button" class="se-btn se-ghost" data-sec="discard">Discard</button></div>';
+  }
+
+  function applySection(el, r, parts) {
+    if (!r) return;
+    const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+    Object.entries(r.texts || {}).forEach(([id, html]) => {
+      const n = byId[id] && byId[id].el;
+      if (!n) return;
+      if (!originals.has(id)) originals.set(id, { html: n.innerHTML, tag: tagOf(n), style: n.getAttribute('style') || '' });
+      n.innerHTML = html;
+      markText(n);
+    });
+    Object.entries(r.alts || {}).forEach(([id, alt]) => {
+      const n = byId[id] && byId[id].el;
+      const img = n && imgOf(n);
+      if (img) { img.alt = alt; imageOp(n, { alt }); }
+    });
+    const loopOps = (r.lists || []).map((l) => ({ op: 'loop', id: l.id, action: l.action, index: l.index }));
+    deselect();
+    if (loopOps.length) { save(loopOps, true); return; }
+    toast('Goraiya\'s changes are in place. Save to keep them, or Discard.');
+  }
+
+  function deleteSection(el) {
+    const parts = [...el.querySelectorAll('[data-se]')];
+    if (!parts.length) return;
+    const ids = parts.map((n) => n.getAttribute('data-se'));
+    const tpl = ids.filter((x) => /^t/.test(x)).length;
+    if (tpl && tpl !== ids.length) { toast('This section mixes the page\'s content and its design. Delete its parts one by one.', 'error', 7000); return; }
+    const anchor = parts[0];
+    let up = 0;
+    for (let n = anchor; n && n !== el; n = n.parentElement) up++;
+    const op = { op: 'remove', id: anchor.getAttribute('data-se'), up, tag: tagOf(el), ids };
+    deselect();
+    const parent = el.parentNode;
+    const next = el.nextSibling;
+    P.section.set(op.id + ':' + up, { el, op });
+    el.remove();
+    update();
+    toast('Section deleted.', '', 9000, { label: 'Undo', fn: () => { parent.insertBefore(el, next && next.parentNode === parent ? next : null); P.section.delete(op.id + ':' + up); update(); } });
   }
 
   // Selection inside the edited element (kept while popovers have focus).
@@ -659,15 +828,14 @@
       + '<button type="button" class="se-tb se-wide" data-pop="size" title="Text size" aria-label="Text size" aria-haspopup="true">' + Math.round(parseFloat(cs.fontSize)) + '<small>px</small></button>'
       + '<button type="button" class="se-tb" data-pop="align" title="Alignment" aria-label="Alignment" aria-haspopup="true">' + (ico[cs.textAlign] || ico.left) + '</button>'
       + '<button type="button" class="se-tb" data-act="reset" title="Reset style: use the site\'s own styles" aria-label="Reset style">' + ico.reset + '</button>';
-    if (C.ai) h += '<span class="se-sep"></span><button type="button" class="se-tb se-ai" data-pop="ai" title="Rewrite with AI" aria-label="Rewrite with AI" aria-haspopup="true">✦</button>';
+    h += '<span class="se-sep"></span><button type="button" class="se-tb se-ai" data-act="g-el" title="Goraiya: rewrite this text" aria-label="Goraiya: rewrite this text" aria-haspopup="dialog">' + ico.sparrow + '</button>';
     if (inLoop) h += '<span class="se-sep"></span><button type="button" class="se-tb se-wide" data-act="loop" title="Repeating group: add, move or remove items">' + ico.loop + '<span>Group</span></button>';
     h += '<span class="se-sep"></span><button type="button" class="se-tb se-danger" data-act="remove" title="Remove element" aria-label="Remove element">' + ico.trash + '</button>';
     // Popovers
     h += linkPop();
-    h += '<div class="se-pop" data-for="size" hidden><label class="se-label" for="se-size">Size in px</label><div class="se-row"><input id="se-size" class="se-input se-num" type="number" min="6" max="200" step="1" value="' + Math.round(parseFloat(cs.fontSize)) + '"><button type="button" class="se-btn se-primary" data-act="size-apply">Set</button></div>'
+    h += '<div class="se-pop" data-for="size" hidden><label class="se-label" for="se-size">Size in px</label><div class="se-row se-inline"><input id="se-size" class="se-input se-num" type="number" min="6" max="200" step="1" value="' + Math.round(parseFloat(cs.fontSize)) + '"><button type="button" class="se-btn se-primary" data-act="size-apply">Set</button></div>'
       + '<div class="se-chips">' + [14, 16, 18, 20, 24, 32, 40, 48, 64].map((s) => '<button type="button" class="se-chip" data-size="' + s + '">' + s + '</button>').join('') + '</div></div>';
     h += '<div class="se-pop" data-for="align" hidden><div class="se-row">' + ['left', 'center', 'right', 'justify'].map((a) => '<button type="button" class="se-tb" data-align="' + a + '" aria-label="Align ' + a + '" title="Align ' + a + '">' + ico[a] + '</button>').join('') + '</div></div>';
-    h += aiPop();
     toolbar.innerHTML = h;
     toolbar.hidden = false;
     placeToolbar();
@@ -677,13 +845,6 @@
     return '<div class="se-pop" data-for="link" hidden><label class="se-label" for="se-href">Link address</label><input id="se-href" class="se-input" type="text" placeholder="https://… or /page" autocomplete="off">'
       + '<label class="se-check"><input type="checkbox" id="se-blank"> Open in a new tab</label>'
       + '<div class="se-row"><button type="button" class="se-btn se-primary" data-act="link-apply">Apply</button><button type="button" class="se-btn se-ghost" data-act="link-remove">Remove link</button></div></div>';
-  }
-  function aiPop() {
-    if (!C.ai) return '';
-    return '<div class="se-pop se-menu" data-for="ai" hidden role="menu">'
-      + [['shorter', 'Shorter'], ['longer', 'Longer'], ['grammar', 'Fix grammar'], ['formal', 'More formal'], ['casual', 'More casual'], ['simpler', 'Simpler words']]
-        .map(([a, l]) => '<button type="button" role="menuitem" class="se-mi" data-ai="' + a + '">' + l + '</button>').join('')
-      + '<div class="se-row"><label class="se-sr" for="se-lang">Language</label><input id="se-lang" class="se-input" type="text" placeholder="Translate to… e.g. Spanish"><button type="button" class="se-btn se-primary" data-ai="translate">Translate</button></div></div>';
   }
   const markAny = (el) => (selKind === 'bind' ? markBind(el) : markText(el));
 
@@ -754,8 +915,14 @@
     if (b.dataset.pop) { openPop(b.dataset.pop, b); return; }
     if (b.dataset.size) { setStyle(sel, 'font-size', b.dataset.size + 'px'); toolbar.querySelector('#se-size').value = b.dataset.size; refreshSizeLabel(); return; }
     if (b.dataset.align) { setStyle(sel, 'text-align', b.dataset.align); toolbar.querySelector('[data-pop="align"]').innerHTML = ico[b.dataset.align]; b.closest('.se-pop').hidden = true; return; }
-    if (b.dataset.ai) { aiRewrite(b.dataset.ai, b); return; }
     const act = b.dataset.act;
+    if (act === 'g-el') {
+      // Open under the text (not over it), lined up with the button.
+      const er = sel.getBoundingClientRect();
+      const br = b.getBoundingClientRect();
+      openGoraiya({ mode: 'element', el: sel }, { left: br.left, top: Math.min(br.top, er.top), bottom: Math.max(br.bottom, er.bottom) });
+      return;
+    }
     if (act === 'size-apply') {
       const v = parseInt(toolbar.querySelector('#se-size').value, 10);
       if (v >= 6 && v <= 200) { setStyle(sel, 'font-size', v + 'px'); refreshSizeLabel(); b.closest('.se-pop').hidden = true; }
@@ -810,7 +977,6 @@
   toolbar.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.id === 'se-href') { e.preventDefault(); toolbar.querySelector('[data-act="link-apply"]').click(); }
     if (e.key === 'Enter' && e.target.id === 'se-size') { e.preventDefault(); toolbar.querySelector('[data-act="size-apply"]').click(); }
-    if (e.key === 'Enter' && e.target.id === 'se-lang') { e.preventDefault(); toolbar.querySelector('[data-ai="translate"]').click(); }
   });
 
   function refreshSizeLabel() {
@@ -818,21 +984,128 @@
     if (b && sel) b.innerHTML = Math.round(parseFloat(getComputedStyle(sel).fontSize)) + '<small>px</small>';
   }
 
-  async function aiRewrite(action, btn) {
-    const el = sel;
-    const lang = action === 'translate' ? (toolbar.querySelector('#se-lang').value || '').trim() : '';
-    if (action === 'translate' && !lang) { toast('Type a language first.', 'error'); return; }
-    btn.closest('.se-pop').hidden = true;
-    const ai = toolbar.querySelector('.se-ai');
-    ai.classList.add('se-busy');
-    ai.disabled = true;
-    const r = await json(C.ai, { action, text: cleanHtml(el), lang });
-    ai.classList.remove('se-busy');
-    ai.disabled = false;
-    if (!r.ok) { toast(r.error || 'The AI request failed.', 'error'); return; }
-    if (selKind === 'bind' && BINDS[bindKey(el)].kind !== 'html') { const t = d.createElement('template'); t.innerHTML = r.html; el.textContent = t.content.textContent; } else el.innerHTML = r.html;
-    markAny(el);
-    toast('Rewritten. Press Discard to undo all changes.');
+  // ------------------------------------------------------------------ Goraiya: selected text or a whole text part
+  let gTarget = null; // {mode: 'range'|'element', el, range}
+  const notConnected = () => '<p class="se-hint">Goraiya is not connected yet. ' + (C.goraiya && C.goraiya.canUse
+    ? 'Connect it from the Goraiya button in the dashboard, then come back to this page.</p><div class="se-row"><a class="se-btn se-primary" href="' + esc(C.goraiya.connect) + '">Connect Goraiya</a></div>'
+    : 'Ask an administrator to connect it.</p>');
+
+  function placeGpop(rect) {
+    gpop.hidden = false;
+    const w = gpop.offsetWidth || 320;
+    const h = gpop.offsetHeight || 200;
+    if (window.innerWidth <= 640) { gpop.style.transform = ''; gpop.classList.add('se-docked'); return; }
+    gpop.classList.remove('se-docked');
+    let top = rect.bottom + 8;
+    if (top + h > floorY() - 8) top = Math.max(8, rect.top - h - 8);
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8));
+    gpop.style.transform = 'translate(' + Math.round(left) + 'px,' + Math.round(top) + 'px)';
+  }
+
+  function openGoraiya(target, rect) {
+    gTarget = target;
+    gsel.hidden = true;
+    toolbar.querySelectorAll('.se-pop').forEach((p) => { p.hidden = true; });
+    let h = '<div class="se-ghead">' + ico.sparrow + '<strong>Goraiya</strong><span class="se-hint">' + (target.mode === 'range' ? 'Selected text' : 'This text') + '</span>'
+      + '<button type="button" class="se-ib" data-g="close" aria-label="Close Goraiya">' + ico.close + '</button></div>';
+    if (!C.ai) {
+      h += notConnected();
+    } else {
+      h += '<div class="se-chips">' + [['improve', 'Improve'], ['shorter', 'Shorter'], ['longer', 'Longer'], ['grammar', 'Fix grammar']]
+        .map(([a, l]) => '<button type="button" class="se-chip" data-g="' + a + '">' + l + '</button>').join('')
+        + '<button type="button" class="se-chip" data-g="tone-open" aria-expanded="false">Change tone</button></div>'
+        + '<div class="se-chips se-tones" hidden>' + ['Formal', 'Friendly', 'Confident', 'Simple', 'Playful'].map((t) => '<button type="button" class="se-chip" data-g="tone" data-tone="' + t.toLowerCase() + '">' + t + '</button>').join('') + '</div>'
+        + '<div class="se-row se-inline"><label class="se-sr" for="se-gask">Ask Goraiya</label><input id="se-gask" class="se-input" type="text" placeholder="e.g. Make it punchier" autocomplete="off">'
+        + '<button type="button" class="se-btn se-primary" data-g="prompt">Ask</button></div>'
+        + '<div class="se-gres" hidden></div>';
+    }
+    gpop.innerHTML = h;
+    placeGpop(rect);
+    const inp = gpop.querySelector('#se-gask');
+    if (inp) setTimeout(() => inp.focus({ preventScroll: true }), 0);
+  }
+  function closeGoraiya() { gpop.hidden = true; gpop.innerHTML = ''; gTarget = null; }
+
+  gpop.addEventListener('mousedown', (e) => { if (!e.target.closest('input,textarea')) e.preventDefault(); });
+  gpop.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'se-gask') { e.preventDefault(); gpop.querySelector('[data-g="prompt"]').click(); } });
+  gpop.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-g]');
+    if (!b || !gTarget) return;
+    const g = b.dataset.g;
+    if (g === 'close' || g === 'discard') { if (g === 'discard') { gpop.querySelector('.se-gres').hidden = true; return; } closeGoraiya(); return; }
+    if (g === 'tone-open') { const t = gpop.querySelector('.se-tones'); t.hidden = !t.hidden; b.setAttribute('aria-expanded', String(!t.hidden)); return; }
+    if (g === 'accept') { applyGoraiya(); return; }
+    const t = gTarget;
+    const text = t.mode === 'range' ? rangeHtml(t.range) : cleanHtml(t.el);
+    const body = { action: g === 'tone' ? 'tone' : g, text };
+    if (g === 'tone') body.lang = b.dataset.tone;
+    if (g === 'prompt') {
+      body.prompt = (gpop.querySelector('#se-gask').value || '').trim();
+      if (!body.prompt) { gpop.querySelector('#se-gask').focus(); return; }
+    }
+    const res = gpop.querySelector('.se-gres');
+    res.hidden = false;
+    res.innerHTML = '<p class="se-hint se-busy">Goraiya is writing</p>';
+    const r = await json(C.ai, body);
+    if (!gTarget) return;
+    if (!r.ok) { res.innerHTML = '<p class="se-gerr">' + esc(r.error || 'Goraiya could not answer. Try again.') + '</p>'; return; }
+    gTarget.result = r.html;
+    res.innerHTML = '<span class="se-label">Preview</span><div class="se-gprev">' + r.html + '</div>'
+      + '<div class="se-row"><button type="button" class="se-btn se-primary" data-g="accept">Accept</button><button type="button" class="se-btn se-ghost" data-g="discard">Discard</button></div>';
+  });
+
+  function rangeHtml(range) {
+    const w = d.createElement('div');
+    w.appendChild(range.cloneContents());
+    return w.innerHTML;
+  }
+
+  function applyGoraiya() {
+    const t = gTarget;
+    if (!t || t.result == null) return;
+    const el = t.el;
+    const plain = selKind === 'bind' && BINDS[bindKey(el)] && BINDS[bindKey(el)].kind !== 'html';
+    const frag = d.createElement('template');
+    frag.innerHTML = t.result;
+    if (t.mode === 'range' && t.range && el.contains(t.range.commonAncestorContainer)) {
+      const r = t.range;
+      r.deleteContents();
+      r.insertNode(plain ? d.createTextNode(frag.content.textContent) : frag.content);
+    } else if (plain) {
+      el.textContent = frag.content.textContent;
+    } else {
+      el.innerHTML = t.result;
+    }
+    if (el === sel) markAny(el); else markText(el);
+    closeGoraiya();
+    toast('Goraiya\'s text is in place. Save to keep it, or Discard.');
+  }
+
+  // A small Goraiya button next to text selected inside the part being edited.
+  d.addEventListener('selectionchange', () => {
+    if (!on || !sel || !(selKind === 'text' || selKind === 'bind') || !sel.isContentEditable || !gpop.hidden) { gsel.hidden = true; return; }
+    const s2 = getSelection();
+    if (!s2.rangeCount || s2.isCollapsed) { gsel.hidden = true; return; }
+    const r = s2.getRangeAt(0);
+    if (!sel.contains(r.commonAncestorContainer) || !r.toString().trim()) { gsel.hidden = true; return; }
+    const rect = r.getBoundingClientRect();
+    gsel.hidden = false;
+    gsel.style.transform = 'translate(' + Math.round(Math.min(rect.right + 6, window.innerWidth - 40)) + 'px,' + Math.round(Math.max(8, rect.top - 34)) + 'px)';
+  });
+  gsel.addEventListener('mousedown', (e) => e.preventDefault());
+  gsel.addEventListener('click', () => {
+    const s2 = getSelection();
+    if (!s2.rangeCount || !sel) return;
+    openGoraiya({ mode: 'range', el: sel, range: s2.getRangeAt(0).cloneRange() }, gsel.getBoundingClientRect());
+  });
+
+  function openGuide() {
+    deselect();
+    openPanel('Goraiya', '<div class="se-guide"><p><strong>Rewrite text.</strong> Click a text to edit it, select some words, then click the Goraiya button that appears next to them. Pick Improve, Shorter, Longer, Fix grammar or a tone, or ask in your own words. You see a preview first.</p>'
+      + '<p><strong>Change a whole section.</strong> Click an empty spot of a block (a hero, a row of cards, a list) to select the section. Goraiya can revamp all its texts at once, change it the way you describe, or delete it.</p>'
+      + '<p class="se-label">Things to ask</p><ul class="se-examples"><li>Make this more formal</li><li>Shorter, with a call to action at the end</li><li>Translate into Spanish</li><li>Add a third card</li></ul>'
+      + '<p class="se-hint">Nothing changes on the site until you press Save. Changes to a shared template ask first.</p></div>'
+      + (C.ai ? '' : notConnected()));
   }
 
   // ------------------------------------------------------------------ side panel
@@ -892,16 +1165,17 @@
     const sizeNow = (() => { const mw = st.maxWidth; if (/thumb/.test(img.src)) return 'thumb'; return mw === '640px' ? 'medium' : mw === '1024px' ? 'large' : 'full'; })();
     const arrow = (deg) => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform:rotate(' + deg + 'deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
     const presets = [['left top', arrow(-45)], ['center top', arrow(0)], ['right top', arrow(45)], ['left center', arrow(-90)], ['center center', '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="3.5" fill="currentColor"/></svg>'], ['right center', arrow(90)], ['left bottom', arrow(-135)], ['center bottom', arrow(180)], ['right bottom', arrow(135)]];
-    let h = '<div class="se-preview"><img src="' + esc(img.getAttribute('src') || '') + '" alt=""></div>';
+    let h = '<h3 class="se-sect">Image</h3><div class="se-preview"><img src="' + esc(img.getAttribute('src') || '') + '" alt=""></div>';
     if (C.media) {
       h += '<div class="se-row"><label class="se-btn se-primary se-file">Upload<input type="file" accept="image/*" data-upload hidden></label>'
         + '<button type="button" class="se-btn se-ghost" data-act="library">Media library</button></div><div class="se-lib" hidden></div>';
     } else {
-      h += '<label class="se-label" for="se-src">Image address</label><div class="se-row"><input id="se-src" class="se-input" type="url" value="' + esc(img.getAttribute('src')) + '"><button type="button" class="se-btn se-ghost" data-act="src">Use</button></div>';
+      h += '<label class="se-label" for="se-src">Image address</label><div class="se-row se-inline"><input id="se-src" class="se-input" type="url" value="' + esc(img.getAttribute('src')) + '"><button type="button" class="se-btn se-ghost" data-act="src">Use</button></div>';
     }
-    h += '<label class="se-label" for="se-alt">Alt text <span class="se-hint">(describes the image for screen readers and search)</span></label>'
+    h += '<h3 class="se-sect">Description</h3><label class="se-label" for="se-alt">Alt text</label><p class="se-hint se-under">Describes the image for screen readers and search engines.</p>'
       + '<textarea id="se-alt" class="se-input" rows="2">' + esc(img.getAttribute('alt') || '') + '</textarea>'
-      + (C.ai ? '<button type="button" class="se-link" data-act="alt-ai">✦ Suggest alt text</button>' : '');
+      + (C.ai ? '<button type="button" class="se-link se-glink" data-act="alt-ai">' + ico.sparrow + ' Suggest alt text with Goraiya</button>' : '');
+    h += '<h3 class="se-sect">Size and shape</h3>';
     if (media) {
       h += '<label class="se-label" for="se-isize">Size</label><select id="se-isize" class="se-input">'
         + [['thumb', 'Thumbnail'], ['medium', 'Medium'], ['large', 'Large'], ['full', 'Full size']].map(([v, l]) => '<option value="' + v + '"' + (v === sizeNow ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>';
@@ -912,13 +1186,13 @@
     h += '<span class="se-label" id="se-asp-l">Aspect ratio</span><div class="se-chips" role="radiogroup" aria-labelledby="se-asp-l">'
       + aspects.map(([v, l]) => '<button type="button" class="se-chip" role="radio" aria-checked="' + (v === asp || (!asp && !v)) + '" data-aspect="' + v + '">' + l + '</button>').join('')
       + '<button type="button" class="se-chip" role="radio" aria-checked="' + (!!asp && !known) + '" data-aspect="custom">Custom</button></div>'
-      + '<div class="se-row se-custom" ' + (asp && !known ? '' : 'hidden') + '><input class="se-input se-num" id="se-asp" type="text" placeholder="e.g. 5/4" value="' + esc(asp && !known ? asp : '') + '" aria-label="Custom aspect ratio"><button type="button" class="se-btn se-ghost" data-act="aspect-custom">Set</button></div>'
+      + '<div class="se-row se-inline se-custom" ' + (asp && !known ? '' : 'hidden') + '><input class="se-input se-num" id="se-asp" type="text" placeholder="e.g. 5/4" value="' + esc(asp && !known ? asp : '') + '" aria-label="Custom aspect ratio"><button type="button" class="se-btn se-ghost" data-act="aspect-custom">Set</button></div>'
       + '<span class="se-label" id="se-fit-l">Fit</span><div class="se-seg" role="radiogroup" aria-labelledby="se-fit-l">'
       + [['cover', 'Fill (crop)'], ['contain', 'Fit inside']].map(([v, l]) => '<button type="button" role="radio" aria-checked="' + (fit === v) + '" data-fit="' + v + '">' + l + '</button>').join('') + '</div>'
-      + '<span class="se-label" id="se-pos-l">Focus point</span><div class="se-focus" role="radiogroup" aria-labelledby="se-pos-l">'
+      + '<h3 class="se-sect" id="se-pos-l">Focus point</h3><div class="se-focus" role="radiogroup" aria-labelledby="se-pos-l">'
       + presets.map(([v, l]) => '<button type="button" role="radio" aria-label="' + v + '" aria-checked="' + (pos === v || (!pos && v === 'center center')) + '" data-pos="' + v + '">' + l + '</button>').join('') + '</div>'
-      + '<div class="se-row se-end"><button type="button" class="se-btn se-danger-btn" data-act="img-remove">' + ico.trash + ' Remove image</button></div>';
-    if (loopOf(el)) h += '<button type="button" class="se-btn se-ghost se-full" data-act="loop">' + ico.loop + ' Repeating group</button>';
+      + '<div class="se-foot">' + (loopOf(el) ? '<button type="button" class="se-btn se-ghost" data-act="loop">' + ico.loop + ' Repeating group</button>' : '')
+      + '<button type="button" class="se-btn se-danger-btn" data-act="img-remove">' + ico.trash + ' Remove image</button></div>';
     openPanel('Image', h);
     wireImage(el);
   }
@@ -988,7 +1262,7 @@
         const near = (el.closest('section,article,figure,li,div') || el.parentNode || el).textContent.replace(/\s+/g, ' ').slice(0, 800);
         const r = await json(C.ai, { action: 'alt', text: near, context: (img.getAttribute('src') || '').split('/').pop() });
         b.classList.remove('se-busy');
-        if (!r.ok) { toast(r.error || 'The AI request failed.', 'error'); return; }
+        if (!r.ok) { toast(r.error || 'Goraiya could not answer. Try again.', 'error'); return; }
         q('#se-alt').value = r.html;
         img.alt = r.html;
         imageOp(el, { alt: r.html });
@@ -1041,15 +1315,15 @@
   // ---------- icons
   function openIcon(el) {
     const isSvg = tagOf(el) === 'svg';
-    let h = '<div class="se-preview se-iconprev">' + (isSvg ? el.outerHTML.replace(/\son\w+=/gi, ' x=') : '<i class="' + esc(cls(el)) + '"></i>') + '</div>';
+    let h = '<h3 class="se-sect">Icon</h3><div class="se-preview se-iconprev">' + (isSvg ? el.outerHTML.replace(/\son\w+=/gi, ' x=') : '<i class="' + esc(cls(el)) + '"></i>') + '</div>';
     if (!isSvg) {
-      h += '<label class="se-label" for="se-icls">Icon classes</label><div class="se-row"><input id="se-icls" class="se-input" type="text" value="' + esc(cls(el)) + '" spellcheck="false"><button type="button" class="se-btn se-primary" data-act="icon-class">Apply</button></div>'
+      h += '<label class="se-label" for="se-icls">Icon classes</label><div class="se-row se-inline"><input id="se-icls" class="se-input" type="text" value="' + esc(cls(el)) + '" spellcheck="false"><button type="button" class="se-btn se-primary" data-act="icon-class">Apply</button></div>'
         + '<p class="se-hint">For example <code>fa-solid fa-star</code> (Font Awesome) or <code>bi bi-star</code> (Bootstrap Icons), whichever the site uses.</p>';
     }
-    h += '<label class="se-label" for="se-isvg">' + (isSvg ? 'Replace with SVG code' : 'Or paste SVG code') + '</label><textarea id="se-isvg" class="se-input se-code" rows="5" spellcheck="false" placeholder="&lt;svg …&gt;…&lt;/svg&gt;"></textarea>'
+    h += '<h3 class="se-sect">' + (isSvg ? 'Replace with SVG' : 'Or use an SVG') + '</h3><label class="se-label" for="se-isvg">SVG code</label><textarea id="se-isvg" class="se-input se-code" rows="5" spellcheck="false" placeholder="&lt;svg …&gt;…&lt;/svg&gt;"></textarea>'
       + '<div class="se-row"><button type="button" class="se-btn se-primary" data-act="icon-svg">Use SVG</button></div>'
-      + '<div class="se-row se-end"><button type="button" class="se-btn se-danger-btn" data-act="icon-remove">' + ico.trash + ' Remove icon</button></div>';
-    if (loopOf(el)) h += '<button type="button" class="se-btn se-ghost se-full" data-act="loop">' + ico.loop + ' Repeating group</button>';
+      + '<div class="se-foot">' + (loopOf(el) ? '<button type="button" class="se-btn se-ghost" data-act="loop">' + ico.loop + ' Repeating group</button>' : '')
+      + '<button type="button" class="se-btn se-danger-btn" data-act="icon-remove">' + ico.trash + ' Remove icon</button></div>';
     openPanel('Icon', h);
     panel.onclick = (e) => {
       const b = e.target.closest('button');
@@ -1122,7 +1396,7 @@
     }
     const cur = itemIndex(el, target, data);
     const n = data.items.length;
-    let h = '<p class="se-hint">Items repeat the same design (cards, slides, list entries). Changes here save the page and reload it so sliders start fresh.</p><ol class="se-items">'
+    let h = '<p class="se-hint">Items repeat the same design (cards, slides, list entries). Changes here save the page and reload it so sliders start fresh.</p><h3 class="se-sect">Items</h3><ol class="se-items">'
       + data.items.map((it, i) => '<li class="' + (i === cur ? 'se-cur' : '') + '"><span class="se-thumb">' + (it.thumb ? '<img src="' + esc(it.thumb) + '" alt="">' : '<span>' + (i + 1) + '</span>') + '</span>'
         + '<span class="se-itl">' + esc(it.label || 'Item ' + (i + 1)) + '</span><span class="se-ita">'
         + '<button type="button" class="se-ib" data-li="' + i + '" data-la="up" aria-label="Move item ' + (i + 1) + ' up" title="Move up"' + (i === 0 ? ' disabled' : '') + '>' + ico.up + '</button>'
@@ -1130,7 +1404,8 @@
         + '<button type="button" class="se-ib" data-li="' + i + '" data-la="duplicate" aria-label="Duplicate item ' + (i + 1) + '" title="Duplicate">' + ico.copy + '</button>'
         + '<button type="button" class="se-ib se-danger" data-li="' + i + '" data-la="remove" aria-label="Delete item ' + (i + 1) + '" title="Delete"' + (n <= 1 ? ' disabled' : '') + '>' + ico.trash + '</button>'
         + '</span></li>').join('') + '</ol>';
-    if (MODE === 'html') h += '<details class="se-dyn"' + (n ? '' : ' open') + '><summary>Make dynamic</summary>' + dynamicForm(data) + '</details>';
+    h += '<h3 class="se-sect">Goraiya</h3><button type="button" class="se-btn se-ghost se-full se-glink" data-act="g-loop">' + ico.sparrow + ' Revamp, change or delete this group</button>';
+    if (MODE === 'html') h += '<details class="se-dynform"' + (n ? '' : ' open') + '><summary>Make dynamic</summary>' + dynamicForm(data) + '</details>';
     openPanel('Repeating group', h);
     wireDynamic(data);
     panel.onclick = (e) => {
@@ -1144,6 +1419,8 @@
           : a === 'down' ? { op: 'loop', id: data.id, action: 'move', index: i, to: i + 1 }
             : { op: 'loop', id: data.id, action: a, index: i };
         loopAction(op, a === 'duplicate' ? 'Duplicating' : a === 'remove' ? 'Deleting' : 'Moving');
+      } else if (b.dataset.act === 'g-loop') {
+        selectSection(el);
       } else if (b.dataset.act === 'dynamic') {
         makeDynamic(data);
       }
@@ -1158,8 +1435,8 @@
       + '<div class="se-grid2"><div><label class="se-label" for="se-dlim">How many</label><input id="se-dlim" class="se-input" type="number" min="1" max="50" value="' + Math.max(1, data.items.length) + '"></div>'
       + '<div><label class="se-label" for="se-dord">Order</label><select id="se-dord" class="se-input"></select></div></div>'
       + '<div class="se-dfilter"><label class="se-label" for="se-dtax">Only items in</label><div class="se-grid2"><select id="se-dtax" class="se-input"></select><select id="se-dterm" class="se-input" aria-label="Term" disabled><option value="">Any</option></select></div></div>'
-      + '<span class="se-label">What goes where</span><div class="se-map"></div>'
-      + '<div class="se-row"><button type="button" class="se-btn se-primary" data-act="dynamic">Make dynamic</button></div>'
+      + '<h3 class="se-sect">What goes where</h3><div class="se-map"></div>'
+      + '<div class="se-row"><button type="button" class="se-btn se-primary se-full" data-act="dynamic">Make dynamic</button></div>'
       + '<p class="se-hint">The first item becomes the design for every item. The current items are kept, so you can make the group static again.</p>';
   }
 
@@ -1268,9 +1545,10 @@
 
   // ------------------------------------------------------------------ saving
   function buildOps() {
-    const removed = Array.from(P.remove.values());
+    const removed = Array.from(P.remove.values()).concat(Array.from(P.section.values()).map((v) => v.el));
     const gone = (el) => removed.some((r) => r !== el && r.contains(el));
     const ops = [];
+    P.section.forEach((v) => { if (!gone(v.el)) ops.push(v.op); });
     P.remove.forEach((el, id) => { if (!gone(el)) ops.push({ op: 'remove', id }); });
     const alive = (el) => !P.remove.has(idOf(el)) && !gone(el);
     P.tag.forEach((tag, id) => { const el = P.text.get(id) || (P.style.get(id) || {}).el || d.querySelector('[data-se="' + id + '"]'); if (!el || alive(el)) ops.push({ op: 'tag', id, tag }); });
@@ -1368,6 +1646,7 @@
     if (!b) return;
     if (b.dataset.act === 'save') save();
     else if (b.dataset.act === 'undo-tpl') undoTemplate();
+    else if (b.dataset.act === 'goraiya') openGuide();
     else if (b.dataset.act === 'discard') {
       if (count() && !confirm('Discard all unsaved changes?')) return;
       leaving = true;

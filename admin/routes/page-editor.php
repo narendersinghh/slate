@@ -106,11 +106,13 @@ return static function (Router $r): void {
         Auth::require('edit_posts');
         Auth::require('use_ai');
         if (!\Slate\Ai::enabled()) {
-            json_response(['ok' => false, 'error' => 'AI is not set up. Go to Settings, AI.'], 400);
+            json_response(['ok' => false, 'error' => 'Goraiya is not connected yet. Connect it from the Goraiya button in the dashboard.'], 400);
         }
         @set_time_limit(180);
         $in = json_input();
-        $res = PageEditor::ai((string)($in['action'] ?? ''), (string)($in['text'] ?? ''), (string)($in['lang'] ?? ''), (string)($in['context'] ?? ''));
+        $res = ($in['action'] ?? '') === 'section'
+            ? PageEditor::aiSection(is_array($in['parts'] ?? null) ? $in['parts'] : [], (string)($in['mode'] ?? 'revamp'), (string)($in['prompt'] ?? ''))
+            : PageEditor::ai((string)($in['action'] ?? ''), (string)($in['text'] ?? ''), (string)($in['lang'] ?? ''), (string)($in['context'] ?? ''), (string)($in['prompt'] ?? ''));
         json_response($res, $res['ok'] ? 200 : 422);
     });
 
@@ -130,11 +132,13 @@ return static function (Router $r): void {
         $load($id);
         Auth::require('use_ai');
         if (!\Slate\Ai::enabled()) {
-            json_response(['ok' => false, 'error' => 'AI is not set up. Go to Settings, AI.'], 400);
+            json_response(['ok' => false, 'error' => 'Goraiya is not connected yet. Connect it from the Goraiya button in the dashboard.'], 400);
         }
         @set_time_limit(180);
         $in = json_input();
-        $res = PageEditor::ai((string)($in['action'] ?? ''), (string)($in['text'] ?? ''), (string)($in['lang'] ?? ''), (string)($in['context'] ?? ''));
+        $res = ($in['action'] ?? '') === 'section'
+            ? PageEditor::aiSection(is_array($in['parts'] ?? null) ? $in['parts'] : [], (string)($in['mode'] ?? 'revamp'), (string)($in['prompt'] ?? ''))
+            : PageEditor::ai((string)($in['action'] ?? ''), (string)($in['text'] ?? ''), (string)($in['lang'] ?? ''), (string)($in['context'] ?? ''), (string)($in['prompt'] ?? ''));
         if ($res['ok']) {
             log_activity('page_editor_ai', (string)($in['action'] ?? ''));
         }

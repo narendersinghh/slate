@@ -68,6 +68,7 @@ final class PageEditor
             'updated' => (string)($post['updated_at'] ?? ''),
             'save' => admin_url('page-editor/' . (int)$post['id'] . '/save'),
             'ai' => self::aiAvailable() ? admin_url('page-editor/' . (int)$post['id'] . '/ai') : null,
+            'goraiya' => ['connect' => admin_url() . '#goraiya', 'canUse' => Auth::can('use_ai')],
             'csrf' => Csrf::token(),
             'media' => Auth::can('upload_media') ? admin_url('api/media') : null,
             'terms' => admin_url('page-editor/terms'),
@@ -341,6 +342,14 @@ final class PageEditor
                 return $fail('Change #' . ($i + 1) . ' (' . preg_replace('/[^a-z_]/', '', $type) . '): element not found');
             }
             $el = $els[$k];
+            if ($type === 'remove' && isset($op['up'])) {
+                $sec = self::sectionFrom($el, $op);
+                if (is_string($sec)) {
+                    return $fail('Change #' . ($i + 1) . ' (remove): ' . $sec);
+                }
+                $el = $sec;
+                $k = (int)$el->getAttribute('data-se-k');
+            }
             $tag = strtolower($el->tagName);
             $mode = match ($type) {
                 'text', 'loop' => 'inner',
@@ -802,6 +811,9 @@ final class PageEditor
                 return 'Change #' . ($i + 1) . ': this is not a part of the template that can be changed here.';
             }
             $ops[$i]['id'] = substr($id, 1);
+            if (isset($op['ids']) && is_array($op['ids'])) {
+                $ops[$i]['ids'] = array_map(static fn($x) => preg_replace('/^t/', '', (string)$x), $op['ids']);
+            }
         }
         $m = self::templateIds($html);
         if (!$m) {
@@ -879,6 +891,7 @@ final class PageEditor
             'updated' => $isPost ? (string)($c['post']['updated_at'] ?? '') : '',
             'save' => $c ? admin_url($isPost ? 'page-editor/' . $id . '/save' : 'page-editor/term/' . $id . '/save') : null,
             'ai' => self::aiAvailable() ? admin_url('page-editor/ai') : null,
+            'goraiya' => ['connect' => admin_url() . '#goraiya', 'canUse' => Auth::can('use_ai')],
             'csrf' => Csrf::token(),
             'media' => Auth::can('upload_media') ? admin_url('api/media') : null,
             'terms' => admin_url('page-editor/terms'),
@@ -984,6 +997,13 @@ final class PageEditor
         if (!$el) {
             return 'element not found';
         }
+        if ($type === 'remove' && isset($op['up'])) {
+            $sec = self::sectionFrom($el, $op);
+            if (is_string($sec)) {
+                return $sec;
+            }
+            $el = $sec;
+        }
         if ($type !== 'style' || !$el->hasAttribute('data-se-loop')) {
             for ($p = $el->parentNode; $p instanceof \DOMElement; $p = $p->parentNode) {
                 if ($p->hasAttribute('data-se-source')) {
@@ -1001,6 +1021,40 @@ final class PageEditor
             'remove' => self::opRemove($el),
             default => 'unknown change',
         };
+    }
+
+    /**
+     * A section (a block with several editable parts, no id of its own) addressed from one part inside it:
+     * {op: 'remove', id: <part>, up: <levels>, tag: <section tag>, ids: [<every part inside>]}. The ids must match
+     * exactly, so a section is only removed when the browser and the stored HTML agree on what it holds.
+     */
+    private static function sectionFrom(\DOMElement $anchor, array $op): \DOMElement|string
+    {
+        $up = $op['up'] ?? null;
+        $ids = $op['ids'] ?? null;
+        if (!is_int($up) || $up < 1 || $up > 30 || !is_array($ids) || !$ids || count($ids) > 500) {
+            return 'invalid section';
+        }
+        $el = $anchor;
+        for ($i = 0; $i < $up; $i++) {
+            $el = $el->parentNode;
+            if (!$el instanceof \DOMElement || $el->getAttribute('id') === '__slate_root') {
+                return 'section not found';
+            }
+        }
+        if (strtolower($el->tagName) !== strtolower((string)($op['tag'] ?? ''))) {
+            return 'section not found';
+        }
+        $have = [];
+        foreach (iterator_to_array($el->getElementsByTagName('*')) as $n) {
+            if ($n->getAttribute('data-se') !== '') {
+                $have[] = $n->getAttribute('data-se');
+            }
+        }
+        $want = array_map('strval', $ids);
+        sort($have);
+        sort($want);
+        return $have === $want ? $el : 'this section does not match the page any more; reload and try again';
     }
 
     private static function find(\DOMDocument $doc, \DOMElement $root, string $attr, string $id): ?\DOMElement
@@ -1669,10 +1723,15 @@ final class PageEditor
     // ------------------------------------------------------------------ AI
 
     /** Rewrite text / suggest alt text. Returns ['ok' => bool, 'html'|'error' => string]. */
-    public static function ai(string $action, string $text, string $lang = '', string $context = ''): array
+    public static function ai(string $action, string $text, string $lang = '', string $context = '', string $ask = ''): array
     {
         $text = mb_substr(trim($text), 0, 6000);
+        $ask = trim(mb_substr(strip_tags($ask), 0, 500));
+        $tone = trim(preg_replace('/[^\p{L} \-]/u', '', $lang));
         $prompts = [
+            'improve' => 'Improve this text: clearer, more engaging and easier to read, keeping its meaning and about the same length.',
+            'tone' => 'Rewrite this text in a ' . ($tone !== '' ? mb_substr($tone, 0, 40) : 'friendlier') . ' tone, keeping its meaning.',
+            'prompt' => 'Apply this instruction to the text: "' . $ask . '".',
             'shorter' => 'Make this text shorter (about half the length), keeping its meaning.',
             'longer' => 'Make this text a little longer and more descriptive (at most twice the length), keeping its meaning and tone.',
             'grammar' => 'Fix spelling, grammar and punctuation. Change nothing else.',
@@ -1691,6 +1750,9 @@ final class PageEditor
             $prompt = "Translate this web page text into $lang. Keep any inline HTML tags (<strong>, <em>, <a href=\"…\">, <br>) exactly where they belong.\n"
                 . "Return only the translated text, with no quotes, notes or explanations.\n\nText:\n" . $text;
         } elseif (isset($prompts[$action])) {
+            if ($action === 'prompt' && $ask === '') {
+                return ['ok' => false, 'error' => 'Tell Goraiya what to do with the text.'];
+            }
             if ($text === '') {
                 return ['ok' => false, 'error' => 'There is no text to rewrite.'];
             }
@@ -1702,7 +1764,7 @@ final class PageEditor
         }
         $res = Ai::complete($prompt, null, ['max_tokens' => 1500]);
         if (!$res['ok']) {
-            return ['ok' => false, 'error' => (string)($res['error'] ?? 'The AI request failed.')];
+            return ['ok' => false, 'error' => (string)($res['error'] ?? 'Goraiya could not answer. Try again.')];
         }
         $out = trim((string)$res['text']);
         $out = (string)preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $out);
@@ -1713,6 +1775,89 @@ final class PageEditor
             return ['ok' => true, 'html' => mb_substr(trim(strip_tags($out)), 0, 200)];
         }
         return ['ok' => true, 'html' => self::sanitizeInline($out)];
+    }
+
+    /**
+     * Goraiya on a section: revamp all its texts, or apply an instruction. $parts: [{id, type: text|image|list, tag?, text?,
+     * alt?, items?}]. The answer is mapped to allowed changes only: texts (inline HTML), image alt texts and list item
+     * duplicate/remove. Returns ['ok' => true, 'texts' => [id => html], 'alts' => [id => text], 'lists' => [[id, action, index]]].
+     */
+    public static function aiSection(array $parts, string $mode, string $ask = ''): array
+    {
+        $ask = trim(mb_substr(strip_tags($ask), 0, 500));
+        if ($mode === 'change' && $ask === '') {
+            return ['ok' => false, 'error' => 'Tell Goraiya what to change in this section.'];
+        }
+        $clean = [];
+        $kinds = [];
+        $size = 0;
+        foreach (array_slice(array_values($parts), 0, 80) as $p) {
+            $id = (string)($p['id'] ?? '');
+            $type = (string)($p['type'] ?? '');
+            if (!preg_match('/^t?[el]\d{1,7}$/', $id) || !in_array($type, ['text', 'image', 'list'], true)) {
+                continue;
+            }
+            $row = ['id' => $id, 'type' => $type];
+            if ($type === 'text') {
+                $row['tag'] = preg_replace('/[^a-z0-9]/', '', strtolower((string)($p['tag'] ?? 'p')));
+                $row['text'] = mb_substr(self::sanitizeInline((string)($p['text'] ?? '')), 0, 2000);
+            } elseif ($type === 'image') {
+                $row['alt'] = mb_substr(trim(strip_tags((string)($p['alt'] ?? ''))), 0, 300);
+            } else {
+                $row['items'] = max(0, min(100, (int)($p['items'] ?? 0)));
+            }
+            $size += strlen(json_encode($row));
+            $clean[] = $row;
+            $kinds[$id] = $row;
+        }
+        if (!$clean || $size > 24000) {
+            return ['ok' => false, 'error' => $clean ? 'This section is too large for Goraiya. Select a smaller part.' : 'This section has nothing Goraiya can change.'];
+        }
+        $task = $mode === 'revamp'
+            ? 'Revamp this section: rewrite every text so it reads fresher, clearer and more engaging, with the same meaning and about the same length.'
+            : 'Apply this instruction to the section: "' . $ask . '".';
+        $prompt = "You edit one section of a web page. $task\n"
+            . "The section's parts, in page order (JSON):\nPARTS: " . json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n"
+            . "Answer with JSON only, in this shape: {\"texts\": {\"<id>\": \"new text\"}, \"alts\": {\"<id>\": \"new alt text\"}, \"lists\": [{\"id\": \"<list id>\", \"action\": \"duplicate\" or \"remove\", \"index\": <item number from 0>}]}.\n"
+            . "Rules: use only the ids given; leave out parts you do not change; texts may use only <strong>, <em> and <a href=\"...\"> inside; "
+            . "no other HTML, no markdown, no scripts; keep headings short; to add an item to a list, duplicate an item (then its texts can change on the next request).";
+        $res = Ai::complete($prompt, null, ['max_tokens' => 3000]);
+        if (!$res['ok']) {
+            return ['ok' => false, 'error' => (string)($res['error'] ?? 'Goraiya could not answer. Try again.')];
+        }
+        $raw = (string)$res['text'];
+        $a = strpos($raw, '{');
+        $b = strrpos($raw, '}');
+        $json = $a !== false && $b !== false ? json_decode(substr($raw, $a, $b - $a + 1), true) : null;
+        if (!is_array($json)) {
+            return ['ok' => false, 'error' => 'Goraiya\'s answer could not be used. Try again.'];
+        }
+        $dash = static fn(string $t): string => str_replace("\u{2013}", '-', (string)preg_replace('/\s*\x{2014}\s*/u', ', ', $t));
+        $out = ['ok' => true, 'texts' => [], 'alts' => [], 'lists' => []];
+        foreach ((array)($json['texts'] ?? []) as $id => $t) {
+            if (isset($kinds[$id]) && $kinds[$id]['type'] === 'text' && is_string($t) && trim($t) !== '') {
+                $html = self::sanitizeInline($dash(trim($t)));
+                if ($html !== '' && $html !== $kinds[$id]['text']) {
+                    $out['texts'][$id] = $html;
+                }
+            }
+        }
+        foreach ((array)($json['alts'] ?? []) as $id => $t) {
+            if (isset($kinds[$id]) && $kinds[$id]['type'] === 'image' && is_string($t)) {
+                $out['alts'][$id] = mb_substr(trim(strip_tags($dash($t))), 0, 200);
+            }
+        }
+        foreach (array_slice((array)($json['lists'] ?? []), 0, 10) as $l) {
+            $id = (string)($l['id'] ?? '');
+            $act = (string)($l['action'] ?? '');
+            $idx = $l['index'] ?? null;
+            if (isset($kinds[$id]) && $kinds[$id]['type'] === 'list' && in_array($act, ['duplicate', 'remove'], true) && is_int($idx) && $idx >= 0 && $idx < $kinds[$id]['items']) {
+                $out['lists'][] = ['id' => $id, 'action' => $act, 'index' => $idx];
+            }
+        }
+        $out['texts'] = (object)$out['texts'];
+        $out['alts'] = (object)$out['alts'];
+        return $out;
     }
 
     /** Inline-only HTML (as stored by the "text" operation). */

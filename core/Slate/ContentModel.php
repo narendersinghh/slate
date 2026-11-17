@@ -120,6 +120,34 @@ final class ContentModel
         self::$types = null;
     }
 
+    /** Delete a custom post type (built-in types cannot be deleted), optionally with all its items. Returns an error message or null. */
+    public static function removeType(string $slug, bool $withContent = false): ?string
+    {
+        if (isset(self::builtinTypes()[$slug])) {
+            return 'Built-in post types cannot be deleted.';
+        }
+        if ($withContent) {
+            foreach (DB::col('SELECT id FROM {{posts}} WHERE type = :t', ['t' => $slug]) as $pid) {
+                Posts::delete((int)$pid, true);
+            }
+        }
+        self::deleteType($slug);
+        return null;
+    }
+
+    /** Delete a custom taxonomy and its terms (content keeps existing). Returns an error message or null. */
+    public static function removeTaxonomy(string $slug): ?string
+    {
+        if (isset(self::builtinTaxonomies()[$slug])) {
+            return 'Built-in taxonomies cannot be deleted.';
+        }
+        foreach (DB::col('SELECT id FROM {{terms}} WHERE taxonomy = :t', ['t' => $slug]) as $tid) {
+            Terms::delete((int)$tid);
+        }
+        self::deleteTaxonomy($slug);
+        return null;
+    }
+
     public static function saveTaxonomy(array $def, ?string $original = null): void
     {
         $all = Options::get('taxonomies') ?: [];
@@ -182,6 +210,118 @@ final class ContentModel
         $all = Options::get('field_groups') ?: [];
         unset($all[$id]);
         Options::set('field_groups', $all);
+    }
+
+    /**
+     * A post type definition from input (the Post types screen, the MCP server). $in keys: slug, singular, plural, icon, public,
+     * has_archive, hierarchical, show_in_menu, rewrite, menu_position, supports, description. Returns the clean definition, or an
+     * error message. Built-in types keep their slug.
+     */
+    public static function cleanTypeDef(array $in, ?string $original = null): array|string
+    {
+        $builtin = $original && (self::builtinTypes()[$original] ?? false);
+        $slug = $builtin ? $original : strtolower(trim((string)($in['slug'] ?? '')));
+        if (!$builtin && ($err = self::validSlug($slug, 'type', $original))) {
+            return $err;
+        }
+        $rewrite = trim(strtolower((string)($in['rewrite'] ?? $slug)), '/');
+        $rewrite = $rewrite === '' ? '' : implode('/', array_map(static fn($seg) => preg_match('/^%[a-z0-9_-]+%$/', $seg) ? $seg : slugify($seg), explode('/', $rewrite)));
+        if ($slug !== 'page' && $rewrite === '') {
+            $rewrite = $slug;
+        }
+        $icon = (string)($in['icon'] ?? '');
+        return [
+            'slug' => $slug,
+            'singular' => trim(strip_tags((string)($in['singular'] ?? ''))) ?: ucfirst($slug),
+            'plural' => trim(strip_tags((string)($in['plural'] ?? ''))) ?: ucfirst($slug) . 's',
+            'icon' => in_array($icon, Icons::names(), true) ? $icon : 'file',
+            'public' => (bool)($in['public'] ?? false),
+            'has_archive' => (bool)($in['has_archive'] ?? false),
+            'hierarchical' => (bool)($in['hierarchical'] ?? false),
+            'show_in_menu' => (bool)($in['show_in_menu'] ?? true),
+            'rewrite' => $rewrite,
+            'menu_position' => (int)($in['menu_position'] ?? 30),
+            'supports' => array_values(array_intersect((array)($in['supports'] ?? []), array_keys(self::SUPPORTS))),
+            'description' => trim(strip_tags((string)($in['description'] ?? ''))),
+        ];
+    }
+
+    /** A taxonomy definition from input (slug, singular, plural, post_types, hierarchical, public, rewrite, nested), or an error message. */
+    public static function cleanTaxonomyDef(array $in, ?string $original = null): array|string
+    {
+        $slug = strtolower(trim((string)($in['slug'] ?? '')));
+        if ($original && isset(self::builtinTaxonomies()[$original])) {
+            $slug = $original;
+        } elseif ($err = self::validSlug($slug, 'tax', $original)) {
+            return $err;
+        }
+        return [
+            'slug' => $slug,
+            'singular' => trim(strip_tags((string)($in['singular'] ?? ''))) ?: ucfirst($slug),
+            'plural' => trim(strip_tags((string)($in['plural'] ?? ''))) ?: ucfirst($slug) . 's',
+            'post_types' => array_values(array_intersect((array)($in['post_types'] ?? []), array_keys(self::types()))),
+            'hierarchical' => (bool)($in['hierarchical'] ?? false),
+            'public' => (bool)($in['public'] ?? false),
+            'rewrite' => trim(implode('/', array_map('slugify', array_filter(explode('/', (string)($in['rewrite'] ?? '')), 'strlen'))), '/'),
+            'nested' => (bool)($in['nested'] ?? true),
+        ];
+    }
+
+    /** A field group from input ({id, title, position, location: {post_types, taxonomies}, fields: [...]}), cleaned for saving. */
+    public static function cleanFieldGroup(array $data): array
+    {
+        return [
+            'id' => preg_replace('/[^a-z0-9]/', '', (string)($data['id'] ?? '')) ?: 'g' . bin2hex(random_bytes(4)),
+            'title' => trim(strip_tags((string)($data['title'] ?? 'Fields'))) ?: 'Fields',
+            'position' => in_array($data['position'] ?? 'main', ['main', 'side'], true) ? $data['position'] : 'main',
+            'location' => [
+                'post_types' => array_values(array_intersect((array)($data['location']['post_types'] ?? []), array_keys(self::types()))),
+                'taxonomies' => array_values(array_intersect((array)($data['location']['taxonomies'] ?? []), array_keys(self::taxonomies()))),
+            ],
+            'fields' => self::cleanFields((array)($data['fields'] ?? []), 0),
+        ];
+    }
+
+    /** Field definitions of a group: known types, unique names, repeaters one level deep. */
+    public static function cleanFields(array $fields, int $depth = 0): array
+    {
+        $out = [];
+        $seen = [];
+        foreach ($fields as $f) {
+            if (!is_array($f)) {
+                continue;
+            }
+            $name = preg_replace('/[^a-z0-9_]/', '', strtolower((string)($f['name'] ?? '')));
+            if (($f['type'] ?? '') === 'tab' && $name === '') {
+                $name = 'tab_' . (slugify((string)($f['label'] ?? '')) ?: count($out));
+                $name = str_replace('-', '_', $name);
+            }
+            if ($name === '' || isset($seen[$name]) || !isset(self::FIELD_TYPES[$f['type'] ?? ''])) {
+                continue;
+            }
+            $seen[$name] = true;
+            $field = [
+                'name' => $name,
+                'label' => trim(strip_tags((string)($f['label'] ?? $name))),
+                'type' => $f['type'],
+                'required' => !empty($f['required']),
+                'help' => trim(strip_tags((string)($f['help'] ?? ''))),
+                'placeholder' => trim(strip_tags((string)($f['placeholder'] ?? ''))),
+                'default' => is_scalar($f['default'] ?? '') ? (string)($f['default'] ?? '') : '',
+                'width' => in_array((string)($f['width'] ?? '100'), ['25', '33', '50', '66', '75', '100'], true) ? (string)($f['width'] ?? '100') : '100',
+                'options' => array_values(array_filter(array_map('trim', is_array($f['options'] ?? null) ? array_map('strval', $f['options']) : explode("\n", (string)($f['options'] ?? ''))))),
+                'post_type' => implode(',', array_filter(array_map(static fn($t) => preg_replace('/[^a-z0-9_-]/', '', (string)$t),
+                    is_array($f['post_type'] ?? null) ? $f['post_type'] : explode(',', (string)($f['post_type'] ?? ''))))),
+            ];
+            if ($f['type'] === 'taxonomy') {
+                $field['taxonomy'] = self::taxonomy((string)($f['taxonomy'] ?? '')) ? (string)$f['taxonomy'] : '';
+            }
+            if ($f['type'] === 'repeater' && $depth < 1) {
+                $field['sub_fields'] = self::cleanFields((array)($f['sub_fields'] ?? []), $depth + 1);
+            }
+            $out[] = $field;
+        }
+        return $out;
     }
 
     public static function validSlug(string $slug, string $kind, ?string $original = null): ?string

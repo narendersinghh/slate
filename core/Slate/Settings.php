@@ -334,6 +334,16 @@ final class Settings
         return self::$tabs = $tabs;
     }
 
+    /** Capability for a settings group (anyone with manage_settings may change every group). */
+    public static function cap(string $tab): string
+    {
+        return match ($tab) {
+            'appearance' => 'manage_menus',
+            'system' => 'manage_updates',
+            default => 'manage_settings',
+        };
+    }
+
     /** Groups with their own place in the sidebar (tab => base address) instead of living under Settings. */
     public const STANDALONE = ['seo' => 'seo', 'appearance' => 'design', 'modules' => 'm'];
 

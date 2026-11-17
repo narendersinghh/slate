@@ -645,31 +645,13 @@ function admin_dispatch(string $path): void
     $r->post('/model/types/save', static function () {
         Auth::require('manage_content_model');
         $original = (string)input('original', '') ?: null;
-        $builtin = $original && (ContentModel::builtinTypes()[$original] ?? false);
-        $slug = $builtin ? $original : strtolower(trim((string)input('slug', '')));
-        if (!$builtin && ($err = ContentModel::validSlug($slug, 'type', $original))) {
-            Session::flash('error', $err);
+        $keys = ['slug', 'singular', 'plural', 'icon', 'public', 'has_archive', 'hierarchical', 'rewrite', 'menu_position', 'supports', 'description'];
+        $def = ContentModel::cleanTypeDef(array_combine($keys, array_map(static fn($k) => input($k), $keys)) + ['show_in_menu' => input('show_in_menu', true)], $original);
+        if (is_string($def)) {
+            Session::flash('error', $def);
             back();
         }
-        $rewrite = trim(strtolower((string)input('rewrite', $slug)), '/');
-        $rewrite = $rewrite === '' ? '' : implode('/', array_map(static fn($seg) => preg_match('/^%[a-z0-9_-]+%$/', $seg) ? $seg : slugify($seg), explode('/', $rewrite)));
-        if ($slug !== 'page' && $rewrite === '') {
-            $rewrite = $slug;
-        }
-        $def = [
-            'slug' => $slug,
-            'singular' => trim(strip_tags((string)input('singular', ''))) ?: ucfirst($slug),
-            'plural' => trim(strip_tags((string)input('plural', ''))) ?: ucfirst($slug) . 's',
-            'icon' => in_array(input('icon'), \Slate\Icons::names(), true) ? input('icon') : 'file',
-            'public' => (bool)input('public'),
-            'has_archive' => (bool)input('has_archive'),
-            'hierarchical' => (bool)input('hierarchical'),
-            'show_in_menu' => (bool)input('show_in_menu', true),
-            'rewrite' => $rewrite,
-            'menu_position' => (int)input('menu_position', 30),
-            'supports' => array_values(array_intersect((array)input('supports', []), array_keys(ContentModel::SUPPORTS))),
-            'description' => trim(strip_tags((string)input('description', ''))),
-        ];
+        $slug = $def['slug'];
         ContentModel::saveType($def, $original);
         PageCache::clear();
         log_activity('post_type_saved', $slug);
@@ -678,16 +660,10 @@ function admin_dispatch(string $path): void
     });
     $r->post('/model/types/{slug}/delete', static function (string $slug) {
         Auth::require('manage_content_model');
-        if (isset(ContentModel::builtinTypes()[$slug])) {
-            Session::flash('error', 'Built-in post types cannot be deleted.');
+        if ($err = ContentModel::removeType($slug, (bool)input('delete_content'))) {
+            Session::flash('error', $err);
             back();
         }
-        if (input('delete_content')) {
-            foreach (DB::col('SELECT id FROM {{posts}} WHERE type = :t', ['t' => $slug]) as $pid) {
-                Posts::delete((int)$pid, true);
-            }
-        }
-        ContentModel::deleteType($slug);
         log_activity('post_type_deleted', $slug);
         Session::flash('success', 'Post type deleted.');
         redirect(admin_url('model/types'));
@@ -707,23 +683,12 @@ function admin_dispatch(string $path): void
     $r->post('/model/taxonomies/save', static function () {
         Auth::require('manage_content_model');
         $original = (string)input('original', '') ?: null;
-        $slug = strtolower(trim((string)input('slug', '')));
-        if ($original && isset(ContentModel::builtinTaxonomies()[$original])) {
-            $slug = $original;
-        } elseif ($err = ContentModel::validSlug($slug, 'tax', $original)) {
-            Session::flash('error', $err);
+        $keys = ['slug', 'singular', 'plural', 'post_types', 'hierarchical', 'public', 'rewrite'];
+        $def = ContentModel::cleanTaxonomyDef(array_combine($keys, array_map(static fn($k) => input($k), $keys)) + ['nested' => input('nested', true)], $original);
+        if (is_string($def)) {
+            Session::flash('error', $def);
             back();
         }
-        $def = [
-            'slug' => $slug,
-            'singular' => trim(strip_tags((string)input('singular', ''))) ?: ucfirst($slug),
-            'plural' => trim(strip_tags((string)input('plural', ''))) ?: ucfirst($slug) . 's',
-            'post_types' => array_values(array_intersect((array)input('post_types', []), array_keys(ContentModel::types()))),
-            'hierarchical' => (bool)input('hierarchical'),
-            'public' => (bool)input('public'),
-            'rewrite' => trim(implode('/', array_map('slugify', array_filter(explode('/', (string)input('rewrite', '')), 'strlen'))), '/'),
-            'nested' => (bool)input('nested', true),
-        ];
         ContentModel::saveTaxonomy($def, $original);
         PageCache::clear();
         Session::flash('success', "Taxonomy “{$def['plural']}” saved.");
@@ -731,14 +696,10 @@ function admin_dispatch(string $path): void
     });
     $r->post('/model/taxonomies/{slug}/delete', static function (string $slug) {
         Auth::require('manage_content_model');
-        if (isset(ContentModel::builtinTaxonomies()[$slug])) {
-            Session::flash('error', 'Built-in taxonomies cannot be deleted.');
+        if ($err = ContentModel::removeTaxonomy($slug)) {
+            Session::flash('error', $err);
             back();
         }
-        foreach (DB::col('SELECT id FROM {{terms}} WHERE taxonomy = :t', ['t' => $slug]) as $tid) {
-            Terms::delete((int)$tid);
-        }
-        ContentModel::deleteTaxonomy($slug);
         Session::flash('success', 'Taxonomy deleted.');
         redirect(admin_url('model/taxonomies'));
     });
@@ -761,53 +722,8 @@ function admin_dispatch(string $path): void
             Session::flash('error', 'Invalid field group data.');
             back();
         }
-        $id = preg_replace('/[^a-z0-9]/', '', (string)($data['id'] ?? '')) ?: 'g' . bin2hex(random_bytes(4));
-        $cleanFields = static function (array $fields, int $depth) use (&$cleanFields): array {
-            $out = [];
-            $seen = [];
-            foreach ($fields as $f) {
-                $name = preg_replace('/[^a-z0-9_]/', '', strtolower((string)($f['name'] ?? '')));
-                if (($f['type'] ?? '') === 'tab' && $name === '') {
-                    $name = 'tab_' . (slugify((string)($f['label'] ?? '')) ?: count($out));
-                    $name = str_replace('-', '_', $name);
-                }
-                if ($name === '' || isset($seen[$name]) || !isset(ContentModel::FIELD_TYPES[$f['type'] ?? ''])) {
-                    continue;
-                }
-                $seen[$name] = true;
-                $field = [
-                    'name' => $name,
-                    'label' => trim(strip_tags((string)($f['label'] ?? $name))),
-                    'type' => $f['type'],
-                    'required' => !empty($f['required']),
-                    'help' => trim(strip_tags((string)($f['help'] ?? ''))),
-                    'placeholder' => trim(strip_tags((string)($f['placeholder'] ?? ''))),
-                    'default' => is_scalar($f['default'] ?? '') ? (string)($f['default'] ?? '') : '',
-                    'width' => in_array($f['width'] ?? '100', ['25', '33', '50', '66', '75', '100'], true) ? $f['width'] : '100',
-                    'options' => array_values(array_filter(array_map('trim', is_array($f['options'] ?? null) ? $f['options'] : explode("\n", (string)($f['options'] ?? ''))))),
-                    'post_type' => implode(',', array_filter(array_map(static fn($t) => preg_replace('/[^a-z0-9_-]/', '', (string)$t),
-                        is_array($f['post_type'] ?? null) ? $f['post_type'] : explode(',', (string)($f['post_type'] ?? ''))))),
-                ];
-                if ($f['type'] === 'taxonomy') {
-                    $field['taxonomy'] = ContentModel::taxonomy((string)($f['taxonomy'] ?? '')) ? (string)$f['taxonomy'] : '';
-                }
-                if ($f['type'] === 'repeater' && $depth < 1) {
-                    $field['sub_fields'] = $cleanFields((array)($f['sub_fields'] ?? []), $depth + 1);
-                }
-                $out[] = $field;
-            }
-            return $out;
-        };
-        $group = [
-            'id' => $id,
-            'title' => trim(strip_tags((string)($data['title'] ?? 'Fields'))) ?: 'Fields',
-            'position' => in_array($data['position'] ?? 'main', ['main', 'side'], true) ? $data['position'] : 'main',
-            'location' => [
-                'post_types' => array_values(array_intersect((array)($data['location']['post_types'] ?? []), array_keys(ContentModel::types()))),
-                'taxonomies' => array_values(array_intersect((array)($data['location']['taxonomies'] ?? []), array_keys(ContentModel::taxonomies()))),
-            ],
-            'fields' => $cleanFields((array)($data['fields'] ?? []), 0),
-        ];
+        $group = ContentModel::cleanFieldGroup($data);
+        $id = $group['id'];
         ContentModel::saveFieldGroup($group);
         Session::flash('success', 'Field group saved.');
         redirect(admin_url('model/fields/' . $id));
@@ -1606,11 +1522,7 @@ function admin_can_edit(array $post): bool
 /** Settings tabs are grouped by capability. */
 function admin_settings_cap(string $tab): string
 {
-    return match ($tab) {
-        'appearance' => 'manage_menus',
-        'system' => 'manage_updates',
-        default => 'manage_settings',
-    };
+    return Settings::cap($tab);
 }
 
 function admin_can_settings(string $tab): bool
@@ -1656,23 +1568,7 @@ function admin_edit_post(string $type, ?int $id): void
 
 function admin_clean_seo(array $in): array
 {
-    $schema = trim((string)($in['schema_custom'] ?? ''));
-    if ($schema !== '' && json_decode($schema) === null) {
-        $schema = '';
-    }
-    return [
-        'title' => trim(strip_tags((string)($in['title'] ?? ''))),
-        'description' => trim(strip_tags((string)($in['description'] ?? ''))),
-        'focus_keyword' => trim(strip_tags((string)($in['focus_keyword'] ?? ''))),
-        'canonical' => ContentModel::cleanUrl((string)($in['canonical'] ?? '')),
-        'robots_index' => in_array($in['robots_index'] ?? 'default', ['default', 'index', 'noindex'], true) ? ($in['robots_index'] ?? 'default') : 'default',
-        'nofollow' => !empty($in['nofollow']),
-        'og_title' => trim(strip_tags((string)($in['og_title'] ?? ''))),
-        'og_description' => trim(strip_tags((string)($in['og_description'] ?? ''))),
-        'og_image' => (int)($in['og_image'] ?? 0) ?: null,
-        'schema_type' => array_key_exists($in['schema_type'] ?? '', \Slate\Seo::SCHEMA_TYPES) ? $in['schema_type'] : '',
-        'schema_custom' => Auth::can('unfiltered_html') ? $schema : '',
-    ];
+    return \Slate\Seo::cleanItemSeo($in);
 }
 
 function admin_save_post(string $type): void
@@ -1819,30 +1715,7 @@ function admin_save_user(bool $profile): void
 
 function admin_save_seo_types(): void
 {
-    $types = [];
-    foreach ((array)input('seo_types', []) as $slug => $d) {
-        if (ContentModel::type((string)$slug)) {
-            $types[$slug] = [
-                'title_template' => trim(strip_tags((string)($d['title_template'] ?? ''))),
-                'robots' => ($d['robots'] ?? 'index') === 'noindex' ? 'noindex' : 'index',
-                'schema' => array_key_exists($d['schema'] ?? '', \Slate\Seo::SCHEMA_TYPES) ? $d['schema'] : 'WebPage',
-                'sitemap' => !empty($d['sitemap']),
-            ];
-        }
-    }
-    Options::set('seo_types', $types);
-    $taxes = [];
-    foreach ((array)input('seo_taxonomies', []) as $slug => $d) {
-        if (ContentModel::taxonomy((string)$slug)) {
-            $taxes[$slug] = [
-                'title_template' => trim(strip_tags((string)($d['title_template'] ?? ''))),
-                'robots' => ($d['robots'] ?? 'index') === 'noindex' ? 'noindex' : 'index',
-                'sitemap' => !empty($d['sitemap']),
-            ];
-        }
-    }
-    Options::set('seo_taxonomies', $taxes);
-    PageCache::clear();
+    \Slate\Seo::saveTypeSettings((array)input('seo_types', []), (array)input('seo_taxonomies', []));
 }
 
 function admin_save_redirects(): void
@@ -1850,17 +1723,9 @@ function admin_save_redirects(): void
     $rows = [];
     $in = (array)input('redirects', []);
     foreach ($in['from'] ?? [] as $i => $from) {
-        $from = trim((string)$from);
-        $to = trim((string)($in['to'][$i] ?? ''));
-        $code = (int)($in['code'][$i] ?? 301);
-        if ($from === '' || ($to === '' && $code !== 410)) {
-            continue;
-        }
-        $rows[] = ['from' => $from, 'to' => $to, 'code' => in_array($code, [301, 302, 307, 308, 410], true) ? $code : 301,
-            'regex' => !empty($in['regex'][$i])];
+        $rows[] = ['from' => $from, 'to' => $in['to'][$i] ?? '', 'code' => $in['code'][$i] ?? 301, 'regex' => !empty($in['regex'][$i])];
     }
-    Options::set('redirects', $rows);
-    PageCache::clear();
+    \Slate\Seo::saveRedirects($rows);
 }
 
 /** Save one settings section (Settings, SEO or Appearance) and go back to it. */

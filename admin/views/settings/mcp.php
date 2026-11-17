@@ -16,8 +16,10 @@ $snippet = static fn(string $label, string $code) => '<div class="stack-sm"><spa
     <strong class="small-label">Endpoint</strong>
     <span class="row-between"><code style="word-break:break-all"><?= e($endpoint) ?></code>
       <button type="button" class="btn btn-sm" data-copy="<?= e($endpoint) ?>"><?= icon('copy', 14) ?> Copy</button></span>
-    <p class="muted small">Streamable HTTP, JSON-RPC over POST. Agents can read the site and its design system, write drafts, write complete designed pages,
-      import images and restore revisions.</p>
+    <p class="muted small">Streamable HTTP, JSON-RPC over POST. Agents can build the whole site with the same permissions as in the dashboard: design system,
+      post types, taxonomies and custom fields, templates, designed pages and drafts, menus, SEO, redirects, media and forms. They can restore
+      revisions and undo template changes; deleting needs an explicit confirmation. Users, module installs, secrets and security settings are
+      never available to agents.</p>
   </div>
   <ol class="small stack-sm" style="padding-left:1.2em;margin:0">
     <li>Create a key under <a href="<?= e($keyUrl) ?>">your profile › API keys</a>. Choose <em>Read only</em> to let an agent look around,

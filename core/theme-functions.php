@@ -69,6 +69,8 @@ function slate_head(): void
     $ownDesign = \Slate\HtmlPages::$rendering;
     if (!$ownDesign) {
         echo \Slate\DesignSystem::head(), "\n"; // imported/AI pages keep exactly their own styles
+    } elseif (($tokens = \Slate\DesignSystem::designedPageHead(post())) !== '') {
+        echo $tokens, "\n"; // AI pages that use the design-system variables get them (not the element styles)
     }
     if (Auth::can('frontend_edit') && Auth::can('edit_posts') && Options::get('admin_bar_frontend', true)) {
         // Admin bar styles (scoped to #slate-bar), also on pages that keep their own design.

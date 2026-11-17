@@ -30,6 +30,85 @@ final class Seo
         ];
     }
 
+    /** Per-item SEO from input (editor SEO panel, MCP): every key cleaned, unknown schema types dropped, custom JSON-LD only for unfiltered_html. */
+    public static function cleanItemSeo(array $in): array
+    {
+        $schema = trim((string)($in['schema_custom'] ?? ''));
+        if ($schema !== '' && json_decode($schema) === null) {
+            $schema = '';
+        }
+        return [
+            'title' => trim(strip_tags((string)($in['title'] ?? ''))),
+            'description' => trim(strip_tags((string)($in['description'] ?? ''))),
+            'focus_keyword' => trim(strip_tags((string)($in['focus_keyword'] ?? ''))),
+            'canonical' => ContentModel::cleanUrl((string)($in['canonical'] ?? '')),
+            'robots_index' => in_array($in['robots_index'] ?? 'default', ['default', 'index', 'noindex'], true) ? ($in['robots_index'] ?? 'default') : 'default',
+            'nofollow' => !empty($in['nofollow']),
+            'og_title' => trim(strip_tags((string)($in['og_title'] ?? ''))),
+            'og_description' => trim(strip_tags((string)($in['og_description'] ?? ''))),
+            'og_image' => (int)($in['og_image'] ?? 0) ?: null,
+            'schema_type' => array_key_exists($in['schema_type'] ?? '', self::SCHEMA_TYPES) ? $in['schema_type'] : '',
+            'schema_custom' => Auth::can('unfiltered_html') ? $schema : '',
+        ];
+    }
+
+    /** One content type's SEO defaults (SEO › Content types). */
+    public static function cleanTypeSettings(array $d): array
+    {
+        return [
+            'title_template' => trim(strip_tags((string)($d['title_template'] ?? ''))),
+            'robots' => ($d['robots'] ?? 'index') === 'noindex' ? 'noindex' : 'index',
+            'schema' => array_key_exists($d['schema'] ?? '', self::SCHEMA_TYPES) ? $d['schema'] : 'WebPage',
+            'sitemap' => !empty($d['sitemap']),
+        ];
+    }
+
+    /** Save SEO › Content types: [type => settings], [taxonomy => settings] (unknown types and taxonomies are dropped). */
+    public static function saveTypeSettings(array $types, array $taxonomies): void
+    {
+        $out = [];
+        foreach ($types as $slug => $d) {
+            if (ContentModel::type((string)$slug)) {
+                $out[$slug] = self::cleanTypeSettings((array)$d);
+            }
+        }
+        Options::set('seo_types', $out);
+        $taxes = [];
+        foreach ($taxonomies as $slug => $d) {
+            if (ContentModel::taxonomy((string)$slug)) {
+                $c = self::cleanTypeSettings((array)$d);
+                $taxes[$slug] = ['title_template' => $c['title_template'], 'robots' => $c['robots'], 'sitemap' => $c['sitemap']];
+            }
+        }
+        Options::set('seo_taxonomies', $taxes);
+        PageCache::clear();
+    }
+
+    /** Clean redirect rules ([from, to, code, regex]); rows without a source, or without a target unless 410 Gone, are dropped. */
+    public static function cleanRedirects(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $from = trim((string)($r['from'] ?? ''));
+            $to = trim((string)($r['to'] ?? ''));
+            $code = (int)($r['code'] ?? 301);
+            if ($from === '' || ($to === '' && $code !== 410)) {
+                continue;
+            }
+            $out[] = ['from' => $from, 'to' => $to, 'code' => in_array($code, [301, 302, 307, 308, 410], true) ? $code : 301, 'regex' => !empty($r['regex'])];
+        }
+        return $out;
+    }
+
+    public static function saveRedirects(array $rows): void
+    {
+        Options::set('redirects', self::cleanRedirects($rows));
+        PageCache::clear();
+    }
+
     public static function taxDefaults(string $tax): array
     {
         $all = Options::get('seo_taxonomies') ?: [];

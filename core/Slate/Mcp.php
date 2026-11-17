@@ -14,7 +14,13 @@ namespace Slate;
  * is asked for and allowed, every change keeps a revision first, HTML is sanitised like in the dashboard and never
  * carries scripts, and every write is in the activity log ("mcp_…").
  *
- * Modules add tools with the "mcp_tools" filter: ['name' => ['description', 'inputSchema', 'handler' => callable(array $args): array, 'write' => bool]].
+ * Tools are grouped (site, content model, terms, content, designed pages, templates, design system, menus, SEO, media,
+ * settings, modules); the site-building groups live in McpSite. Each tool may declare 'write' (needs a read & write key),
+ * 'cap' (capability, or a list of which any one is enough) and 'destructive' (needs confirm:true; logged). Secrets and
+ * security settings are never exposed (see McpSite::settingsAllowed()).
+ *
+ * Modules add tools with the "mcp_tools" filter: ['name' => ['description', 'inputSchema', 'handler' => callable(array $args): array,
+ * 'write' => bool, 'cap' => string|string[], 'destructive' => bool, 'group' => string]].
  */
 final class Mcp
 {
@@ -138,9 +144,11 @@ final class Mcp
                 'ping' => new \stdClass(),
                 'tools/list' => ['tools' => self::toolList()],
                 'tools/call' => self::callTool($params),
-                'resources/list' => ['resources' => []],
+                'resources/list' => ['resources' => McpSite::resources()],
+                'resources/read' => McpSite::readResource($params),
                 'resources/templates/list' => ['resourceTemplates' => []],
-                'prompts/list' => ['prompts' => []],
+                'prompts/list' => ['prompts' => McpSite::prompts()],
+                'prompts/get' => McpSite::getPrompt($params),
                 default => throw new McpError(-32601, "Method not found: $method"),
             };
             return ['jsonrpc' => '2.0', 'id' => $id, 'result' => $result];
@@ -157,7 +165,7 @@ final class Mcp
         $asked = is_string($params['protocolVersion'] ?? null) ? $params['protocolVersion'] : '';
         return [
             'protocolVersion' => in_array($asked, self::VERSIONS, true) ? $asked : self::VERSIONS[0],
-            'capabilities' => ['tools' => ['listChanged' => false]],
+            'capabilities' => ['tools' => ['listChanged' => false], 'prompts' => ['listChanged' => false], 'resources' => ['subscribe' => false, 'listChanged' => false]],
             'serverInfo' => ['name' => 'Slate', 'title' => 'Slate CMS: ' . Options::get('site_title', 'Slate site'), 'version' => SLATE_VERSION],
             'instructions' => self::instructions(),
         ];
@@ -168,11 +176,13 @@ final class Mcp
         $site = (string)Options::get('site_title', 'Slate site');
         $write = (self::$key['scope'] ?? 'read') === 'write' ? 'read & write' : 'read only';
         return "You manage the Slate CMS website “{$site}” (" . site_url() . "), as user “" . (Auth::user()['display_name'] ?? '') . "” with a $write key.\n"
-            . "1. Call get_site first: content types with their custom fields and taxonomies, the active theme and the design system (colour, font and spacing CSS variables, utility classes).\n"
-            . "2. Content: list_content / get_content / search, then create_content or update_content. New content is a DRAFT unless you pass publish:true (and the user may publish). Ask the user before publishing. Every update keeps a revision (get_revisions, restore_revision).\n"
-            . "3. Designed pages: write_page saves a complete HTML document (its own <head> with styles, and <body>) as a page that keeps exactly that design; people then edit texts, images and repeating parts by clicking on the live page. Use the design-system CSS variables from get_site so the page matches the site. Write responsive CSS, real copy, alt text on images.\n"
-            . "4. Images: upload_media_from_url, then use the returned url in <img src> with alt text.\n"
-            . "Template tags work in designs and templates: {{site.name}}, {{title}}, {{field:name}}, {{#query type=\"post\" limit=\"3\"}}<a href=\"{{url}}\">{{title}}</a>{{/query}}.";
+            . "1. Call get_site first (content types with their fields and taxonomies, templates, menus, the design system, modules, the tools this key may use). For building a whole site read the prompt “build_site” (also the resource " . McpSite::GUIDE_URI . ").\n"
+            . "2. Build in this order: design system (update_design_system), content model (save_post_type, save_taxonomy, save_field_group), templates (save_template), pages (write_page for designed pages, create_content for the rest), content items, menus (save_menu), SEO (set_seo_defaults, set_schema_mapping, add_redirects, update_content seo), forms when the Forms module is active.\n"
+            . "3. Content: list_content / get_content / search, then create_content or update_content. New content is a DRAFT unless you pass publish:true (and the user may publish). Ask the user before publishing. Every update keeps a revision (get_revisions, restore_revision); template changes keep versions (undo_template).\n"
+            . "4. Designed pages: write_page saves a complete HTML document (its own <head> with styles, and <body>) as a page that keeps exactly that design; people then edit texts, images and repeating parts by clicking on the live page (get_page_structure + edit_page do the same). Use the design-system CSS variables from get_site so the page matches the site. Write responsive CSS, real copy, alt text on images.\n"
+            . "5. Images: upload_media_from_url, then use the returned url in <img src> with alt text.\n"
+            . "6. Deleting a type, taxonomy, field group, term, template or menu needs confirm:true; ask the user first.\n"
+            . "Template tags work in designs and templates: {{site.name}}, {{title}}, {{{content}}}, {{field:name}}, {{menu:primary}}, {{form:slug}}, {{#query type=\"post\" limit=\"3\"}}<a href=\"{{url}}\">{{title}}</a>{{/query}}.";
     }
 
     // ------------------------------------------------------------------ auth, origin, limits
@@ -298,6 +308,9 @@ final class Mcp
             'robots_index' => ['type' => 'string', 'enum' => ['default', 'index', 'noindex']],
             'og_title' => ['type' => 'string', 'maxLength' => 300],
             'og_description' => ['type' => 'string', 'maxLength' => 500],
+            'og_image' => ['type' => ['integer', 'null'], 'description' => 'Media id of the share image.'],
+            'nofollow' => ['type' => 'boolean', 'description' => 'Ask search engines not to follow the links on this item.'],
+            'schema_type' => ['type' => 'string', 'enum' => array_merge([''], array_keys(Seo::SCHEMA_TYPES)), 'description' => 'Schema.org type of this item, overriding the type default ("" = use the default of its content type).'],
         ]];
         $fields = ['type' => 'object', 'additionalProperties' => true, 'description' => 'Custom field values by field name (see content_types[].fields in get_site). Image/file fields take media ids, relation fields post ids, repeaters an array of row objects.'];
         $terms = ['type' => 'object', 'description' => 'Terms per taxonomy slug, replacing the current ones: {"category": [3, "News"]}. Ids, or names (created when missing and the user may manage terms).',
@@ -323,7 +336,7 @@ final class Mcp
             . 'Images: upload_media_from_url first, then <img src="URL" alt="…">. Template tags work for live content: {{site.name}}, {{title}}, {{#query type="post" limit="3"}}<a href="{{url}}">{{title}}</a>{{/query}}.';
         $tools = [
             'get_site' => ['title' => 'Site overview', 'annotations' => $ro,
-                'description' => 'Overview of the website: name, URL, active theme, content types with their custom fields and taxonomies (with terms), the design system (colour, font, type-scale and layout CSS variables and the utility classes such as .container .section .btn .btn-outline .eyebrow) and what this key may do. Call this first.',
+                'description' => 'Overview of the website: name, URL, active theme, content types with their custom fields and taxonomies (with terms), the design system (colour, font, type-scale and layout CSS variables and the utility classes such as .container .section .btn .btn-outline .eyebrow), templates, menus and menu locations, active modules, and what this key may do (you.tools lists the tools it can use). Call this first.',
                 'inputSchema' => ['type' => 'object', 'properties' => new \stdClass(), 'additionalProperties' => false]],
             'list_content' => ['title' => 'List content', 'annotations' => $ro,
                 'description' => 'List items of a content type (newest changes first), with status, URL and whether it has a visual design. Without type, lists all public types.',
@@ -400,16 +413,60 @@ final class Mcp
                 'inputSchema' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['id', 'revision_id'], 'properties' => [
                     'id' => $id, 'revision_id' => ['type' => 'integer', 'minimum' => 1]]]],
         ];
+        $tools += McpSite::tools();
+        foreach (McpSite::CORE_GROUPS as $name => $group) {
+            if (isset($tools[$name])) {
+                $tools[$name]['group'] = $group;
+                if (isset(McpSite::CORE_CAPS[$name])) {
+                    $tools[$name]['cap'] = McpSite::CORE_CAPS[$name];
+                }
+            }
+        }
         $tools = (array)Hooks::filter('mcp_tools', $tools);
         return $tools;
+    }
+
+    /** All tools (core and modules) with their definitions. */
+    public static function allTools(): array
+    {
+        return self::tools();
+    }
+
+    /** Can this key use the tool at all (scope and capability)? Returns null when it can, otherwise why not. */
+    public static function toolBlocked(array $tool): ?string
+    {
+        if (!empty($tool['write']) && self::scope() !== 'write') {
+            return 'needs a read & write key';
+        }
+        $caps = (array)($tool['cap'] ?? []);
+        if ($caps && !array_filter($caps, static fn($c) => Auth::can((string)$c))) {
+            return 'needs the capability ' . implode(' or ', $caps);
+        }
+        return null;
+    }
+
+    /** The key's scope: "read" or "write". */
+    public static function scope(): string
+    {
+        return (self::$key['scope'] ?? 'read') === 'write' ? 'write' : 'read';
+    }
+
+    /** The API key in use (name, prefix, scope, dates; never the token or its hash). */
+    public static function key(): array
+    {
+        return array_intersect_key((array)self::$key, array_flip(['id', 'name', 'prefix', 'scope', 'created_at', 'last_used']));
     }
 
     private static function toolList(): array
     {
         $out = [];
         foreach (self::tools() as $name => $t) {
+            $ann = $t['annotations'] ?? null;
+            if ($ann === null && (isset($t['write']) || isset($t['destructive']))) {
+                $ann = ['readOnlyHint' => empty($t['write']), 'destructiveHint' => !empty($t['destructive']), 'idempotentHint' => empty($t['write']), 'openWorldHint' => false];
+            }
             $out[] = array_filter(['name' => $name, 'title' => $t['title'] ?? null, 'description' => $t['description'] ?? '',
-                'inputSchema' => $t['inputSchema'] ?? ['type' => 'object'], 'annotations' => $t['annotations'] ?? null], static fn($v) => $v !== null);
+                'inputSchema' => $t['inputSchema'] ?? ['type' => 'object'], 'annotations' => $ann], static fn($v) => $v !== null);
         }
         return $out;
     }
@@ -431,6 +488,13 @@ final class Mcp
         try {
             if (!empty($tool['write'])) {
                 self::requireWriteKey();
+            }
+            $caps = (array)($tool['cap'] ?? []);
+            if ($caps && !array_filter($caps, static fn($c) => Auth::can((string)$c))) {
+                throw new ToolError('The user of this key is not allowed to use ' . $name . ' (needs the capability ' . implode(' or ', $caps) . ').');
+            }
+            if (!empty($tool['destructive']) && ($args['confirm'] ?? null) !== true) {
+                throw new ToolError("$name deletes data. Ask the user, then call it again with confirm: true.");
             }
             $handler = $tool['handler'] ?? [self::class, 'tool' . str_replace('_', '', ucwords($name, '_'))];
             $data = (array)$handler((array)$args);
@@ -510,6 +574,9 @@ final class Mcp
             unset($val);
         }
         if (is_array($v) && array_is_list($v) && in_array('array', $types, true)) {
+            if (isset($s['minItems']) && count($v) < $s['minItems']) {
+                return "$path needs at least {$s['minItems']} item(s).";
+            }
             if (isset($s['maxItems']) && count($v) > $s['maxItems']) {
                 return "$path has too many items (max {$s['maxItems']}).";
             }
@@ -534,35 +601,35 @@ final class Mcp
         }
     }
 
-    private static function requireCap(string $cap, string $what): void
+    public static function requireCap(string $cap, string $what): void
     {
         if (!Auth::can($cap)) {
             throw new ToolError("The user of this key is not allowed to $what.");
         }
     }
 
-    private static function canEdit(array $post): bool
+    public static function canEdit(array $post): bool
     {
         return Auth::can('edit_others_posts') || ((int)$post['author_id'] === Auth::id() && Auth::can('edit_posts'));
     }
 
-    private static function canRead(array $post): bool
+    public static function canRead(array $post): bool
     {
         return $post['status'] === 'publish' || self::canEdit($post);
     }
 
-    private static function canPublish(): bool
+    public static function canPublish(): bool
     {
         return (self::$key['scope'] ?? 'read') === 'write' && Auth::can('publish_posts');
     }
 
     /** Public content types the server exposes (filter "mcp_types"). */
-    private static function types(): array
+    public static function types(): array
     {
         return (array)Hooks::filter('mcp_types', array_filter(ContentModel::types(), static fn($t) => ($t['public'] ?? true) !== false));
     }
 
-    private static function type(string $slug): array
+    public static function type(string $slug): array
     {
         $t = self::types()[$slug] ?? null;
         if (!$t) {
@@ -571,7 +638,7 @@ final class Mcp
         return $t;
     }
 
-    private static function findPost(int $id, bool $forEdit): array
+    public static function findPost(int $id, bool $forEdit): array
     {
         $post = Posts::find($id);
         if (!$post || !isset(self::types()[$post['type']]) || !($forEdit ? self::canEdit($post) : self::canRead($post))) {
@@ -582,24 +649,24 @@ final class Mcp
 
     // ------------------------------------------------------------------ output helpers
 
-    private static function absAdmin(string $path): string
+    public static function absAdmin(string $path): string
     {
         return AdminAccess::baseUrl() . '/' . admin_slug() . '/' . ltrim($path, '/');
     }
 
-    private static function iso(?string $utc): ?string
+    public static function iso(?string $utc): ?string
     {
         return $utc ? gmdate('c', (int)strtotime($utc . ' UTC')) : null;
     }
 
-    private static function summary(array $p): array
+    public static function summary(array $p): array
     {
         return ['id' => (int)$p['id'], 'type' => $p['type'], 'title' => $p['title'], 'slug' => $p['slug'], 'status' => $p['status'],
             'url' => Posts::permalink($p, true), 'updated_at' => self::iso($p['updated_at']), 'published_at' => self::iso($p['published_at']),
             'parent_id' => $p['parent_id'] ? (int)$p['parent_id'] : null, 'designed_page' => HtmlPages::active($p)];
     }
 
-    private static function full(array $p): array
+    public static function full(array $p): array
     {
         $terms = [];
         foreach (Terms::forPosts([(int)$p['id']])[(int)$p['id']] ?? [] as $tax => $list) {
@@ -634,7 +701,7 @@ final class Mcp
         return $out;
     }
 
-    private static function media(array $m): array
+    public static function media(array $m): array
     {
         return ['id' => (int)$m['id'], 'url' => site_url('content/uploads/' . $m['path']), 'mime' => $m['mime'],
             'width' => $m['width'] ? (int)$m['width'] : null, 'height' => $m['height'] ? (int)$m['height'] : null,
@@ -697,11 +764,13 @@ final class Mcp
             'you' => ['name' => $u['display_name'] ?? '', 'role' => $u['role'] ?? '', 'key_scope' => self::$key['scope'] ?? 'read',
                 'can' => ['write' => (self::$key['scope'] ?? '') === 'write' && Auth::can('edit_posts'), 'publish' => self::canPublish(),
                     'edit_others' => Auth::can('edit_others_posts'), 'unfiltered_html' => Auth::can('unfiltered_html'),
-                    'upload_media' => Auth::can('upload_media'), 'read_templates' => Auth::can('manage_content_model'), 'manage_terms' => Auth::can('manage_terms')]],
-        ];
+                    'upload_media' => Auth::can('upload_media'), 'read_templates' => Auth::can('manage_content_model'), 'manage_terms' => Auth::can('manage_terms'),
+                    'manage_content_model' => Auth::can('manage_content_model'), 'manage_menus' => Auth::can('manage_menus'), 'manage_settings' => Auth::can('manage_settings')],
+                'tools' => array_keys(array_filter(self::tools(), static fn($t) => self::toolBlocked($t) === null))],
+        ] + McpSite::siteExtras();
     }
 
-    private static function fieldDef(array $f): array
+    public static function fieldDef(array $f): array
     {
         $out = ['name' => $f['name'], 'label' => $f['label'] ?? $f['name'], 'type' => $f['type']];
         foreach (['required', 'help', 'default', 'options', 'post_type', 'taxonomy'] as $k) {
@@ -844,11 +913,8 @@ final class Mcp
             // Partial update: fields not sent keep their values (Posts::save merges).
         }
         if (isset($a['seo'])) {
-            $seo = [];
-            foreach ($a['seo'] as $k => $v) {
-                $seo[$k] = $k === 'canonical' ? ContentModel::cleanUrl((string)$v) : trim(strip_tags((string)$v));
-            }
-            $in['seo_clean'] = $seo;
+            // Same cleaning as the editor's SEO panel; only the keys sent change (Posts::save merges SEO).
+            $in['seo_clean'] = array_intersect_key(Seo::cleanItemSeo($a['seo']), $a['seo']);
         }
         if (isset($a['terms'])) {
             $allowed = ContentModel::taxonomiesFor($type);

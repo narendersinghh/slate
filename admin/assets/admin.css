@@ -998,7 +998,7 @@ html.nav-collapsed .nav-toggle, html.nav-collapsed .nav-count { display: none; }
 .settings-nav-items a { padding: 6px 10px; border-radius: 7px; color: var(--muted); font-size: 13px; }
 .settings-nav-items a:hover { color: var(--text); background: var(--surface); }
 .settings-nav-items a.active { color: var(--text); font-weight: 600; background: var(--surface); }
-.settings-main { min-width: 0; max-width: 920px; }
+.settings-main { min-width: 0; }
 .settings-head { margin-bottom: 18px; }
 .settings-head h1 { margin-top: 4px; }
 .settings-head p { margin: 6px 0 0; }
@@ -1296,7 +1296,7 @@ input[type=file][hidden] { display: none; }
 
 /* SEO and Appearance: settings on their own page */
 .settings-shell.is-solo { grid-template-columns: minmax(0, 1fr); }
-.settings-shell.is-solo .settings-main { max-width: 1120px; }
+.settings-shell.is-solo .settings-main { }
 .settings-intro { margin: 0 0 16px; }
 
 /* Styles editor (Appearance › Styles) */

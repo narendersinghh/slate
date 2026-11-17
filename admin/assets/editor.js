@@ -379,7 +379,7 @@
       if (state) state.textContent = 'Saving…';
       let data;
       try {
-        const res = await fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' });
+        const res = await fetch(form.getAttribute('action'), { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' });
         data = await res.json();
       } catch (e) { data = { ok: false, error: 'Network error, your changes were not saved.' }; }
       button?.classList.remove('is-loading');

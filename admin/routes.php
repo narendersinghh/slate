@@ -1736,6 +1736,11 @@ function admin_save_post(string $type): void
         is_ajax() ? json_response(['ok' => false, 'error' => $msg], 422) : Session::flash('error', $msg);
         back();
     }
+    // Designed pages (imported / AI): keep the page's own CSS or use the site's styles (HtmlPages 'design').
+    if ($existing && \Slate\HtmlPages::active($existing) && in_array($mode = (string)input('html_design', ''), array_keys(\Slate\HtmlPages::DESIGNS), true)
+        && $mode !== \Slate\HtmlPages::design((array)\Slate\HtmlPages::data($existing))) {
+        $data['fields']['_html'] = \Slate\HtmlPages::withDesign((array)\Slate\HtmlPages::data($existing), $mode);
+    }
     if ($existing) {
         \Slate\Revisions::snapshot($existing, $data);
     }

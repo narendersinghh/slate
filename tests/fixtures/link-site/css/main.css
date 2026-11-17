@@ -1,0 +1,7 @@
+@import "base.css";
+@font-face { font-family: Linkfont; src: url("../fonts/link.woff2") format("woff2"); }
+h1 { font-family: Linkfont, Georgia, serif; color: rgb(200, 10, 10); }
+.top { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; }
+.hero { padding: 64px 24px; background: url('../img/bg.svg') center / cover; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 24px; }
+.btn-primary { background: rgb(0, 120, 90); color: #fff; padding: 10px 16px; border-radius: 4px; }

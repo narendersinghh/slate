@@ -18,6 +18,11 @@ Slate is built so that the usual ways CMS sites get hacked are closed by default
   release; modules and other files with a snapshot you trusted; executables or new `.htaccess` files in data folders
   are always flagged. Administrators get an email; the dashboard shows a warning.
 - Backups with retention, revisions, activity log.
+- **Import pages from a link** fetches only public http(s) addresses: the host is resolved first and private, loopback,
+  link-local, shared and reserved addresses are refused, the checked address is the one connected to (no DNS
+  rebinding), redirects are followed one by one and checked again, with timeouts and size limits per file and per
+  import. Fetched scripts are stored as files and never run on the server; previews of imported pages run no scripts.
+  Only for tests: `'import_allow_private' => true` in `config.php` allows local addresses (never on a real site).
 
 ## Hide the dashboard completely
 

@@ -130,6 +130,19 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
 
       <?php /* Goraiya works inside the editor: the button in the header and the sparrow next to selected text. */ ?>
 
+      <?php if ($post && \Slate\HtmlPages::active($post)): $dmode = \Slate\HtmlPages::design((array)\Slate\HtmlPages::data($post)); $src = (string)(\Slate\HtmlPages::data($post)['import']['url'] ?? ''); ?>
+      <section class="card" data-page-design>
+        <div class="card-head"><h2>Design</h2></div>
+        <div class="card-pad stack-sm">
+          <?php foreach (\Slate\HtmlPages::DESIGNS as $k => $label): ?>
+          <label class="choice-card"><input type="radio" name="html_design" value="<?= e($k) ?>"<?= $dmode === $k ? ' checked' : '' ?>> <?= icon($k === 'site' ? 'palette' : 'layers', 15) ?> <?= e($label) ?></label>
+          <?php endforeach; ?>
+          <small class="help">"Keep the original design" uses the page's own CSS. "Use my site's styles" removes it and applies your design system (Appearance &rsaquo; Styles) and global classes. Texts and images stay the same; switch back any time.</small>
+          <?php if ($src !== ''): ?><small class="help"><?= icon('link', 12) ?> Imported from <a href="<?= e($src) ?>" target="_blank" rel="noopener noreferrer"><?= e($src) ?></a></small><?php endif; ?>
+        </div>
+      </section>
+      <?php endif; ?>
+
       <?php if ($supports('page_attributes') || $type['hierarchical'] || !empty($templates)): ?>
       <section class="card">
         <div class="card-head"><h2>Attributes</h2></div>

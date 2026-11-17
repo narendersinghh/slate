@@ -10,6 +10,9 @@ namespace Slate;
  *   'head'  => their stylesheets, styles, scripts and meta (title/charset/viewport/description are left to Slate's SEO),
  *   'body'  => the body HTML; editable elements carry data-se="<id>", repeating groups data-se-loop / data-se-item,
  *   'html_attrs', 'body_attrs', 'source' => 'import'|'ai', 'next' => next free element id, 'v' => 1,
+ *   'design' => 'keep' (default: the page's own CSS, design-system CSS stays out) | 'site' (the page's own CSS is left
+ *               out at render time and the site's design system styles it, see designHead()/designBody()),
+ *   'hints'  => layout hints read from the page's CSS for the 'site' design: ['grid' => [class => columns], 'flex' => [class => 1]],
  * ]
  * and post content holds the page's text (search, excerpts, feeds). Visitors get the page as its own document with
  * Slate's SEO tags; loops bound to content ({{#query}}) are filled in by the template engine. Team members can edit
@@ -218,6 +221,17 @@ final class HtmlPages
         if (!$post) {
             return;
         }
+        // A rewrite of the whole page (Goraiya, MCP) keeps the chosen design and where the page was imported from.
+        $old = self::data($post) ?? [];
+        foreach (['design', 'import'] as $k) {
+            if (!array_key_exists($k, $data) && isset($old[$k])) {
+                $data[$k] = $old[$k];
+            }
+        }
+        if (self::design($data) === 'site' && (!isset($data['hints']) || (isset($old['head']) && ($data['head'] ?? null) !== $old['head']))) {
+            unset($data['hints']);
+            $data = self::withDesign($data, 'site');
+        }
         if (!$sanitized && !Auth::can('unfiltered_html') && PHP_SAPI !== 'cli') {
             $data['head'] = self::stripScripts((string)$data['head']);
             $data['body'] = self::stripScripts((string)$data['body']);
@@ -249,23 +263,243 @@ final class HtmlPages
     public static function render(array $post, array $ctx): string
     {
         $d = (array)self::data($post);
-        $body = Templates::render((string)($d['body'] ?? ''), $ctx);
+        $body = self::designBody($d, Templates::render((string)($d['body'] ?? ''), $ctx));
         self::$rendering = true;
         ob_start();
         echo '<!doctype html><html ' . ((string)($d['html_attrs'] ?? '') !== '' ? $d['html_attrs'] : html_attrs()) . '><head><meta charset="utf-8">'
             . '<meta name="viewport" content="width=device-width, initial-scale=1">';
         slate_head();
-        echo "\n" . (string)($d['head'] ?? '') . "\n";
+        echo self::designHead($d);
         if (class_exists(PageEditor::class) && PageEditor::enabledFor($post)) {
             echo PageEditor::assets($post);
         }
-        echo '</head><body ' . (string)($d['body_attrs'] ?? '') . '>';
+        echo '</head><body ' . self::bodyAttrs($d) . '>';
         slate_body_open();
         echo $body;
         slate_footer();
         echo '</body></html>';
         self::$rendering = false;
         return (string)ob_get_clean();
+    }
+
+    // ------------------------------------------------------------------ design: the page's own CSS or the site's styles
+
+    public const DESIGNS = ['keep' => "Keep the original design", 'site' => "Use my site's styles"];
+
+    /** Inline style properties kept in the 'site' design (layout only; colours, fonts, borders, backgrounds go). */
+    private const LAYOUT_PROPS = '/^(display|flex|flex-[a-z-]+|grid|grid-[a-z-]+|gap|row-gap|column-gap|align-[a-z-]+|justify-[a-z-]+|place-[a-z-]+|order|text-align|width|max-width|min-width|aspect-ratio|object-fit|object-position)$/';
+    /** Icon font stylesheets stay in the 'site' design, so icons keep showing. */
+    private const ICON_CSS = '/font-?awesome|bootstrap-icons|material-?icons|material-symbols|remixicon|boxicons|ionicons|line-?awesome|icofont|themify-icons|phosphor/i';
+
+    public static function design(array $d): string
+    {
+        return ($d['design'] ?? 'keep') === 'site' ? 'site' : 'keep';
+    }
+
+    /** Page data with the design switched; layout hints are read from the page's CSS the first time 'site' is chosen. */
+    public static function withDesign(array $d, string $mode): array
+    {
+        $d['design'] = $mode === 'site' ? 'site' : 'keep';
+        if ($d['design'] === 'site' && !isset($d['hints'])) {
+            $d['hints'] = self::layoutHints((string)($d['head'] ?? ''), (string)($d['body'] ?? ''));
+        }
+        return $d;
+    }
+
+    /** What follows Slate's own head tags. 'keep' prints the page's head exactly as before. */
+    public static function designHead(array $d): string
+    {
+        if (self::design($d) !== 'site') {
+            return "\n" . (string)($d['head'] ?? '') . "\n";
+        }
+        return "\n" . DesignSystem::head() . "\n" . '<style id="slate-site-base">' . self::siteBaseCss() . "</style>\n" . self::siteHead((string)($d['head'] ?? '')) . "\n";
+    }
+
+    public static function designBody(array $d, string $body): string
+    {
+        return self::design($d) === 'site' ? self::siteBody($body, (array)($d['hints'] ?? [])) : $body;
+    }
+
+    public static function bodyAttrs(array $d): string
+    {
+        $attrs = (string)($d['body_attrs'] ?? '');
+        if (self::design($d) !== 'site') {
+            return $attrs;
+        }
+        if (preg_match('/(^|\s)class="([^"]*)"/', $attrs)) {
+            return (string)preg_replace('/(^|\s)class="([^"]*)"/', '$1class="$2 slate-site-styles"', $attrs, 1);
+        }
+        return trim($attrs . ' class="slate-site-styles"');
+    }
+
+    /** The page's head without its stylesheets (icon fonts stay); scripts, icons and meta stay. */
+    public static function siteHead(string $head): string
+    {
+        $head = (string)preg_replace('#<style\b[^>]*>.*?</style>\s*#is', '', $head);
+        return (string)preg_replace_callback('#<link\b[^>]*>\s*#i', static function ($m) {
+            $tag = $m[0];
+            $rel = preg_match('#\brel=["\']([^"\']*)#i', $tag, $r) ? strtolower($r[1]) : '';
+            $isCss = str_contains($rel, 'stylesheet') || (str_contains($rel, 'preload') && preg_match('#\bas=["\']?style#i', $tag));
+            return $isCss && !preg_match(self::ICON_CSS, $tag) ? '' : $tag;
+        }, $head);
+    }
+
+    /**
+     * The body for the 'site' design: the page's own <style>/stylesheets go, inline styles keep layout properties only,
+     * button-like links and buttons get the global "btn" class (outline/secondary ones "btn-outline"), wrappers get
+     * "container", and grids/rows found in the original CSS get "sl-grid"/"sl-row" so the structure still reads well.
+     * Editable ids (data-se) and repeating groups are untouched.
+     */
+    public static function siteBody(string $html, array $hints = []): string
+    {
+        [$doc, $root] = self::fragment($html);
+        $grid = (array)($hints['grid'] ?? []);
+        $flex = (array)($hints['flex'] ?? []);
+        $remove = [];
+        foreach (iterator_to_array($root->getElementsByTagName('*')) as $el) {
+            /** @var \DOMElement $el */
+            $tag = strtolower($el->tagName);
+            if ($tag === 'style' || ($tag === 'link' && str_contains(strtolower($el->getAttribute('rel')), 'stylesheet') && !preg_match(self::ICON_CSS, $el->getAttribute('href')))) {
+                $remove[] = $el;
+                continue;
+            }
+            if (self::insideSvg($el) || $tag === 'svg') {
+                continue;
+            }
+            if ($el->hasAttribute('style')) {
+                $keep = [];
+                foreach (explode(';', $el->getAttribute('style')) as $decl) {
+                    [$prop, $val] = array_pad(explode(':', $decl, 2), 2, '');
+                    $prop = strtolower(trim($prop));
+                    if ($prop !== '' && trim($val) !== '' && preg_match(self::LAYOUT_PROPS, $prop)) {
+                        $keep[] = $prop . ':' . trim($val);
+                    }
+                }
+                $keep ? $el->setAttribute('style', implode(';', $keep)) : $el->removeAttribute('style');
+            }
+            $classes = preg_split('/\s+/', trim($el->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+            $add = [];
+            $cls = ' ' . strtolower(implode(' ', $classes)) . ' ';
+            if ($tag === 'button' || ($tag === 'input' && in_array(strtolower($el->getAttribute('type')), ['submit', 'button'], true))
+                || ($tag === 'a' && (preg_match('/[\s_-](btn|button|cta)[\s_-]/', $cls) || strtolower($el->getAttribute('role')) === 'button'))) {
+                $add[] = preg_match('/outline|secondary|ghost|border|light|link/', $cls) && $tag === 'a' ? 'btn-outline' : 'btn';
+            }
+            if (preg_match('/[\s_-](wrapper|wrap|inner|container|container-fluid|site-width|page-width|content-width)\s/', $cls)) {
+                $add[] = 'container';
+            }
+            foreach ($classes as $c) {
+                if (isset($grid[$c])) {
+                    $add[] = 'sl-grid';
+                    $n = (int)$grid[$c];
+                    if ($n >= 2 && $n <= 6) {
+                        $add[] = 'sl-cols-' . $n;
+                    }
+                    break;
+                }
+                if (isset($flex[$c])) {
+                    $add[] = 'sl-row';
+                    break;
+                }
+            }
+            if ($el->hasAttribute('data-se-loop') && !array_intersect($add, ['sl-grid', 'sl-row']) && !preg_match('/swiper|slick|carousel|splide|owl|glide|flickity|slide/', $cls)) {
+                $add[] = 'sl-grid';
+            }
+            $add = array_diff(array_unique($add), $classes);
+            if ($add) {
+                $el->setAttribute('class', trim(implode(' ', array_merge($classes, $add))));
+            }
+        }
+        foreach ($remove as $el) {
+            $el->parentNode?->removeChild($el);
+        }
+        return self::inner($doc, $root);
+    }
+
+    /**
+     * Layout hints from the page's CSS (<style> blocks and stylesheets stored with an import): classes laid out as
+     * grids (with their column count) or as rows (flex, not column direction). Used by the 'site' design.
+     */
+    public static function layoutHints(string $head, string $body): array
+    {
+        $css = '';
+        if (preg_match_all('#<style\b[^>]*>(.*?)</style>#is', $head . $body, $m)) {
+            $css .= implode("\n", $m[1]);
+        }
+        $uploads = url('content/uploads/');
+        if (preg_match_all('#<link\b[^>]*\bhref=["\']([^"\']+\.css)(?:\?[^"\']*)?["\'][^>]*>#i', $head . $body, $m)) {
+            foreach ($m[1] as $href) {
+                $href = html_entity_decode($href, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                if (str_starts_with($href, $uploads)) {
+                    $rel = rawurldecode(substr($href, strlen($uploads)));
+                    $file = SLATE_UPLOADS . '/' . $rel;
+                    if (!str_contains($rel, '..') && is_file($file) && filesize($file) < 3 * 1024 * 1024) {
+                        $css .= "\n" . (string)file_get_contents($file);
+                    }
+                }
+            }
+        }
+        $css = (string)preg_replace('#/\*.*?\*/#s', '', $css);
+        $out = ['grid' => [], 'flex' => []];
+        if (preg_match_all('/([^{}@;]+)\{([^{}]*)\}/', $css, $rules, PREG_SET_ORDER)) {
+            foreach ($rules as [, $selectors, $decls]) {
+                $decls = strtolower($decls);
+                $kind = preg_match('/(^|;)\s*display\s*:\s*(inline-)?grid/', $decls) ? 'grid'
+                    : (preg_match('/(^|;)\s*display\s*:\s*(inline-)?flex/', $decls) && !preg_match('/flex-direction\s*:\s*column/', $decls) ? 'flex' : '');
+                if ($kind === '') {
+                    continue;
+                }
+                $cols = 0;
+                if ($kind === 'grid' && preg_match('/grid-template-columns\s*:\s*([^;]+)/', $decls, $gm)) {
+                    $cols = preg_match('/repeat\(\s*(\d+)/', $gm[1], $rm) ? (int)$rm[1] : count(preg_split('/\s+(?![^(]*\))/', trim($gm[1])));
+                }
+                foreach (explode(',', $selectors) as $sel) {
+                    if (preg_match('/\.([a-zA-Z_][\w-]*)\s*$/', trim($sel), $cm) && count($out['grid']) + count($out['flex']) < 300) {
+                        $out[$kind][$cm[1]] = $kind === 'grid' ? max($cols, (int)($out['grid'][$cm[1]] ?? 0)) : 1;
+                    }
+                }
+            }
+        }
+        foreach (array_keys($out['grid']) as $c) {
+            unset($out['flex'][$c]);
+        }
+        return $out;
+    }
+
+    /**
+     * Base layout for the 'site' design. Every rule is wrapped in :where() (no specificity), so the design system's
+     * element styles and global classes (btn, container, ...) always win; this only fills the gaps the removed CSS left.
+     */
+    public static function siteBaseCss(): string
+    {
+        $b = ':where(.slate-site-styles)';
+        return "$b{margin:0;padding-inline:max(24px,calc((100% - var(--container,1200px)) / 2));font:var(--type-body);color:var(--color-text);background:var(--color-background,#fff)}"
+            . "$b :where(*,*::before,*::after){box-sizing:border-box}"
+            . implode('', array_map(static fn($h) => "$b :where($h){font:var(--type-$h);margin:0 0 .5em}", ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']))
+            . "$b :where(p,ul,ol,dl,figure,table,form){margin:0 0 1em}"
+            . "$b :where(ul,ol){padding-left:1.4em}"
+            . "$b :where(small){font:var(--type-small)}"
+            . "$b :where(a){color:var(--color-primary)}"
+            . "$b :where(img,video){max-width:100%;height:auto;vertical-align:middle}"
+            . "$b :where(img){border-radius:var(--radius)}"
+            . "$b :where(blockquote){margin:1.5em 0;padding:.4em 0 .4em 1.25em;border-left:3px solid var(--color-primary);font-family:var(--font-heading);font-size:1.25em;line-height:1.5}"
+            . "$b :where(blockquote cite,figcaption){display:block;margin-top:.5em;font:var(--type-small);color:var(--color-muted)}"
+            . "$b :where(table){width:100%;border-collapse:collapse}$b :where(th,td){padding:.6em .8em;border-bottom:1px solid rgba(0,0,0,.1);text-align:left}"
+            . "$b :where(hr){border:0;border-top:1px solid rgba(0,0,0,.12);margin:2em 0}"
+            . "$b :where(input,select,textarea){font:inherit;padding:.65em .85em;border:1px solid rgba(0,0,0,.2);border-radius:var(--radius-button);max-width:100%}"
+            . "$b :where(.btn,.btn-outline){display:inline-flex;align-items:center;gap:.5em;padding:.9em 1.6em;border-radius:var(--radius-button);font:var(--type-button);text-decoration:none;cursor:pointer}"
+            . "$b :where(.btn){background:var(--color-primary);color:#fff;border:0}$b :where(.btn-outline){border:1.5px solid currentColor;color:var(--color-primary);background:none}"
+            . "$b > :where(section,main>section,main>div){padding-block:calc(var(--section-space,80px) / 2)}"
+            . "$b > :where(header,footer){padding-block:20px}"
+            . "$b > :where(header){display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px}"
+            . "$b :where(nav){display:flex;flex-wrap:wrap;align-items:center;gap:.4em 1.4em}$b :where(nav ul){display:flex;flex-wrap:wrap;gap:.4em 1.4em;list-style:none;margin:0;padding:0}"
+            . "$b :where(nav a){color:inherit;text-decoration:none}"
+            . "$b :where(.container){width:100%;max-width:var(--container,1200px);margin-inline:auto}"
+            . "$b :where(.sl-row){display:flex;flex-wrap:wrap;align-items:center;gap:16px}"
+            . "$b :where(ul.sl-grid,ol.sl-grid,ul.sl-row,ol.sl-row){list-style:none;padding:0}"
+            . "$b :where(.sl-grid){display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:24px;margin-block:1em}"
+            . "@media (min-width:760px){" . implode('', array_map(static fn($n) => "$b :where(.sl-cols-$n){grid-template-columns:repeat($n,minmax(0,1fr))}", [2, 3, 4, 5, 6])) . '}'
+            . "$b :where(.sl-grid>:has(>*+*)){padding:20px;border:1px solid rgba(0,0,0,.08);border-radius:var(--radius);background:var(--color-background,#fff)}"
+            . "$b :where(.sl-grid>*>:last-child){margin-bottom:0}";
     }
 
     // ------------------------------------------------------------------ DOM helpers

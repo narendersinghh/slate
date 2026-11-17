@@ -6,7 +6,7 @@ A fast, secure, SEO-first content management system, the flexibility of WordPres
 
 - **Modern admin**: clean dashboard, command palette (⌘/Ctrl + K), dark mode, fully responsive.
 - **AI first: Goraiya**: the built-in AI (✦ in the top bar) writes complete pages in your style and designs templates, as drafts. Works with Claude, OpenAI, Gemini or local models.
-- **Import pages**: bring HTML/CSS/JS pages (a zip or a folder) into Slate with exactly the same design; then edit any text, image, icon or slider by clicking on the live page.
+- **Import pages**: bring HTML/CSS/JS pages into Slate from a zip, a folder, the separate files of a page or a link (the page and every file it uses, optionally the pages it links to). Keep exactly the same design or switch the page to your site's styles, per page; then edit any text, image, icon or slider by clicking on the live page.
 - **Content model built in**: custom post types, taxonomies and custom fields (20 field types incl. repeater, gallery, relationship). No plugins needed.
 - **SEO built in**: meta titles/descriptions with templates, live Google preview & on-page analysis, robots meta, *noindex the whole site*, canonical URLs, Open Graph/Twitter, JSON-LD schema graph (Organization, WebSite, Article, Breadcrumbs, FAQ…), XML sitemaps, virtual robots.txt, redirects (incl. regex & 410).
 - **Integrations**: Google Tag Manager, GA4, Search Console, Bing, Yandex, Pinterest, Meta Pixel, Microsoft Clarity, LinkedIn Insight, AdSense, plus custom header/body/footer code.

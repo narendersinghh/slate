@@ -1660,3 +1660,33 @@ input[type=file][hidden] { display: none; }
 .goraiya-hint { color: var(--muted); font-size: 11.5px; padding-left: 4px; }
 @media (max-width: 480px) { .goraiya-starts { grid-template-columns: minmax(0, 1fr); } .goraiya-hint { display: none; } }
 .goraiya-box textarea, .goraiya-box textarea:focus, .goraiya-box textarea:focus-visible { border: 0; outline: 0; box-shadow: none; background: transparent; }
+
+/* ==========================================================================
+   Import: files list, link import, design choice with previews, report (admin/views/import.php, admin/assets/import.js)
+   ========================================================================== */
+.import-tabs { margin-bottom: 14px; }
+.import-pickers { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.import-files { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.import-files-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 13px; }
+.import-group + .import-group { border-top: 1px solid var(--border); }
+.import-group-head { display: flex; align-items: center; gap: 8px; padding: 9px 14px 4px; font: 600 12px var(--font); color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.import-group-head .ic { color: var(--muted); }
+.import-group ul { list-style: none; margin: 0; padding: 0 6px 6px; }
+.import-group li { display: flex; align-items: center; gap: 10px; padding: 4px 8px; border-radius: 8px; font-size: 13px; min-width: 0; }
+.import-group li:hover { background: var(--surface-2); }
+.import-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; }
+.import-group .icon-btn { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; }
+.import-designs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.import-design { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1.5px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color .15s, background .15s; min-width: 0; }
+.import-design:hover { border-color: var(--border-strong); }
+.import-design:has(input:checked) { border-color: var(--o-500); background: var(--accent-soft); }
+.import-design-head { display: flex; align-items: center; gap: 8px; }
+.import-thumb { position: relative; display: block; height: 230px; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.import-thumb iframe { position: absolute; top: 0; left: 0; width: 400%; height: 400%; border: 0; transform: scale(.25); transform-origin: 0 0; pointer-events: none; }
+.import-preview-pick { display: inline-flex; align-items: center; gap: 8px; }
+.import-src { display: inline-block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.import-src-line { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--muted); }
+.import-src-line a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-summary { padding: 14px 18px 0; }
+.import-summary .kpis { margin-bottom: 4px; }
+@media (min-width: 1100px) { .import-thumb { height: 260px; } }

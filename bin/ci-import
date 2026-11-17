@@ -1,0 +1,19 @@
+<?php
+// CI/tests only: let "Import pages > From a link" fetch from private/local addresses (the sample site served on
+// 127.0.0.1). Never enable this on a real site: it turns off the SSRF protection of core/Slate/RemoteFetch.php.
+//   php -S 127.0.0.1:8191 -t tests/fixtures/sample-site &
+//   php bin/ci-import
+declare(strict_types=1);
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+$file = dirname(__DIR__) . '/config.php';
+require $file; // defines SLATE_CONFIG
+if (!defined('SLATE_CONFIG') || !is_array(SLATE_CONFIG)) {
+    fwrite(STDERR, "config.php does not define SLATE_CONFIG\n");
+    exit(1);
+}
+$config = SLATE_CONFIG;
+$config['import_allow_private'] = true;
+file_put_contents($file, "<?php\n// Slate configuration (CI). Keep this file private.\nconst SLATE_CONFIG = " . var_export($config, true) . ";\n");
+echo "Import by link may fetch from local addresses (tests only).\n";

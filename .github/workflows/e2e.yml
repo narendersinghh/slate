@@ -1,4 +1,4 @@
-# End-to-end tests (import pages, Goraiya, on-page editing) against a throwaway site with a fake AI provider.
+# End-to-end tests (import pages from files and links, Goraiya, on-page editing) against a throwaway site with a fake AI provider.
 # Dependabot patch updates of the test tools merge into develop automatically when this passes; others wait for a person.
 name: End-to-end tests
 
@@ -40,6 +40,10 @@ jobs:
         run: |
           php -S 127.0.0.1:8197 bin/mock-indexing > mock-indexing.log 2>&1 &
           php bin/ci-indexing http://127.0.0.1:8197
+      - name: Sample websites for "Import pages > From a link" (local, so private addresses are allowed for the test)
+        run: |
+          php -S 127.0.0.1:8191 -t tests/fixtures > fixtures.log 2>&1 &
+          php bin/ci-import
       - name: Start PHP
         run: PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000 dev-server.php > php.log 2>&1 &
       - run: npx playwright test

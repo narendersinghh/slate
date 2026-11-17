@@ -14,9 +14,9 @@ foreach (ContentModel::types() as $slug => $type) {
         continue;
     }
     $base = trim((string)($type['rewrite'] ?: ''), '/');
-    $groups['Content'][] = ['single', $slug, $slug === 'page' ? 'Pages' : $type['singular'] . ' page', 'Each ' . strtolower($type['singular']) . ($base !== '' ? ' at /' . $base . '/…' : ''), $type['icon'] ?? 'file'];
+    $groups['Item pages'][] = ['single', $slug, $slug === 'page' ? 'Pages' : $type['singular'] . ' page', 'Each ' . strtolower($type['singular']) . ($base !== '' ? ' at /' . $base . '/…' : ''), $type['icon'] ?? 'file'];
     if ($slug !== 'page' && (!empty($type['has_archive']) || $slug === 'post')) {
-        $groups['Content'][] = ['archive', $slug, $type['plural'] . ' listing', $slug === 'post' ? 'The blog: all posts, newest first' : 'All ' . strtolower($type['plural']) . ' on one page', 'list'];
+        $groups['Listings'][] = ['archive', $slug, $type['plural'] . ' listing', $slug === 'post' ? 'The blog: all posts, newest first' : 'All ' . strtolower($type['plural']) . ' on one page', 'list'];
     }
 }
 foreach (ContentModel::taxonomies() as $slug => $tax) {
@@ -37,12 +37,21 @@ echo AdminUi::header('Templates', 'How each kind of page on your site looks. Wit
     <div class="kpi"><span>Drafts</span><strong><?= count($templates) - $active ?></strong></div>
     <div class="kpi"><span>Page types</span><strong><?= array_sum(array_map('count', $groups)) ?></strong></div>
   </div>
+</div>
+<?php $gkey = static fn(string $g): string => strtolower(preg_replace('/[^a-z]+/i', '-', $g)); ?>
+<div class="mod-toolbar tpl-toolbar">
+  <div class="mod-seg" role="tablist" aria-label="Page types" data-tpl-tabs>
+    <?php foreach ($groups as $group => $list): $inUse = 0; foreach ($list as [$k, $t]) { foreach ($byKey["$k/$t"] ?? [] as $x) { if (!empty($x['enabled'])) { $inUse++; break; } } } ?>
+      <button type="button" role="tab" data-tab="<?= e($gkey($group)) ?>" title="<?= $inUse ?> of <?= count($list) ?> use a template"><?= e($group) ?> <span><?= count($list) ?></span></button>
+    <?php endforeach; ?>
+    <button type="button" role="tab" data-tab="all">All <span><?= array_sum(array_map('count', $groups)) ?></span></button>
+  </div>
   <label class="tpl-find"><?= icon('search', 15) ?><input class="input" type="search" placeholder="Find a page type" data-tpl-find aria-label="Find a page type"></label>
 </div>
 
 <?php foreach ($groups as $group => $list): ?>
-<section class="tpl-group" data-tpl-group>
-  <h2 class="section-title"><?= e($group) ?></h2>
+<section class="tpl-group" data-tpl-group="<?= e($gkey($group)) ?>" role="tabpanel">
+  <h2 class="section-title tpl-group-title"><?= e($group) ?></h2>
   <div class="tpl-grid">
     <?php foreach ($list as [$kind, $target, $label, $desc, $ic]):
         $existing = $byKey["$kind/$target"] ?? [];
@@ -85,15 +94,26 @@ echo AdminUi::header('Templates', 'How each kind of page on your site looks. Wit
 <script>
 (function () {
   const find = document.querySelector('[data-tpl-find]');
-  find.addEventListener('input', () => {
+  const tabs = [...document.querySelectorAll('[data-tpl-tabs] [data-tab]')];
+  const groups = [...document.querySelectorAll('[data-tpl-group]')];
+  let tab = (location.hash.slice(1) || '');
+  if (!tabs.some((b) => b.dataset.tab === tab)) tab = tabs[0] ? tabs[0].dataset.tab : 'all';
+  const show = () => {
     const q = find.value.trim().toLowerCase();
+    const active = q ? 'all' : tab; // searching looks through every group
+    tabs.forEach((b) => { const on = b.dataset.tab === active; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+    document.body.classList.toggle('tpl-all', active === 'all');
     let any = false;
-    document.querySelectorAll('[data-tpl-group]').forEach((g) => {
+    groups.forEach((g) => {
       let n = 0;
-      g.querySelectorAll('[data-tpl-card]').forEach((c) => { const show = !q || c.dataset.search.includes(q); c.hidden = !show; if (show) n++; });
-      g.hidden = !n; if (n) any = true;
+      g.querySelectorAll('[data-tpl-card]').forEach((c) => { const ok = !q || c.dataset.search.includes(q); c.hidden = !ok; if (ok) n++; });
+      g.hidden = !n || (active !== 'all' && g.dataset.tplGroup !== active);
+      if (!g.hidden) any = true;
     });
     document.querySelector('[data-tpl-none]').hidden = any;
-  });
+  };
+  tabs.forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; find.value = ''; history.replaceState(null, '', '#' + tab); show(); }));
+  find.addEventListener('input', show);
+  show();
 })();
 </script>

@@ -1734,3 +1734,9 @@ input[type=file][hidden] { display: none; }
 .mod-upd-banner { align-items: flex-start; }
 .mod-upd-banner > .ic { margin-top: 2px; }
 @media (max-width: 600px) { .mod-report dl { grid-template-columns: minmax(0, 1fr); } .mod-auto-list { grid-template-columns: minmax(0, 1fr); } }
+/* Templates: tabs per group; the group title only shows on the All tab */
+.tpl-toolbar { margin-top: 6px; }
+.tpl-group .tpl-group-title { display: none; }
+body.tpl-all .tpl-group .tpl-group-title { display: block; }
+.tpl-group { margin-top: 0; }
+body.tpl-all .tpl-group + .tpl-group { margin-top: 18px; }

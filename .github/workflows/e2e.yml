@@ -36,6 +36,10 @@ jobs:
         run: |
           php -S 127.0.0.1:8097 bin/mock-ai > mock-ai.log 2>&1 &
           php bin/ci-ai http://127.0.0.1:8097/v1
+      - name: Fake indexing endpoints (Google, IndexNow)
+        run: |
+          php -S 127.0.0.1:8197 bin/mock-indexing > mock-indexing.log 2>&1 &
+          php bin/ci-indexing http://127.0.0.1:8197
       - name: Start PHP
         run: PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000 dev-server.php > php.log 2>&1 &
       - run: npx playwright test

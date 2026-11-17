@@ -1,0 +1,21 @@
+<?php
+// CI only: point a throwaway site's indexing endpoints (Google, IndexNow) at the local mock (bin/mock-indexing).
+//   php -S 127.0.0.1:8197 bin/mock-indexing &
+//   php bin/ci-indexing http://127.0.0.1:8197
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+$mock = rtrim($argv[1] ?? 'http://127.0.0.1:8197', '/');
+$file = $root . '/config.php';
+require $file; // defines SLATE_CONFIG
+if (!defined('SLATE_CONFIG') || !is_array(SLATE_CONFIG)) {
+    fwrite(STDERR, "config.php does not define SLATE_CONFIG\n");
+    exit(1);
+}
+$config = SLATE_CONFIG;
+$config['seo_endpoints'] = [
+    'google_token' => "$mock/token", 'google_publish' => "$mock/publish", 'google_metadata' => "$mock/metadata",
+    'google_webmasters' => "$mock/webmasters", 'indexnow' => "$mock/indexnow",
+];
+file_put_contents($file, "<?php\n// Slate configuration (CI). Keep this file private.\nconst SLATE_CONFIG = " . var_export($config, true) . ";\n");
+echo "Indexing endpoints point at the mock ($mock).\n";

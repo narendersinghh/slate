@@ -118,6 +118,13 @@ test('instant indexing: key file, automatic submission, noindex, request indexin
   await page.goto(`${BASE}/admin/seo/instant`);
   await expect(page.locator('[data-seo-test-endpoints]'), 'config.php must point seo_endpoints at the mock').toBeVisible();
   await request.post(`${MOCK}/reset`);
+  // A key left over from an earlier, interrupted run: remove it first so the run starts clean.
+  const leftover = page.locator('button:has-text("Remove key")');
+  if (await leftover.count()) {
+    page.once('dialog', (d) => d.accept());
+    await leftover.click();
+    await expect(page.locator('textarea[name="seo_idx[google_key]"]')).toBeVisible();
+  }
 
   // Google: paste a service account key (a throwaway RSA key; the mock accepts any signed assertion).
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });

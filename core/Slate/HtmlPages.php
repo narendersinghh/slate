@@ -287,7 +287,7 @@ final class HtmlPages
     public const DESIGNS = ['keep' => "Keep the original design", 'site' => "Use my site's styles"];
 
     /** Inline style properties kept in the 'site' design (layout only; colours, fonts, borders, backgrounds go). */
-    private const LAYOUT_PROPS = '/^(display|flex|flex-[a-z-]+|grid|grid-[a-z-]+|gap|row-gap|column-gap|align-[a-z-]+|justify-[a-z-]+|place-[a-z-]+|order|text-align|width|max-width|min-width|aspect-ratio|object-fit|object-position)$/';
+    private const LAYOUT_PROPS = '/^(display|flex|flex-[a-z-]+|grid|grid-[a-z-]+|gap|row-gap|column-gap|align-[a-z-]+|justify-[a-z-]+|place-[a-z-]+|order|text-align|width|max-width|min-width|aspect-ratio|object-fit|object-position|background-image|background-size|background-position|background-repeat)$/'; // background images are content (hero photos); colours and fonts follow the site
     /** Icon font stylesheets stay in the 'site' design, so icons keep showing. */
     private const ICON_CSS = '/font-?awesome|bootstrap-icons|material-?icons|material-symbols|remixicon|boxicons|ionicons|line-?awesome|icofont|themify-icons|phosphor/i';
 
@@ -373,6 +373,11 @@ final class HtmlPages
                     $prop = strtolower(trim($prop));
                     if ($prop !== '' && trim($val) !== '' && preg_match(self::LAYOUT_PROPS, $prop)) {
                         $keep[] = $prop . ':' . trim($val);
+                    } elseif ($prop === 'background' && preg_match('/url\(\s*([\'"]?)[^\'")]+\1\s*\)/i', $val, $bg)) {
+                        // Shorthand with an image: keep the image (content), drop the colour.
+                        $keep[] = 'background-image:' . $bg[0];
+                        $keep[] = 'background-size:cover';
+                        $keep[] = 'background-position:center';
                     }
                 }
                 $keep ? $el->setAttribute('style', implode(';', $keep)) : $el->removeAttribute('style');

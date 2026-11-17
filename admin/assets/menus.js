@@ -125,6 +125,8 @@
 
   // ---- search ----
   const found = { post: [], term: [] };
+  // Ticked items survive a new search, so you can pick from several searches and add them together.
+  const picked = { post: new Map(), term: new Map() };
   const runSearch = debounce(async (kind) => {
     const box = $('[data-results="' + kind + '"]', root);
     if (!box) return;
@@ -135,14 +137,14 @@
       const d = await r.json();
       found[kind] = d.items || [];
       box.innerHTML = found[kind].length ? (q ? '' : '<p class="muted small">' + (kind === 'post' ? 'Recently updated' : 'Most used') + '</p>') + found[kind].map((x, i) =>
-        '<label class="mb-result"><input type="checkbox" value="' + i + '"><span><strong>' + esc(x.label) + '</strong><small>' + esc(x.group) + '</small></span>' +
+        '<label class="mb-result"><input type="checkbox" value="' + i + '"' + (picked[kind].has(x.id) ? ' checked' : '') + '><span><strong>' + esc(x.label) + '</strong><small>' + esc(x.group) + '</small></span>' +
         '<button type="button" class="icon-btn" data-add-one="' + kind + ':' + i + '" title="Add to menu" aria-label="Add ' + esc(x.label) + '">' + IC.plus + '</button></label>').join('')
         : '<p class="muted small">Nothing found' + (q ? ' for “' + esc(q) + '”' : '') + '.</p>';
       selCount(kind);
     } catch (e) { box.innerHTML = '<p class="muted small">Search failed. Try again.</p>'; }
   }, 200);
   const selCount = (kind) => {
-    const n = $$('[data-results="' + kind + '"] input:checked', root).length;
+    const n = picked[kind].size;
     const b = $('[data-add-selected="' + kind + '"]', root);
     if (b) b.disabled = !n;
     const c = $('[data-sel-count="' + kind + '"]', root);
@@ -154,6 +156,7 @@
       menus[cur].items.push({ id: uid(), label: '', type: kind, object_id: x.id, target: '', children: [] });
     });
     $$('[data-results="' + kind + '"] input:checked', root).forEach((c) => { c.checked = false; });
+    picked[kind].clear();
     selCount(kind);
     render();
     window.Slate.toast(list.length === 1 ? '“' + list[0].label + '” added' : list.length + ' items added');
@@ -177,7 +180,13 @@
     if (el.matches('[data-menu-switch]')) { cur = +el.value; open = null; render(); return; }
     if (el.matches('[data-menu-loc]')) { menus.forEach((m, i) => { if (i !== cur && m.location === el.value && el.value) m.location = ''; }); menus[cur].location = el.value; sync(); return; }
     if (el.matches('[data-filter]')) { runSearch(el.dataset.filter); return; }
-    if (el.closest('[data-results]')) { selCount(el.closest('[data-results]').dataset.results); return; }
+    if (el.closest('[data-results]')) {
+      const kind = el.closest('[data-results]').dataset.results;
+      const item = found[kind][+el.value];
+      if (item) { if (el.checked) picked[kind].set(item.id, item); else picked[kind].delete(item.id); }
+      selCount(kind);
+      return;
+    }
     if (el.dataset.k === 'target') { const li = el.closest('.mb-item'); get(findPath(li.dataset.id)).target = el.checked ? '_blank' : ''; sync(); render(); }
   });
   root.addEventListener('keydown', (e) => {
@@ -193,7 +202,7 @@
       return;
     }
     if (t.dataset.addOne) { const [kind, i] = t.dataset.addOne.split(':'); e.preventDefault(); addRefs(kind, [found[kind][+i]]); return; }
-    if (t.dataset.addSelected) { const kind = t.dataset.addSelected; addRefs(kind, $$('[data-results="' + kind + '"] input:checked', root).map((c) => found[kind][+c.value])); return; }
+    if (t.dataset.addSelected) { const kind = t.dataset.addSelected; addRefs(kind, [...picked[kind].values()]); return; }
     if (t.matches('[data-add-custom]')) {
       const url = $('[data-custom-url]', root).value.trim();
       if (!url) { $('[data-custom-url]', root).focus(); return; }

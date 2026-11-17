@@ -167,6 +167,7 @@
     }
     on = v;
     d.documentElement.classList.toggle('se-editing', on);
+    emptyListMarkers(on);
     // Room under the page so its last section can scroll above the save bar.
     let spacer = d.getElementById('se-spacer');
     if (on && !spacer) { spacer = d.createElement('div'); spacer.id = 'se-spacer'; spacer.setAttribute('aria-hidden', 'true'); spacer.style.cssText = 'height:160px;clear:both'; d.body.appendChild(spacer); }
@@ -195,11 +196,17 @@
     marks = new Map();
     const w = d.createTreeWalker(d.body, NodeFilter.SHOW_COMMENT);
     const starts = [];
-    for (let n = w.nextNode(); n; n = w.nextNode()) { const m = /^se:([a-z]+)$/.exec(n.data.trim()); if (m) starts.push([n, m[1]]); }
-    starts.forEach(([c, kind]) => {
+    for (let n = w.nextNode(); n; n = w.nextNode()) { const m = /^se:([a-z]+)(?::(b\d+))?$/.exec(n.data.trim()); if (m) starts.push([n, m[1], m[2] || '']); }
+    starts.forEach(([c, kind, id]) => {
+      let depth = 0;
       for (let n = c.nextSibling; n; n = n.nextSibling) {
-        if (n.nodeType === 8 && n.data.trim() === '/se:' + kind) break;
-        if (n.nodeType === 1 && !marks.has(n)) marks.set(n, kind);
+        if (n.nodeType === 8) {
+          const t = n.data.trim();
+          if (new RegExp('^se:' + kind + '(:|$)').test(t)) depth++;
+          else if (t === '/se:' + kind) { if (depth === 0) break; depth--; }
+          continue;
+        }
+        if (n.nodeType === 1 && !marks.has(n)) marks.set(n, id ? kind + ':' + id : kind);
       }
     });
   }
@@ -208,9 +215,9 @@
     for (let n = t; n && n !== d.body; n = n.parentNode) {
       for (let p = n.previousSibling; p; p = p.previousSibling) {
         if (p.nodeType === 8) { const m = /^se:item:([pt]\d+)$/.exec(p.data.trim()); if (m) return (C.items || {})[m[1]] || null; }
-        if (p.nodeType === 8 && /^\/?se:list$/.test(p.data.trim())) break;
+        if (p.nodeType === 8 && /^\/?se:list(:b\d+)?$/.test(p.data.trim())) break;
       }
-      if (marks && marks.get(n) === 'list') break;
+      if (marks && /^list/.test(marks.get(n) || '')) break;
     }
     return null;
   }
@@ -220,11 +227,15 @@
     if (!(t instanceof Element) || t === d.body || t === d.documentElement) return null;
     if (!marks) buildMarks();
     for (let n = t; n && n !== d.body; n = n.parentElement) {
-      const k = marks.get(n);
-      if (k === 'list') {
+      const k = marks.get(n) || '';
+      if (k === 'list' || k.startsWith('list:')) {
         const it = itemOf(t);
-        if (it) return { kind: 'list', text: 'Comes from “' + it.title + '”: edit it there', links: [['Open “' + it.title + '”', it.url]].concat(it.edit ? [['Edit in dashboard', it.edit]] : []) };
-        return { kind: 'list', text: 'Part of a list: it repeats for each item', links: TPL ? [['Open the template', TPL.edit]] : [] };
+        const list = k.slice(5);
+        const known = list && (C.lists || {})[list];
+        const links = it ? [['Open “' + it.title + '”', it.url]].concat(it.edit ? [['Edit in dashboard', it.edit]] : []) : (TPL ? [['Open the template', TPL.edit]] : []);
+        if (known) return { kind: 'list', list, item: it, text: (it ? 'Comes from “' + it.title + '”' : 'A list') + ': click for list settings', links };
+        if (it) return { kind: 'list', text: 'Comes from “' + it.title + '”: edit it there', links };
+        return { kind: 'list', text: 'Part of a list: it repeats for each item', links };
       }
       if (k === 'mod') return { kind: 'mod', text: 'Added by a module', links: [] };
       if (k === 'content') return { text: 'Layout of the page content: edit it in the dashboard', links: C.dashboard ? [['Edit in dashboard', C.dashboard]] : [] };
@@ -234,6 +245,7 @@
     return { text: 'Site theme (header, menu or footer): menus are in Appearance › Menus', links: C.menus ? [['Open Appearance › Menus', C.menus]] : [] };
   }
   function showHint(h) {
+    if (h.list) { selectList(h.list, h.item); return; }
     deselect();
     openPanel('Not editable here', '<p>' + esc(h.text) + '.</p>' + (h.links.length ? '<div class="se-row">' + h.links.map(([l, u], i) => '<a class="se-btn ' + (i ? 'se-ghost' : 'se-primary') + '" href="' + esc(u) + '">' + esc(l) + '</a>').join('') + '</div>' : ''));
   }
@@ -298,6 +310,14 @@
     if (sb.height) y = Math.min(y, sb.top);
     return y;
   }
+  function placeRect(box, r) {
+    if (!r || (!r.width && !r.height)) { box.hidden = true; return; }
+    box.hidden = false;
+    box.style.transform = 'translate(' + Math.round(r.left - 3) + 'px,' + Math.round(r.top - 3) + 'px)';
+    box.style.width = Math.round(r.width + 6) + 'px';
+    box.style.height = Math.round(r.height + 6) + 'px';
+    box.classList.toggle('se-label-below', r.top < 26);
+  }
   function placeToolbar() {
     if (toolbar.hidden || !sel) return;
     let r = sel.getBoundingClientRect();
@@ -322,7 +342,7 @@
     const loop = () => {
       if (!on) { ticking = false; return; }
       placeBox(hoverBox, hoverEl && hoverEl !== sel ? hoverEl : null);
-      placeBox(selBox, sel);
+      if (selList) placeRect(selBox, listRect(selList)); else placeBox(selBox, sel);
       placeToolbar();
       requestAnimationFrame(loop);
     };
@@ -426,6 +446,7 @@
     if (sel && selKind === 'bind') stopBind(sel);
     if (!gpop.hidden) closeGoraiya();
     gsel.hidden = true;
+    if (selList) endList();
     sel = null;
     selKind = '';
     toolbar.hidden = true;
@@ -663,6 +684,251 @@
     el.remove();
     update();
     toast('Removed.', '', 8000, { label: 'Undo', fn: () => { parent.insertBefore(el, next && next.parentNode === parent ? next : null); P.remove.delete(id); update(); } });
+  }
+
+  // ------------------------------------------------------------------ list settings (lists of the page's template)
+  let selList = null; // 'b3'
+  let listState = null; // {id, original: [nodes], values, dirty}
+
+  /** The nodes a list block rendered: between <!--se:list:b3--> and its matching <!--/se:list--> in doc. */
+  function listNodes(doc, id) {
+    const w = doc.createTreeWalker(doc.body, NodeFilter.SHOW_COMMENT);
+    let start = null;
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.data.trim() === 'se:list:' + id) { start = n; break; }
+    if (!start) return null;
+    const nodes = [];
+    let depth = 0;
+    for (let n = start.nextSibling; n; n = n.nextSibling) {
+      if (n.nodeType === 8) {
+        const t = n.data.trim();
+        if (/^se:list(:|$)/.test(t)) depth++;
+        else if (t === '/se:list') { if (depth === 0) return { start, end: n, nodes }; depth--; }
+      }
+      nodes.push(n);
+    }
+    return null;
+  }
+  function listRect(id) {
+    const b = listNodes(d, id);
+    if (!b) return null;
+    let r = null;
+    b.nodes.forEach((n) => {
+      if (n.nodeType !== 1) return;
+      const q = n.getBoundingClientRect();
+      if (!q.width && !q.height) return;
+      r = r ? { left: Math.min(r.left, q.left), top: Math.min(r.top, q.top), right: Math.max(r.right, q.right), bottom: Math.max(r.bottom, q.bottom) } : { left: q.left, top: q.top, right: q.right, bottom: q.bottom };
+    });
+    if (!r) { const p = b.start.parentElement; return p ? p.getBoundingClientRect() : null; }
+    return { left: r.left, top: r.top, width: r.right - r.left, height: r.bottom - r.top };
+  }
+
+  /** Lists that show nothing get a placeholder while editing, so they can still be clicked (never saved, never seen by visitors). */
+  function emptyListMarkers(show) {
+    d.querySelectorAll('.se-empty-list').forEach((n) => n.remove());
+    if (!show) return;
+    const w = d.createTreeWalker(d.body, NodeFilter.SHOW_COMMENT);
+    const ids = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) { const m = /^se:list:(b\d+)$/.exec(n.data.trim()); if (m && (C.lists || {})[m[1]]) ids.push(m[1]); }
+    ids.forEach((id) => {
+      const b = listNodes(d, id);
+      if (!b || b.nodes.some((n) => n.nodeType === 1 || (n.nodeType === 3 && n.data.trim()))) return;
+      const ph = d.createElement('div');
+      ph.className = 'se-empty-list';
+      ph.textContent = 'Empty list: click to change what it shows';
+      b.end.parentNode.insertBefore(ph, b.end);
+    });
+    marks = null;
+  }
+
+  function selectList(id, item) {
+    deselect();
+    const L = (C.lists || {})[id];
+    if (!L) return;
+    selList = id;
+    const b = listNodes(d, id);
+    listState = { id, original: b ? b.nodes.map((n) => n.cloneNode(true)) : [], values: Object.assign({}, L.values), dirty: false };
+    selBox.querySelector('.se-tagname').textContent = 'List';
+    selBox.classList.remove('se-dyn');
+    openListPanel(id, item);
+  }
+  function endList() {
+    if (listState && listState.dirty) restoreList();
+    selList = null;
+    listState = null;
+  }
+  function restoreList() {
+    const b = listNodes(d, listState.id);
+    if (!b) return;
+    b.nodes.forEach((n) => n.remove());
+    listState.original.forEach((n) => b.end.parentNode.insertBefore(n.cloneNode(true), b.end));
+    listState.dirty = false;
+    emptyListMarkers(true);
+  }
+
+  const typeOf = () => (listState && listState.values.type) || '';
+  function typeFields(only) {
+    const types = (typeOf() || '').split(',').filter(Boolean);
+    const out = [];
+    (C.sources.types || []).forEach((t) => {
+      if (types.length && !types.includes(t.slug)) return;
+      (t.fields || []).forEach((f) => {
+        if (only === 'date' && !['date', 'datetime'].includes(f.type)) return;
+        if (!out.some((o) => o[0] === f.name)) out.push([f.name, f.label]);
+      });
+    });
+    return out;
+  }
+  function optionsFor(f, v) {
+    const base = (pairs, empty) => (empty != null ? [['', empty]] : []).concat(pairs);
+    switch (f.type) {
+      case 'select': return Object.entries(f.options || {});
+      case 'post_type': return base((C.sources.types || []).map((t) => [t.slug, t.label]), !v && f.default == null ? 'Not set' : null);
+      case 'taxonomy': return base((C.sources.taxonomies || []).map((t) => [t.slug, t.label]), f.empty || (!v && f.default == null ? 'Not set' : null));
+      case 'cfield': return base(typeFields(), f.empty || 'None');
+      case 'datefield': return base(typeFields('date'), 'Publish date');
+      case 'orderby': return base([['published_at', 'Date published'], ['updated_at', 'Date updated'], ['title', 'Title'], ['menu_order', 'Manual order'], ['random', 'Random']]
+        .concat(typeFields().map(([n, l]) => ['field:' + n, 'Field: ' + l])), f.empty || null);
+      default: return [];
+    }
+  }
+
+  function fieldHtml(f, v) {
+    const id = 'se-lf-' + f.key;
+    const lab = '<label class="se-label" for="' + id + '">' + esc(f.label || f.key) + '</label>';
+    const help = f.help ? '<p class="se-hint se-under">' + esc(f.help) + '</p>' : '';
+    if (f.type === 'toggle') return '<label class="se-check se-lrow"><input type="checkbox" id="' + id + '" data-lk="' + esc(f.key) + '"' + (v ? ' checked' : '') + '> ' + esc(f.label) + '</label>' + help;
+    if (f.type === 'number') return lab + help + '<input id="' + id + '" class="se-input" type="number" data-lk="' + esc(f.key) + '" min="' + (f.min ?? 0) + '" max="' + (f.max ?? 100000) + '" value="' + esc(v || '') + '" placeholder="' + esc(f.placeholder || (f.default != null ? String(f.default) : '')) + '">';
+    if (f.type === 'date') return lab + help + '<input id="' + id + '" class="se-input" type="date" data-lk="' + esc(f.key) + '" value="' + esc(v || '') + '">';
+    if (f.type === 'text') return lab + help + '<input id="' + id + '" class="se-input" type="text" data-lk="' + esc(f.key) + '" value="' + esc(v || '') + '" maxlength="100">';
+    if (f.type === 'termfilter') {
+      const [tax, slugs] = (v || '').split(':');
+      return lab + help + '<div class="se-tf" data-lk="' + esc(f.key) + '" data-tf="1"><select class="se-input" aria-label="' + esc(f.label) + ': taxonomy" data-tf-tax><option value="">No filter</option>'
+        + (C.sources.taxonomies || []).map((t) => '<option value="' + esc(t.slug) + '"' + (t.slug === tax ? ' selected' : '') + '>' + esc(t.label) + '</option>').join('')
+        + '</select><div class="se-termlist" data-tf-terms data-selected="' + esc(slugs || '') + '"></div></div>';
+    }
+    if (f.type === 'terms') {
+      const ta = (C.lists[listState.id].schema.groups || []).flatMap((g) => g.fields).find((x) => x.key === f.taxonomy_arg);
+      const tax = f.taxonomy || listState.values[f.taxonomy_arg] || (ta && ta.default) || '';
+      return lab + help + '<div class="se-termlist" data-lk="' + esc(f.key) + '" data-terms-of="' + esc(tax) + '" data-single="' + (f.single ? '1' : '') + '" data-selected="' + esc(v || '') + '"></div>';
+    }
+    let opts = optionsFor(f, v);
+    if (v && !opts.some(([o]) => o === v)) opts = opts.concat([[v, v]]);
+    if (f.type === 'post_type' && v && v.includes(',')) opts = [[v, v.split(',').join(' and ')]].concat(opts);
+    return lab + help + '<select id="' + id + '" class="se-input" data-lk="' + esc(f.key) + '">' + opts.map(([o, l]) => '<option value="' + esc(o) + '"' + (o === (v || '') ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>';
+  }
+
+  async function fillTerms(box) {
+    const tax = box.dataset.tfTerms !== undefined ? box.parentNode.querySelector('[data-tf-tax]').value : box.dataset.termsOf;
+    const selected = (box.dataset.selected || '').split(',').filter(Boolean);
+    if (!tax) { box.innerHTML = ''; return; }
+    box.innerHTML = '<p class="se-hint">Loading terms</p>';
+    const r = await json(C.terms + '?taxonomy=' + encodeURIComponent(tax));
+    if (!r.ok) { box.innerHTML = '<p class="se-gerr">' + esc(r.error || 'Could not load the terms.') + '</p>'; return; }
+    if (!r.items.length) { box.innerHTML = '<p class="se-hint">No terms yet.</p>'; return; }
+    if (box.dataset.single) {
+      box.innerHTML = '<select class="se-input" data-tl><option value="">Any</option>' + r.items.map((t) => '<option value="' + esc(t.slug) + '"' + (selected.includes(t.slug) ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('') + '</select>';
+      return;
+    }
+    const items = r.items.slice().sort((a, b) => (selected.includes(b.slug) ? 1 : 0) - (selected.includes(a.slug) ? 1 : 0));
+    box.innerHTML = items.map((t) => '<label class="se-check"><input type="checkbox" value="' + esc(t.slug) + '"' + (selected.includes(t.slug) ? ' checked' : '') + '> ' + esc(t.name) + ' <span class="se-hint">' + t.count + '</span></label>').join('');
+  }
+
+  function readList() {
+    const v = {};
+    const L = C.lists[listState.id];
+    (L.schema.groups || []).forEach((g) => g.fields.forEach((f) => { v[f.key] = ''; }));
+    panel.querySelectorAll('[data-lk]').forEach((el) => {
+      const k = el.dataset.lk;
+      if (el.dataset.tf) {
+        const tax = el.querySelector('[data-tf-tax]').value;
+        const picked = [...el.querySelectorAll('[data-tf-terms] input:checked')].map((i) => i.value);
+        v[k] = tax && picked.length ? tax + ':' + picked.join(',') : '';
+      } else if (el.classList.contains('se-termlist')) {
+        const one = el.querySelector('[data-tl]');
+        v[k] = one ? one.value : [...el.querySelectorAll('input:checked')].map((i) => i.value).join(',');
+      } else if (el.type === 'checkbox') {
+        v[k] = el.checked ? '1' : '';
+      } else {
+        v[k] = el.value.trim();
+      }
+    });
+    return v;
+  }
+
+  function openListPanel(id, item) {
+    const L = C.lists[id];
+    let h = '';
+    if (TPL) h += '<div class="se-notice' + (TPL.shared ? ' se-shared' : '') + '">' + esc(tplNotice()) + (TPL.shared ? ' <a href="' + esc(TPL.edit) + '">Open the template</a>' : '') + '</div>';
+    h += '<p class="se-hint">' + esc(L.label) + ' in ' + esc(where()) + ': <code title="' + esc(L.tag) + '">' + esc(L.tag.length > 90 ? L.tag.slice(0, 88) + '…}}' : L.tag) + '</code></p>';
+    if (item) h += '<div class="se-itemrow"><span class="se-hint">This item comes from <strong>' + esc(item.title) + '</strong>.</span><div class="se-row"><a class="se-btn se-ghost" href="' + esc(item.url) + '">Open it</a>' + (item.edit ? '<a class="se-btn se-ghost" href="' + esc(item.edit) + '">Edit in dashboard</a>' : '') + '</div></div>';
+    if (!L.schema) {
+      h += '<div class="se-notice">' + esc(L.reason) + '</div>' + (TPL ? '<div class="se-foot"><a class="se-btn se-ghost" href="' + esc(TPL.edit) + '">Open the template</a></div>' : '');
+      openPanel('List settings', h);
+      return;
+    }
+    h += '<div class="se-lform">' + (L.schema.groups || []).map((g) => '<h3 class="se-sect">' + esc(g.label) + '</h3>' + g.fields.map((f) => fieldHtml(f, listState.values[f.key] ?? (f.default != null && f.type !== 'number' ? String(f.default) : ''))).join('')).join('') + '</div>'
+      + '<p class="se-hint se-lstatus" aria-live="polite">Changes show on the page as you make them.</p>'
+      + '<div class="se-foot"><button type="button" class="se-btn se-ghost" data-lact="discard">Discard</button><button type="button" class="se-btn se-primary" data-lact="save">Save list</button></div>';
+    openPanel('List settings', h);
+    panel.querySelectorAll('.se-termlist').forEach(fillTerms);
+    let timer = 0;
+    const changed = (e) => {
+      if (e && e.target.matches('[data-tf-tax]')) { const box = e.target.parentNode.querySelector('[data-tf-terms]'); box.dataset.selected = ''; fillTerms(box); }
+      const v = readList();
+      const typeChanged = v.type !== undefined && v.type !== listState.values.type;
+      listState.values = v;
+      if (typeChanged || (e && e.target.dataset.lk && C.lists[id].schema.groups.some((g) => g.fields.some((f) => f.taxonomy_arg === e.target.dataset.lk)))) {
+        const keep = panel.querySelector('.se-pb').scrollTop;
+        openListPanel(id, item);
+        panel.querySelector('.se-pb').scrollTop = keep;
+      }
+      clearTimeout(timer);
+      timer = setTimeout(() => previewList(id, listState.values), 350);
+    };
+    panel.querySelector('.se-lform').addEventListener('change', changed);
+    panel.onclick = async (e) => {
+      const b = e.target.closest('[data-lact]');
+      if (!b) return;
+      if (b.dataset.lact === 'discard') { restoreList(); listState.values = Object.assign({}, L.values); openListPanel(id, item); return; }
+      if (b.dataset.lact === 'save') saveList(id, b);
+    };
+  }
+
+  async function previewList(id, values) {
+    const st = panel.querySelector('.se-lstatus');
+    if (st) { st.textContent = 'Updating the preview'; st.classList.add('se-busy'); }
+    const u = new URL(location.href);
+    u.searchParams.delete('se-edit');
+    u.searchParams.delete('se-content');
+    u.searchParams.set('se-list', id);
+    u.searchParams.set('se-args', JSON.stringify(values));
+    let html = '';
+    try { html = await fetch(u.toString(), { credentials: 'same-origin', headers: { Accept: 'text/html' } }).then((r) => r.text()); } catch (e) { html = ''; }
+    if (!listState || listState.id !== id) return;
+    const fresh = listNodes(new DOMParser().parseFromString(html, 'text/html'), id);
+    const live = listNodes(d, id);
+    if (st) st.classList.remove('se-busy');
+    if (!fresh || !live) { if (st) st.textContent = 'The preview could not be loaded. Save still works.'; return; }
+    live.nodes.forEach((n) => n.remove());
+    fresh.nodes.forEach((n) => live.end.parentNode.insertBefore(d.importNode(n, true), live.end));
+    listState.dirty = true;
+    emptyListMarkers(true);
+    if (st) st.textContent = fresh.nodes.some((n) => n.nodeType === 1) ? 'Preview updated. Save to keep it.' : 'Nothing matches these settings. Save to keep them anyway.';
+  }
+
+  async function saveList(id, btn) {
+    if (TPL && TPL.shared && !confirm(tplNotice() + '\n\nSave these list settings to the template?')) return;
+    btn.classList.add('se-busy');
+    const r = await json(C.listSave, { block: id, values: readList(), base: TPL ? TPL.updated : '' });
+    btn.classList.remove('se-busy');
+    if (!r.ok) {
+      if (r.conflict) { if (confirm(r.error + '\n\nReload now?')) { leaving = true; location.reload(); } } else toast(r.error || 'Could not save the list.', 'error');
+      return;
+    }
+    leaving = true;
+    const u = new URL(location.href);
+    u.searchParams.set('se-edit', '1');
+    location.replace(u.toString());
   }
 
   // ------------------------------------------------------------------ sections: Goraiya revamp / change / delete

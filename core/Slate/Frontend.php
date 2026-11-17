@@ -6,6 +6,8 @@ namespace Slate;
 /** Resolves public URLs to content and renders them through the active theme. */
 final class Frontend
 {
+    /** The query behind the current archive / term / search list (see output()). */
+    private static ?array $listQuery = null;
     /** Globals available to templates. */
     public static array $data = [];
     /** True while core is working out which content a URL points to (see resolving()). */
@@ -91,7 +93,7 @@ final class Frontend
         if (isset($_GET['s']) && is_string($_GET['s'])) {
             $q = mb_substr(trim($_GET['s']), 0, 100);
             $types = array_keys(array_filter(ContentModel::types(), static fn($t) => !empty($t['public'])));
-            $result = Posts::query(['type' => $types, 'search' => $q, 'page' => $page]);
+            $result = Posts::query(self::$listQuery = ['type' => $types, 'search' => $q, 'page' => $page]);
             Seo::$ctx = ['kind' => 'search', 'query' => $q, 'page' => $page];
             self::output('search', ['query' => $q, 'result' => $result]);
             return;
@@ -103,7 +105,7 @@ final class Frontend
                 self::single($fp);
                 return;
             }
-            $result = Posts::query(['type' => 'post', 'page' => $page, 'with_terms' => true]);
+            $result = Posts::query(self::$listQuery = ['type' => 'post', 'page' => $page, 'with_terms' => true]);
             Seo::$ctx = ['kind' => 'home', 'page' => $page];
             self::output('home', ['result' => $result, 'title' => (string)Options::get('site_title')], ['home', 'index']);
             return;
@@ -121,7 +123,7 @@ final class Frontend
         // Posts page (when homepage is static).
         if (Options::get('front_page') === 'page' && ($pp = (int)Options::get('posts_page_id')) && ($postsPage = Posts::find($pp))
             && rtrim(parse_url(Posts::permalink($postsPage), PHP_URL_PATH), '/') === rtrim(url($path), '/')) {
-            $result = Posts::query(['type' => 'post', 'page' => $page, 'with_terms' => true]);
+            $result = Posts::query(self::$listQuery = ['type' => 'post', 'page' => $page, 'with_terms' => true]);
             Seo::$ctx = ['kind' => 'archive', 'title' => $postsPage['title'], 'url' => Posts::permalink($postsPage, true), 'page' => $page, 'type' => 'post'];
             self::output('archive', ['result' => $result, 'title' => $postsPage['title'], 'type' => ContentModel::type('post')], ['archive-post', 'home', 'archive']);
             return;
@@ -145,7 +147,7 @@ final class Frontend
             }
             $re = self::rewriteRegex($base);
             if (!str_contains($base, '%') && !empty($type['has_archive']) && preg_match('#^/' . $re . '$#', $rel)) {
-                $result = Posts::query(['type' => $slug, 'page' => $page, 'with_terms' => true,
+                $result = Posts::query(self::$listQuery = ['type' => $slug, 'page' => $page, 'with_terms' => true,
                     'orderby' => !empty($type['hierarchical']) ? 'menu_order' : 'published_at', 'order' => !empty($type['hierarchical']) ? 'ASC' : 'DESC']);
                 Seo::$ctx = ['kind' => 'archive', 'title' => $type['plural'], 'url' => site_url(Posts::trail('/' . $base)), 'page' => $page, 'type' => $slug];
                 self::output('archive', ['result' => $result, 'title' => $type['plural'], 'type' => $type], ["archive-$slug", 'archive']);
@@ -178,7 +180,7 @@ final class Frontend
                 if ($termSlug === null || !($term = Terms::findBySlug($slug, $termSlug))) {
                     continue;
                 }
-                $result = Posts::query(['type' => $tax['post_types'] ?: ['post'], 'term' => [$term['id']], 'page' => $page, 'with_terms' => true]);
+                $result = Posts::query(self::$listQuery = ['type' => $tax['post_types'] ?: ['post'], 'term' => [$term['id']], 'page' => $page, 'with_terms' => true]);
                 Seo::$ctx = ['kind' => 'term', 'term' => $term, 'page' => $page, 'items' => $result['items'], 'per_page' => (int)Options::get('posts_per_page', 10)];
                 self::output('taxonomy', ['result' => $result, 'term' => $term, 'taxonomy' => $tax, 'title' => $term['name']],
                     ["taxonomy-$slug-{$term['slug']}", "taxonomy-$slug", 'taxonomy', 'archive']);
@@ -300,6 +302,15 @@ final class Frontend
         self::$data = array_merge(self::$data, $vars, ['kind' => $kind]);
         $tpl = self::template($kind, $vars);
         PageEditor::begin($tpl); // a team member editing this item on the page (never for visitors)
+        // An archive template's {{#posts per_page=… orderby=… order=…}} changes the page's list (nothing when it sets none).
+        if ($tpl && self::$listQuery !== null && isset($vars['result']) && ($pa = Templates::postsArgs($tpl, PageEditor::listOverride()))) {
+            $vars['result'] = Posts::query(array_merge(self::$listQuery, $pa));
+            self::$data['result'] = $vars['result'];
+            if (isset(Seo::$ctx['items'])) {
+                Seo::$ctx['items'] = $vars['result']['items'];
+                Seo::$ctx['per_page'] = (int)($pa['limit'] ?? Seo::$ctx['per_page'] ?? 10);
+            }
+        }
         if ($kind === 'single' && isset($vars['post']) && HtmlPages::active($vars['post'])) {
             // Imported or AI-written page: served as its own document with its own design.
             $html = HtmlPages::render($vars['post'], self::templateContext($kind, $vars));

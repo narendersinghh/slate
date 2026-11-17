@@ -674,3 +674,83 @@ test('Goraiya: delete a section, undo it, delete again and save', async ({ page 
   expect(html).not.toContain('class="swiper"');
   expect(html).toContain('class="cards"');
 });
+
+// ---------------------------------------------------------------- List settings: loops of the page's template
+
+async function openListOf(page, url, itemSelector) {
+  await login(page);
+  await page.goto(`${BASE}${url}`);
+  await page.click('#se-toggle');
+  await page.hover(itemSelector);
+  await expect(page.locator('.se-hover .se-tagname')).toHaveText(/click for list settings/);
+  await page.click(itemSelector);
+  await expect(page.locator('#se-panel-title')).toHaveText('List settings');
+}
+const listStatus = (page) => page.locator('.se-lstatus');
+
+test('list settings: post type, taxonomy filter, sort and limit with a live preview, save, undo', async ({ page }) => {
+  const before = run('template pepagetpl');
+  await openListOf(page, PAGE.tpl.url, '.t-item >> nth=0');
+  await expect(page.locator('.se-pb code')).toHaveText('{{#query type=post limit=2 orderby=title order=asc}}');
+  await page.selectOption('#se-lf-type', 'penote');
+  await expect(listStatus(page)).toHaveText(/Preview updated/);
+  await page.selectOption('[data-lk="terms"] [data-tf-tax]', 'petag');
+  await page.locator('[data-lk="terms"] [data-tf-terms] input[value="red"]').check();
+  await page.selectOption('#se-lf-order', 'desc');
+  await page.fill('#se-lf-limit', '1');
+  await page.locator('#se-lf-limit').dispatchEvent('change');
+  await expect(page.locator('.t-list .t-item')).toHaveText(['PE note Three']);
+  await expect(listStatus(page)).toHaveText(/Preview updated/);
+  await page.screenshot({ path: `${SHOTS}/pe-list-settings.png` });
+  await Promise.all([page.waitForEvent('load'), page.click('[data-lact="save"]')]);
+  const after = run('template pepagetpl');
+  expect(after.html).toBe(before.html.replace('{{#query type=post limit=2 orderby=title order=asc}}', '{{#query type=penote limit=1 orderby=title order=desc terms=petag:red}}'));
+  const html = await visitorAt(PAGE.tpl.url);
+  expect(noMarks(html)).toBe(true);
+  expect(html).toMatch(/<div class="t-list"><h3 class="t-item">PE note Three<\/h3><\/div>/);
+  // Discarding a preview puts the list back; undo restores the template.
+  await expect(page.locator('[data-act="undo-tpl"]')).toBeVisible();
+  page.once('dialog', (d) => d.accept());
+  await Promise.all([page.waitForEvent('load'), page.click('[data-act="undo-tpl"]')]);
+  expect(run('template pepagetpl').html).toBe(before.html);
+});
+
+test('list settings: a relative date filter (last 30 days)', async ({ page }) => {
+  const before = run('template pepagetpl');
+  await openListOf(page, PAGE.tpl.url, '.t-item >> nth=0');
+  await page.selectOption('#se-lf-type', 'penote');
+  await page.selectOption('#se-lf-within', '30d');
+  await expect(page.locator('.t-list .t-item')).toHaveText(['PE note One', 'PE note Three']); // "Two" is 60 days old
+  await page.click('[data-lact="discard"]');
+  await expect(page.locator('.t-list .t-item').first()).toHaveText(/^Dyn post/);
+  await page.selectOption('#se-lf-type', 'penote');
+  await page.selectOption('#se-lf-within', '30d');
+  await expect(page.locator('.t-list .t-item')).toHaveText(['PE note One', 'PE note Three']);
+  await Promise.all([page.waitForEvent('load'), page.click('[data-lact="save"]')]);
+  expect(run('template pepagetpl').html).toBe(before.html.replace('{{#query type=post limit=2 orderby=title order=asc}}', '{{#query type=penote limit=2 orderby=title order=asc within=30d}}'));
+  expect(await visitorAt(PAGE.tpl.url)).toMatch(/<div class="t-list"><h3 class="t-item">PE note One<\/h3><h3 class="t-item">PE note Three<\/h3><\/div>/);
+  page.once('dialog', (d) => d.accept());
+  await Promise.all([page.waitForEvent('load'), page.click('[data-act="undo-tpl"]')]);
+  expect(run('template pepagetpl').html).toBe(before.html);
+});
+
+test('list settings: an archive {{#posts}} list, items per page and order', async ({ page }) => {
+  const A = PAGE.archive;
+  const before = run('template ' + A.template);
+  const visitorBefore = await visitorAt(A.url);
+  expect(visitorBefore.match(/class="pa-item"/g).length).toBe(3);
+  await openListOf(page, A.url, '.pa-item >> nth=0');
+  await page.fill('#se-lf-per_page', '2');
+  await page.selectOption('#se-lf-orderby', 'title');
+  await page.selectOption('#se-lf-order', 'asc');
+  await expect(page.locator('.pa-list .pa-item')).toHaveText(['PE note One', 'PE note Three']);
+  await Promise.all([page.waitForEvent('load'), page.click('[data-lact="save"]')]);
+  expect(run('template ' + A.template).html).toBe(before.html.replace('{{#posts}}', '{{#posts orderby=title order=asc per_page=2}}'));
+  const html = await visitorAt(A.url);
+  expect(noMarks(html)).toBe(true);
+  expect(html).toMatch(/<div class="pa-list"><h3 class="pa-item">PE note One<\/h3><h3 class="pa-item">PE note Three<\/h3><\/div>/);
+  page.once('dialog', (d) => d.accept());
+  await Promise.all([page.waitForEvent('load'), page.click('[data-act="undo-tpl"]')]);
+  expect(run('template ' + A.template).html).toBe(before.html);
+  expect(await visitorAt(A.url)).toBe(visitorBefore);
+});

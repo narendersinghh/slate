@@ -114,6 +114,7 @@ Hooks::add('module_updated_my-shop', fn(string $from, string $to) => null);
 | `settings_tabs`, `settings_saved` | filter / action | add settings screens |
 | `seo_title`, `seo_description`, `seo_robots`, `seo_head`, `seo_schema`, `seo_schema_node` | filter | SEO output |
 | `template_tag`, `template_lookup`, `template_block` | filter | add `{{tags}}`, conditions and `{{#blocks}}` to Templates |
+| `template_block_args` | filter | `($schema, $name, $args)`: describe a `{{#block}}`'s settings so team members can change them on the page (List settings); return `['label' => …, 'args' => ['key' => ['label' => …, 'type' => select\|number\|toggle\|text\|date\|taxonomy\|post_type\|terms, 'options' => [value => label], 'taxonomy_arg' => 'taxonomy']]]` |
 | `design_system_css` | filter | CSS variables of the design system |
 | `modules_loaded` | action | every active module is loaded |
 | `webhook_events` | filter | add events (then `Webhooks::dispatch('shop.order_paid', $data)`) |

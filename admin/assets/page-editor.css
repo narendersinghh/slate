@@ -7,6 +7,8 @@ html.se-editing [data-se], html.se-editing [data-se-loop] { cursor: pointer; }
 html.se-editing [data-se][contenteditable="true"] { cursor: text; outline: none !important; caret-color: #F26B2D; -webkit-user-select: text; user-select: text; }
 html.se-editing [data-se][contenteditable="true"] * { -webkit-user-select: text; user-select: text; }
 html.se-editing a[data-se], html.se-editing [data-se] a { -webkit-user-drag: none; }
+html.se-editing .se-empty-list { display: block; margin: 8px 0; padding: 14px 16px; border: 1.5px dashed rgba(122, 116, 108, .6); border-radius: 10px;
+  background: rgba(122, 116, 108, .06); color: #5f5952; font: 500 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center; cursor: pointer; }
 #slate-bar #se-toggle[aria-pressed="true"] { background: #fff; color: #0D0D0E; }
 
 /* ---------- editor UI (inside the shadow root) ----------
@@ -258,3 +260,17 @@ textarea.se-input { resize: vertical; line-height: 1.45; }
   .se-count { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .se-busy::after { animation: none; } .se-btn { transition: none; } }
+
+/* List settings */
+.se-lform .se-sect:first-child { margin-top: 16px; }
+.se-lrow { margin: 12px 0 0; }
+.se-tf { display: grid; gap: 8px; }
+.se-termlist { display: grid; gap: 8px; max-height: 180px; overflow: auto; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); }
+.se-termlist:empty { display: none; }
+.se-termlist .se-check { min-width: 0; overflow-wrap: anywhere; }
+.se-termlist .se-check .se-hint { margin: 0 0 0 auto; }
+.se-termlist select.se-input { background: var(--surface); }
+.se-itemrow { margin: 12px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); }
+.se-itemrow .se-hint { margin: 0; }
+.se-itemrow .se-row { margin-top: 8px; }
+.se-lstatus { margin-top: 16px; }

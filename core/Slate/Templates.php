@@ -30,6 +30,16 @@ namespace Slate;
  *   {{#each related:field}} … post tags … {{/each}}      (relationship field posts)
  *   {{#posts}} … post tags … {{else}} No items {{/posts}}  (items of the current archive / term / search)
  *   {{#query type=product limit=6 orderby=title order=asc term=category:featured}} … {{/query}}
+ *     more {{#query}} args (all optional, unknown keys are ignored):
+ *       offset=3                     skip the first items
+ *       terms=category:news,events   in any of these terms      not_terms=category:old   in none of them
+ *       same_term=category           shares a term of this taxonomy with the current item
+ *       author=7 | author=current    by this author / by the current item's author
+ *       after=2026-01-01 before=2026-12-31   within=30d (7d, 12w, 6m, 1y: the last…)   upcoming=1 (from today on)
+ *       date_field=event_date        the date filters use this date field instead of the publish date
+ *       field=price op=gt value=10   op: eq (default) ne contains gt gte lt lte
+ *       has_image=1   exclude_current=1   orderby=published_at|updated_at|title|menu_order|random|field:name  numeric=1
+ *   {{#posts per_page=12 orderby=title order=asc}} on archives sets that page's list (per page, order), see postsArgs()
  *   {{#terms taxonomy=category limit=12 orderby=name|count|id|slug order=asc hide_empty=1}} {{item.name}} {{item.url}} {{item.count}}
  *       {{item.description|strip}} {{item.fields.photo|image_url}} {{/terms}}   (all terms of a taxonomy)
  */
@@ -49,6 +59,8 @@ final class Templates
     public static ?array $bind = null;
     /** Bound values found while rendering: key => kind (text|textarea|html|image). */
     public static array $bound = [];
+    /** List blocks of the page's template seen while editing: index => ['name', 'args']. */
+    public static array $lists = [];
     /** Items shown by lists while editing (for "Comes from …" hints): ['post' => [id => true], 'term' => [id => true]]. */
     public static array $items = ['post' => [], 'term' => []];
     private static bool $binding = false;
@@ -271,7 +283,7 @@ final class Templates
             $expr = trim($tok[3][0] ?? '');
             if ($sigil === '#') {
                 [$name, $args] = array_pad(preg_split('/\s+/', $expr, 2), 2, '');
-                $tokens[] = ['open', $name, trim((string)$args), $where];
+                $tokens[] = ['open', $name, trim((string)$args), $where, in_array($name, ['if', 'unless'], true) ? null : ($bi = ($bi ?? -1) + 1)];
             } elseif ($sigil === '/') {
                 $tokens[] = ['close'];
             } elseif ($expr === 'else') {
@@ -373,6 +385,9 @@ final class Templates
                     $node = ['t' => 'block', 'name' => $t[1], 'args' => $t[2], 'children' => $inner['children'], 'else' => $inner['else']];
                     if ($bindable && ($t[3] ?? '') === 'text') {
                         $node['w'] = true;
+                        if (isset($t[4])) {
+                            $node['bi'] = $t[4]; // index among the template's list blocks (blockTokens())
+                        }
                     }
                     if ($else !== null) {
                         $else[] = $node;
@@ -434,6 +449,16 @@ final class Templates
                 continue;
             }
             if ($n['t'] === 'block') {
+                if (isset($n['bi'])) {
+                    // A list of the page's template: marked for "List settings"; a preview may try other args.
+                    $over = PageEditor::listOverride();
+                    if ($over && $over['index'] === $n['bi'] && $over['name'] === $n['name']) {
+                        $n['args'] = $over['args'];
+                    }
+                    self::$lists[$n['bi']] = ['name' => $n['name'], 'args' => $n['args']];
+                    $parts[$i] = '<!--se:list:b' . $n['bi'] . '-->' . self::block($n, $ctx) . '<!--/se:list-->';
+                    continue;
+                }
                 $html = self::block($n, $ctx);
                 $parts[$i] = !empty($n['w']) && !in_array($n['name'], ['if', 'unless'], true) && $html !== '' ? '<!--se:list-->' . $html . '<!--/se:list-->' : $html;
                 continue;
@@ -575,6 +600,7 @@ final class Templates
                 if (!empty($args['exclude_current']) && !empty($ctx['post']['id'])) {
                     $q['exclude'] = [(int)$ctx['post']['id']];
                 }
+                $q = self::queryArgs($args, $ctx, $q);
                 $items = Posts::query($q)['items'];
                 $out = '';
                 foreach ($items as $i => $p) {
@@ -616,6 +642,129 @@ final class Templates
         $html = Hooks::filter('template_block', null, $n['name'], self::args($n['args']), $ctx,
             static fn(array $c) => self::renderNodes($n['children'], $c), static fn(array $c) => self::renderNodes($n['else'] ?? [], $c));
         return is_string($html) ? $html : '';
+    }
+
+    /** The extra {{#query}} args (see the header) as Posts::query() args. Values are checked; anything else is ignored. */
+    private static function queryArgs(array $args, array $ctx, array $q): array
+    {
+        $slugs = static function (string $v): array {
+            if (!preg_match('/^([a-z0-9_-]+):([a-z0-9_,-]+)$/i', $v, $m) || !ContentModel::taxonomy($m[1])) {
+                return [];
+            }
+            return array_values(array_filter(array_map(static fn($s) => Terms::findBySlug($m[1], $s)['id'] ?? null, array_filter(explode(',', $m[2])))));
+        };
+        if (isset($args['offset'])) {
+            $q['offset'] = max(0, min(500, (int)$args['offset']));
+        }
+        if (!empty($args['terms'])) {
+            $ids = $slugs((string)$args['terms']);
+            $q['term'] = array_values(array_unique(array_merge(is_array($q['term'] ?? null) && isset($q['taxonomy'])
+                ? array_values(array_filter(array_map(static fn($s) => Terms::findBySlug($q['taxonomy'], (string)$s)['id'] ?? null, $q['term']))) : [], $ids ?: [0])));
+            unset($q['taxonomy']);
+        }
+        if (!empty($args['not_terms']) && ($ids = $slugs((string)$args['not_terms']))) {
+            $q['exclude_term'] = $ids;
+        }
+        if (!empty($args['same_term']) && ContentModel::taxonomy((string)$args['same_term'])) {
+            $mine = array_column(self::postTerms($ctx['post'] ?? null, (string)$args['same_term']), 'id');
+            $q['term'] = array_map('intval', $mine ?: [0]);
+            unset($q['taxonomy']);
+        }
+        if (!empty($args['author'])) {
+            $a = $args['author'] === 'current' ? (int)($ctx['post']['author_id'] ?? 0) : (int)$args['author'];
+            $q['author'] = $a ?: -1;
+        }
+        $df = (string)($args['date_field'] ?? '');
+        if ($df !== '' && preg_match('/^[A-Za-z0-9_]{1,60}$/', $df)) {
+            $q['date_field'] = $df;
+        }
+        $fmt = $df !== '' ? 'Y-m-d' : 'Y-m-d H:i:s';
+        foreach (['after' => 'date_from', 'before' => 'date_to'] as $a => $k) {
+            if (!empty($args[$a]) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$args[$a])) {
+                $q[$k] = (string)$args[$a] . ($df === '' ? ($a === 'after' ? ' 00:00:00' : ' 23:59:59') : '');
+            }
+        }
+        if (!empty($args['within']) && preg_match('/^(\d{1,4})([dwmy])$/', (string)$args['within'], $w)) {
+            $unit = ['d' => 'day', 'w' => 'week', 'm' => 'month', 'y' => 'year'][$w[2]];
+            $q['date_from'] = gmdate($fmt, (int)strtotime('-' . (int)$w[1] . ' ' . $unit));
+            $q['date_to'] ??= gmdate($fmt);
+        }
+        if (!empty($args['upcoming'])) {
+            $q['date_from'] = gmdate($fmt);
+        }
+        if (!empty($args['field']) && preg_match('/^[A-Za-z0-9_]{1,60}$/', (string)$args['field']) && isset($args['value'])) {
+            $op = in_array($args['op'] ?? 'eq', ['eq', 'ne', 'contains', 'gt', 'gte', 'lt', 'lte'], true) ? (string)($args['op'] ?? 'eq') : 'eq';
+            $q['field_compare'] = [[(string)$args['field'], $op, mb_substr((string)$args['value'], 0, 200)]];
+        }
+        if (!empty($args['has_image'])) {
+            $q['has_image'] = true;
+        }
+        if (!empty($args['numeric'])) {
+            $q['numeric'] = true;
+        }
+        return $q;
+    }
+
+    /**
+     * The template's list blocks in source order (everything but if/unless), with the exact bytes of their opening tag:
+     * [['index', 'name', 'args', 'start', 'end'], …]. The same order as the block indexes parse() gives while editing.
+     */
+    public static function blockTokens(string $src): array
+    {
+        preg_match_all('/\{\{\{\s*(.+?)\s*\}\}\}|\{\{\s*([#\/]?)([^{}]*?)\s*\}\}/s', $src, $m, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
+        $out = [];
+        foreach ($m as $tok) {
+            if (isset($tok[1]) && $tok[1][1] !== -1 && $tok[1][0] !== '') {
+                continue;
+            }
+            if (($tok[2][0] ?? '') !== '#') {
+                continue;
+            }
+            [$name, $args] = array_pad(preg_split('/\s+/', trim($tok[3][0]), 2), 2, '');
+            if (in_array($name, ['if', 'unless'], true)) {
+                continue;
+            }
+            $out[] = ['index' => count($out), 'name' => $name, 'args' => trim((string)$args), 'start' => $tok[0][1], 'end' => $tok[0][1] + strlen($tok[0][0])];
+        }
+        return $out;
+    }
+
+    /** Parsed args of a block tag ("type=post limit=3 value=\"a b\"") in order. */
+    public static function parseArgs(string $s): array
+    {
+        return self::args($s);
+    }
+
+    /**
+     * {{#posts per_page=12 orderby=title order=asc}} on an archive template: the archive query's changes, or [] when the
+     * template sets none (the archive then stays exactly as before). $override: a preview from the page editor.
+     */
+    public static function postsArgs(array $tpl, ?array $override = null): array
+    {
+        foreach (self::blockTokens((string)$tpl['html']) as $b) {
+            if ($b['name'] !== 'posts') {
+                continue;
+            }
+            $args = self::args($override && $override['index'] === $b['index'] && $override['name'] === 'posts' ? $override['args'] : $b['args']);
+            $q = [];
+            if (isset($args['per_page'])) {
+                $q['limit'] = max(1, min(100, (int)$args['per_page']));
+            }
+            if (!empty($args['orderby'])) {
+                $ob = (string)$args['orderby'];
+                if (in_array($ob, ['published_at', 'updated_at', 'title', 'menu_order', 'created_at', 'random'], true) || preg_match('/^field:[A-Za-z0-9_]{1,60}$/', $ob)) {
+                    $q['orderby'] = $ob;
+                }
+            }
+            if (!empty($args['order'])) {
+                $q['order'] = strtolower((string)$args['order']) === 'asc' ? 'ASC' : 'DESC';
+            }
+            if (!empty($args['numeric'])) {
+                $q['numeric'] = true;
+            }
+            return $q;
+        }
+        return [];
     }
 
     /** Dotted path into nested arrays: "fields.color". */

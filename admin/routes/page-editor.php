@@ -92,6 +92,24 @@ return static function (Router $r): void {
         log_activity('template_edited_on_page', (string)$now['name']);
         json_response(['ok' => true, 'updated' => (string)$now['updated_at'], 'versions' => count(\Slate\Templates::versions($id))]);
     });
+    // List settings: new args for one list block of the template ({block: "b3", values: {...}, base}).
+    $r->post('/page-editor/template/{id:[a-z0-9]+}/list', static function (string $id) use ($tpl) {
+        $t = $tpl($id);
+        $in = json_input();
+        $base = (string)($in['base'] ?? '');
+        if ($base !== '' && $base !== (string)($t['updated_at'] ?? '')) {
+            json_response(['ok' => false, 'conflict' => true, 'error' => 'This template was changed since you opened the page. Reload to get the latest version.'], 409);
+        }
+        if (!preg_match('/^b(\d{1,4})$/', (string)($in['block'] ?? ''), $m) || !is_array($in['values'] ?? null)) {
+            json_response(['ok' => false, 'error' => 'Nothing to save.'], 422);
+        }
+        if ($err = PageEditor::saveList($t, (int)$m[1], $in['values'])) {
+            json_response(['ok' => false, 'error' => $err], 422);
+        }
+        $now = \Slate\Templates::find($id);
+        log_activity('template_list_edited', (string)$now['name']);
+        json_response(['ok' => true, 'updated' => (string)$now['updated_at'], 'versions' => count(\Slate\Templates::versions($id))]);
+    });
     $r->post('/page-editor/template/{id:[a-z0-9]+}/undo', static function (string $id) use ($tpl) {
         $t = $tpl($id);
         if (!\Slate\Templates::undo($id)) {

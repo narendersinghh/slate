@@ -145,6 +145,50 @@ final class Posts
             }
             $where[] = $ph ? "$col IN (" . implode(',', $ph) . ')' : '1 = 0';
         }
+        // Items in none of these terms: 'exclude_term' => [term ids].
+        if (!empty($args['exclude_term'])) {
+            [$in, $p] = DB::in(array_map('intval', (array)$args['exclude_term']), 'xterm');
+            $where[] = "p.id NOT IN (SELECT xtr.post_id FROM {{term_relationships}} xtr WHERE xtr.term_id IN ($in))";
+            $params += $p;
+        }
+        // Only items with a featured image.
+        if (!empty($args['has_image'])) {
+            $where[] = 'p.featured_media_id IS NOT NULL AND p.featured_media_id > 0';
+        }
+        // Date range on the publish date or on a date field: 'date_from' / 'date_to' ('Y-m-d' or 'Y-m-d H:i:s'), 'date_field' => name.
+        if (!empty($args['date_from']) || !empty($args['date_to'])) {
+            $dcol = !empty($args['date_field']) && preg_match('/^[A-Za-z0-9_]+$/', (string)$args['date_field']) ? DB::jsonField('p.fields', (string)$args['date_field']) : 'p.published_at';
+            foreach (['date_from' => '>=', 'date_to' => '<='] as $k => $opr) {
+                if (!empty($args[$k]) && preg_match('/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/', (string)$args[$k])) {
+                    $where[] = "$dcol $opr :$k";
+                    $params[$k] = (string)$args[$k];
+                }
+            }
+        }
+        // Custom-field comparisons: 'field_compare' => [[name, op (eq|ne|contains|gt|gte|lt|lte), value], …].
+        foreach (array_values((array)($args['field_compare'] ?? [])) as $ci => $fc) {
+            [$name, $op, $value] = array_pad(array_values((array)$fc), 3, '');
+            if (!is_string($name) || !preg_match('/^[A-Za-z0-9_]+$/', $name) || !is_scalar($value)) {
+                continue;
+            }
+            $col = DB::jsonField('p.fields', $name);
+            $key = 'fc' . $ci;
+            $value = (string)$value;
+            if ($op === 'contains') {
+                $where[] = "$col LIKE :$key";
+                $params[$key] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $value) . '%';
+            } elseif (in_array($op, ['gt', 'gte', 'lt', 'lte'], true)) {
+                $sym = ['gt' => '>', 'gte' => '>=', 'lt' => '<', 'lte' => '<='][$op];
+                $where[] = is_numeric($value) ? "CAST($col AS DECIMAL(20,6)) $sym :$key" : "$col $sym :$key";
+                $params[$key] = is_numeric($value) ? $value + 0 : $value;
+            } elseif ($op === 'ne') {
+                $where[] = "($col IS NULL OR $col <> :$key)";
+                $params[$key] = $value;
+            } else {
+                $where[] = "$col = :$key";
+                $params[$key] = $value;
+            }
+        }
         // Search-engine visibility set on the item: 'noindex' => true (hidden) / false (indexable).
         if (isset($args['noindex'])) {
             $col = DB::jsonField('p.seo', 'robots_index');
@@ -164,13 +208,15 @@ final class Posts
         if (is_string($args['orderby'] ?? null) && preg_match('/^field:([A-Za-z0-9_]+)$/', $args['orderby'], $fm)) {
             $expr = DB::jsonField('p.fields', $fm[1]);
             $orderSql = (!empty($args['numeric']) ? "CAST($expr AS DECIMAL(20,6))" : $expr) . " $order";
+        } elseif (($args['orderby'] ?? '') === 'random') {
+            $orderSql = DB::$driver === 'sqlite' ? 'RANDOM()' : 'RAND()';
         } else {
             $orderby = in_array($args['orderby'] ?? '', self::ORDERBY, true) ? $args['orderby'] : 'published_at';
             $orderSql = "p.$orderby $order";
         }
         $limit = max(1, min(500, (int)($args['limit'] ?? Options::get('posts_per_page', 10))));
         $page = max(1, (int)($args['page'] ?? 1));
-        $offset = ($page - 1) * $limit;
+        $offset = ($page - 1) * $limit + max(0, min(10000, (int)($args['offset'] ?? 0)));
 
         $whereSql = implode(' AND ', $where);
         $distinct = $joins ? 'DISTINCT ' : '';

@@ -776,6 +776,327 @@ final class PageEditor
         return self::$tplAnn['html'];
     }
 
+    // ------------------------------------------------------------------ list settings (loop blocks of the page's template)
+
+    private static array|false|null $override = null;
+
+    /**
+     * A list preview requested by the page editor (?se-list=b3&se-args={json}): ['index', 'name', 'args' => string]
+     * with the args checked exactly like a save. Null for everyone else.
+     */
+    public static function listOverride(): ?array
+    {
+        if (self::$override !== null) {
+            return self::$override ?: null;
+        }
+        self::$override = false;
+        if (!self::$tplEdit || !isset($_GET['se-list'], $_GET['se-args']) || !preg_match('/^b(\d{1,4})$/', (string)$_GET['se-list'], $m)) {
+            return null;
+        }
+        $vals = json_decode((string)$_GET['se-args'], true);
+        $tok = Templates::blockTokens((string)self::$tplEdit['html'])[(int)$m[1]] ?? null;
+        if (!$tok || !is_array($vals)) {
+            return null;
+        }
+        $res = self::listArgs($tok, $vals);
+        if (!isset($res['args'])) {
+            return null;
+        }
+        return self::$override = ['index' => $tok['index'], 'name' => $tok['name'], 'args' => (string)$res['args']];
+    }
+
+    /** Lists of the template seen on this page, with what can be changed (for the editor's "List settings"). */
+    private static function listsConfig(): array
+    {
+        $toks = Templates::blockTokens((string)self::$tplEdit['html']);
+        $out = [];
+        foreach (Templates::$lists as $i => $seen) {
+            $tok = $toks[$i] ?? null;
+            if (!$tok) {
+                continue;
+            }
+            $schema = self::blockSchema($tok['name'], $tok['args']);
+            $out['b' . $i] = ['name' => $tok['name'], 'tag' => '{{#' . $tok['name'] . ($tok['args'] !== '' ? ' ' . $tok['args'] : '') . '}}',
+                'label' => $schema['label'] ?? self::blockLabel($tok['name'], $tok['args']), 'schema' => $schema,
+                'values' => $schema ? self::schemaValues($schema, $tok['name'], $tok['args']) : (object)[],
+                'reason' => $schema ? null : self::readOnlyReason($tok['name'])];
+        }
+        return $out;
+    }
+
+    private static function blockLabel(string $name, string $args): string
+    {
+        return match ($name) {
+            'query' => 'List of items', 'posts' => 'This page\'s list of items', 'terms' => 'List of terms',
+            'each' => str_starts_with($args, 'related:') ? 'Related items' : (str_starts_with($args, 'terms:') ? 'This item\'s terms' : 'Repeating field'),
+            default => 'List from a module ({{#' . $name . '}})',
+        };
+    }
+
+    private static function readOnlyReason(string $name): string
+    {
+        return in_array($name, ['each'], true)
+            ? 'This list shows a field of the item; its settings cannot be changed here.'
+            : 'The {{#' . $name . '}} list is drawn by a module that does not describe its settings, so they cannot be changed here. What it shows is set by the module or in Templates.';
+    }
+
+    /**
+     * What a block's settings are, as a small schema: ['label', 'groups' => [['label', 'fields' => [[key, label, type,
+     * options?, min?, max?, help?, taxonomy?|taxonomy_arg?]]]]]. Types: select, number, toggle, date, text, post_type,
+     * taxonomy, termfilter (taxonomy:slug,slug), terms (slugs of one taxonomy), cfield, datefield, orderby.
+     * Modules describe their blocks with the "template_block_args" filter (same shape, or ['label', 'args' => [key => field]]).
+     */
+    public static function blockSchema(string $name, string $args): ?array
+    {
+        $within = ['' => 'Any time', '7d' => 'Last 7 days', '30d' => 'Last 30 days', '90d' => 'Last 90 days', '6m' => 'Last 6 months', '1y' => 'Last year'];
+        $order = ['desc' => 'Descending (newest, Z to A, highest first)', 'asc' => 'Ascending (oldest, A to Z, lowest first)'];
+        if ($name === 'query') {
+            return ['label' => 'List of items', 'groups' => [
+                ['label' => 'Source', 'fields' => [['key' => 'type', 'label' => 'Content type', 'type' => 'post_type', 'default' => 'post']]],
+                ['label' => 'Filters', 'fields' => [
+                    ['key' => 'terms', 'label' => 'Only items in', 'type' => 'termfilter'],
+                    ['key' => 'not_terms', 'label' => 'Leave out items in', 'type' => 'termfilter'],
+                    ['key' => 'same_term', 'label' => 'Same term as the current item', 'type' => 'taxonomy', 'empty' => 'No'],
+                    ['key' => 'author', 'label' => 'Author', 'type' => 'select', 'options' => ['' => 'Anyone', 'current' => 'The current item\'s author'] + self::authors()],
+                    ['key' => 'within', 'label' => 'Published', 'type' => 'select', 'options' => $within],
+                    ['key' => 'after', 'label' => 'From', 'type' => 'date'],
+                    ['key' => 'before', 'label' => 'Until', 'type' => 'date'],
+                    ['key' => 'upcoming', 'label' => 'Upcoming only (from today on)', 'type' => 'toggle'],
+                    ['key' => 'date_field', 'label' => 'Dates use', 'type' => 'datefield'],
+                    ['key' => 'field', 'label' => 'Field', 'type' => 'cfield', 'empty' => 'No field filter'],
+                    ['key' => 'op', 'label' => 'Condition', 'type' => 'select', 'options' => ['eq' => 'equals', 'ne' => 'is not', 'contains' => 'contains', 'gt' => 'greater than', 'gte' => 'at least', 'lt' => 'less than', 'lte' => 'at most']],
+                    ['key' => 'value', 'label' => 'Value', 'type' => 'text'],
+                    ['key' => 'has_image', 'label' => 'Only items with a featured image', 'type' => 'toggle'],
+                    ['key' => 'exclude_current', 'label' => 'Leave out the current item', 'type' => 'toggle'],
+                ]],
+                ['label' => 'Sort', 'fields' => [
+                    ['key' => 'orderby', 'label' => 'Sort by', 'type' => 'orderby'],
+                    ['key' => 'numeric', 'label' => 'Sort field values as numbers', 'type' => 'toggle'],
+                    ['key' => 'order', 'label' => 'Direction', 'type' => 'select', 'options' => $order],
+                ]],
+                ['label' => 'How many', 'fields' => [
+                    ['key' => 'limit', 'label' => 'Show', 'type' => 'number', 'min' => 1, 'max' => 50, 'default' => 6],
+                    ['key' => 'offset', 'label' => 'Skip the first', 'type' => 'number', 'min' => 0, 'max' => 500],
+                ]],
+            ]];
+        }
+        if ($name === 'posts') {
+            return ['label' => 'This page\'s list of items', 'groups' => [
+                ['label' => 'Sort', 'fields' => [
+                    ['key' => 'orderby', 'label' => 'Sort by', 'type' => 'orderby', 'empty' => 'Default'],
+                    ['key' => 'numeric', 'label' => 'Sort field values as numbers', 'type' => 'toggle'],
+                    ['key' => 'order', 'label' => 'Direction', 'type' => 'select', 'options' => ['' => 'Default'] + $order],
+                ]],
+                ['label' => 'How many', 'fields' => [['key' => 'per_page', 'label' => 'Items per page', 'type' => 'number', 'min' => 1, 'max' => 100,
+                    'placeholder' => (string)Options::get('posts_per_page', 10)]]],
+            ]];
+        }
+        if ($name === 'terms') {
+            return ['label' => 'List of terms', 'groups' => [
+                ['label' => 'Source', 'fields' => [['key' => 'taxonomy', 'label' => 'Taxonomy', 'type' => 'taxonomy']]],
+                ['label' => 'Filters', 'fields' => [
+                    ['key' => 'parent', 'label' => 'Only children of', 'type' => 'terms', 'taxonomy_arg' => 'taxonomy', 'single' => true],
+                    ['key' => 'hide_empty', 'label' => 'Hide terms without items', 'type' => 'toggle'],
+                ]],
+                ['label' => 'Sort', 'fields' => [
+                    ['key' => 'orderby', 'label' => 'Sort by', 'type' => 'select', 'options' => ['name' => 'Name', 'count' => 'Number of items', 'id' => 'Newest', 'slug' => 'Slug']],
+                    ['key' => 'order', 'label' => 'Direction', 'type' => 'select', 'options' => ['' => 'Default'] + $order],
+                ]],
+                ['label' => 'How many', 'fields' => [['key' => 'limit', 'label' => 'Show', 'type' => 'number', 'min' => 1, 'max' => 100, 'default' => 12]]],
+            ]];
+        }
+        if ($name === 'each') {
+            if (preg_match('/^related:/', $args)) {
+                $opts = [];
+                foreach (ContentModel::fieldGroups() as $g) {
+                    foreach ($g['fields'] ?? [] as $f) {
+                        if (($f['type'] ?? '') === 'relation') {
+                            $opts['related:' . $f['name']] = (string)($f['label'] ?? $f['name']);
+                        }
+                    }
+                }
+                return $opts ? ['label' => 'Related items', 'positional' => true, 'groups' => [['label' => 'Source', 'fields' => [
+                    ['key' => '_', 'label' => 'Relationship field', 'type' => 'select', 'options' => $opts]]]]] : null;
+            }
+            if (preg_match('/^terms:/', $args)) {
+                $opts = [];
+                foreach (ContentModel::taxonomies() as $tx => $t) {
+                    $opts['terms:' . $tx] = (string)($t['plural'] ?? $tx);
+                }
+                return ['label' => 'This item\'s terms', 'positional' => true, 'groups' => [['label' => 'Source', 'fields' => [
+                    ['key' => '_', 'label' => 'Taxonomy', 'type' => 'select', 'options' => $opts]]]]];
+            }
+            return null;
+        }
+        if (in_array($name, ['if', 'unless'], true)) {
+            return null;
+        }
+        $mod = Hooks::filter('template_block_args', null, $name, Templates::parseArgs($args));
+        if (!is_array($mod)) {
+            return null;
+        }
+        if (isset($mod['args']) && !isset($mod['groups'])) {
+            $fields = [];
+            foreach ((array)$mod['args'] as $k => $f) {
+                $fields[] = ['key' => (string)$k] + (array)$f;
+            }
+            $mod = ['label' => (string)($mod['label'] ?? $name), 'groups' => [['label' => 'Settings', 'fields' => $fields]]];
+        }
+        return $mod;
+    }
+
+    private static function authors(): array
+    {
+        $out = [];
+        foreach (DB::all('SELECT id, display_name, username FROM {{users}} ORDER BY display_name LIMIT 200') as $u) {
+            $out[(string)$u['id']] = (string)($u['display_name'] ?: $u['username']);
+        }
+        return $out;
+    }
+
+    /** Current values of a block's settings (from its args). */
+    private static function schemaValues(array $schema, string $name, string $args): object
+    {
+        $a = Templates::parseArgs($args);
+        $v = [];
+        foreach ($schema['groups'] as $g) {
+            foreach ($g['fields'] as $f) {
+                $k = (string)$f['key'];
+                if (!empty($schema['positional'])) {
+                    $v[$k] = trim($args);
+                } elseif ($k === 'terms' && !isset($a['terms']) && isset($a['term'])) {
+                    $v[$k] = (string)$a['term']; // the older single-term arg shows here
+                } elseif (isset($a[$k])) {
+                    $v[$k] = (string)$a[$k];
+                }
+            }
+        }
+        if ($name === 'query' && !isset($v['type'])) {
+            $v['type'] = 'post';
+        }
+        return (object)$v;
+    }
+
+    /** Field names of a post type (or all public types) for field filters and sorting. */
+    private static function fieldNames(string $types, ?string $only = null): array
+    {
+        $names = [];
+        $list = array_filter(explode(',', $types)) ?: array_keys(ContentModel::types());
+        foreach ($list as $t) {
+            foreach (ContentModel::fieldsFor('post', $t) as $n => $f) {
+                if ($only === null || in_array($f['type'] ?? 'text', $only === 'date' ? ['date', 'datetime'] : [$only], true)) {
+                    $names[] = (string)$n;
+                }
+            }
+        }
+        return $names;
+    }
+
+    /**
+     * Check new setting values against the block's schema and build the new args string: keys the schema does not know
+     * stay exactly as they were (and where they were). Returns ['args' => string] or ['error' => message].
+     */
+    public static function listArgs(array $tok, array $vals): array
+    {
+        $schema = self::blockSchema($tok['name'], $tok['args']);
+        if (!$schema) {
+            return ['error' => 'This list cannot be changed here.'];
+        }
+        if (!empty($schema['positional'])) {
+            $f = $schema['groups'][0]['fields'][0];
+            $v = (string)($vals['_'] ?? '');
+            return isset($f['options'][$v]) ? ['args' => $v] : ['error' => 'Choose one of the options.'];
+        }
+        $old = Templates::parseArgs($tok['args']);
+        $new = $old;
+        $type = (string)($vals['type'] ?? $old['type'] ?? '');
+        foreach ($schema['groups'] as $g) {
+            foreach ($g['fields'] as $f) {
+                $k = (string)$f['key'];
+                if (!array_key_exists($k, $vals)) {
+                    continue;
+                }
+                $v = is_bool($vals[$k]) ? ($vals[$k] ? '1' : '') : trim((string)$vals[$k]);
+                $label = (string)($f['label'] ?? $k);
+                if ($v === '' || ($f['type'] === 'toggle' && $v === '0')) {
+                    unset($new[$k]);
+                    continue;
+                }
+                $ok = match ((string)$f['type']) {
+                    'select' => isset($f['options'][$v]),
+                    'number' => preg_match('/^\d{1,5}$/', $v) && (int)$v >= (int)($f['min'] ?? 0) && (int)$v <= (int)($f['max'] ?? 100000),
+                    'toggle' => in_array($v, ['1', 'true', 'on'], true),
+                    'date' => (bool)preg_match('/^\d{4}-\d{2}-\d{2}$/', $v),
+                    'text' => mb_strlen($v) <= 100 && !preg_match('/[{}"\r\n]/', $v),
+                    'post_type' => (bool)array_filter(explode(',', $v)) && !array_filter(explode(',', $v), static fn($t) => !(($d = ContentModel::type($t)) && !empty($d['public']))),
+                    'taxonomy' => ContentModel::taxonomy($v) !== null,
+                    'termfilter' => preg_match('/^([a-z0-9_-]+):([a-z0-9_,-]+)$/i', $v, $tm) && ContentModel::taxonomy($tm[1]) !== null,
+                    'terms' => (bool)preg_match(!empty($f['single']) ? '/^[a-z0-9_-]{1,100}$/i' : '/^[a-z0-9_,-]{1,500}$/i', $v),
+                    'cfield' => in_array($v, self::fieldNames($type), true),
+                    'datefield' => in_array($v, self::fieldNames($type, 'date'), true),
+                    'orderby' => in_array($v, ['published_at', 'updated_at', 'title', 'menu_order', 'random', 'created_at'], true)
+                        || (str_starts_with($v, 'field:') && in_array(substr($v, 6), self::fieldNames($type), true)),
+                    default => false,
+                };
+                if (!$ok) {
+                    return ['error' => '“' . $label . '” has a value that cannot be used.'];
+                }
+                if ($f['type'] === 'toggle') {
+                    $v = '1';
+                }
+                // A default the block already uses is not written out (the template only changes where settings change).
+                $default = isset($f['default']) ? (string)$f['default'] : ($f['type'] === 'select' && !isset($f['options'][''])
+                    ? (string)array_key_first((array)$f['options']) : null);
+                if (!isset($old[$k]) && $default !== null && $v === $default) {
+                    continue;
+                }
+                $new[$k] = $v;
+            }
+        }
+        // The older single-term arg becomes "terms" when the filter changes.
+        if ($tok['name'] === 'query' && isset($old['term']) && array_key_exists('terms', $vals)) {
+            if (($new['terms'] ?? '') === (string)$old['term']) {
+                unset($new['terms']);
+            } else {
+                unset($new['term']);
+            }
+        }
+        if (isset($new['field']) && !isset($new['value'])) {
+            return ['error' => 'Give the field filter a value.'];
+        }
+        $parts = [];
+        foreach ($new as $k => $v) {
+            $v = (string)$v;
+            $parts[] = $k . '=' . (preg_match('/^[^\s"{}]+$/', $v) ? $v : '"' . str_replace('"', '', $v) . '"');
+        }
+        return ['args' => implode(' ', $parts)];
+    }
+
+    /** Save new settings of list block $index: only that block's opening tag changes (the previous version is kept). */
+    public static function saveList(array $tpl, int $index, array $vals): ?string
+    {
+        $toks = Templates::blockTokens((string)$tpl['html']);
+        $tok = $toks[$index] ?? null;
+        if (!$tok) {
+            return 'This list is no longer in the template. Reload the page.';
+        }
+        $res = self::listArgs($tok, $vals);
+        if (isset($res['error'])) {
+            return $res['error'];
+        }
+        $args = (string)$res['args'];
+        $html = (string)$tpl['html'];
+        $old = substr($html, $tok['start'], $tok['end'] - $tok['start']);
+        $newTag = '{{#' . $tok['name'] . ($args !== '' ? ' ' . $args : '') . '}}';
+        if ($old === $newTag || Templates::parseArgs($tok['args']) === Templates::parseArgs($args)) {
+            return null;
+        }
+        $out = substr($html, 0, $tok['start']) . $newTag . substr($html, $tok['end']);
+        Templates::save(['id' => $tpl['id'], 'name' => $tpl['name'], 'kind' => $tpl['kind'], 'target' => $tpl['target'], 'html' => $out,
+            'css' => (string)$tpl['css'], 'wrap' => !empty($tpl['wrap']), 'enabled' => !empty($tpl['enabled'])]);
+        return null;
+    }
+
     /** How a template is presented in the editor: this page's own design, or shared by many pages. */
     public static function templateInfo(array $tpl): array
     {
@@ -897,7 +1218,9 @@ final class PageEditor
             'terms' => admin_url('page-editor/terms'),
             'dashboard' => !$c ? null : ($isPost ? admin_url('content/' . $c['post']['type'] . '/' . $id) : admin_url('terms/' . $c['term']['taxonomy'] . '/' . $id)),
             'css' => asset_url('admin/assets/page-editor.css'),
-            'sources' => ['types' => [], 'taxonomies' => []],
+            'sources' => self::$tplEdit ? self::sources() : ['types' => [], 'taxonomies' => []],
+            'lists' => self::$tplEdit ? (object)self::listsConfig() : (object)[],
+            'listSave' => self::$tplEdit ? admin_url('page-editor/template/' . self::$tplEdit['id'] . '/list') : null,
             'loops' => array_merge(self::$content ? self::loops((string)self::$content['body']) : [], $tplLoops),
             'binds' => (object)$binds,
             'where' => self::$where,

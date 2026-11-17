@@ -149,7 +149,7 @@ window.SLATE = <?= json_encode([
       <?php if (Auth::can('manage_users')): ?>
         <?= $navItem(admin_url('users'), 'users', 'Users', $is('/users')) ?>
       <?php endif; ?>
-      <?php $setOpen = $is('/settings') && !$is('/settings/modules'); ?>
+      <?php $setOpen = $is('/settings'); ?>
       <div class="nav-group<?= $setOpen ? ' open' : '' ?>" data-nav-group="settings">
         <?= $navItem(admin_url('settings'), 'settings', 'Settings', $setOpen, ($hasUpdate ? '<span class="badge-dot" title="Update available"></span>' : '') . '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show settings menu">' . icon('chevron-down', 14) . '</button>') ?>
         <div class="nav-sub">

@@ -617,10 +617,14 @@
     let view = 'all';
     const run = () => {
       const term = q ? q.value.trim().toLowerCase() : '';
+      let shown = 0;
       $$('[data-module-card]').forEach((c) => {
         const st = (c.dataset.state || '').split(' ');
         c.hidden = (term !== '' && !c.dataset.moduleCard.includes(term)) || (view !== 'all' && !st.includes(view));
+        if (!c.hidden) shown++;
       });
+      const none = $('[data-module-none]');
+      if (none) none.hidden = shown > 0;
     };
     if (q) q.addEventListener('input', run);
     if (views) views.addEventListener('click', (e) => {

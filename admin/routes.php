@@ -1138,7 +1138,18 @@ function admin_dispatch(string $path): void
     $r->post('/settings/{tab}/{section}', static fn(string $tab, string $section) => admin_settings_save($tab, $section));
 
     // SEO and Appearance: same settings, their own place in the sidebar.
+    // Module settings: /m/{module}/settings, next to the module's own pages (same header and tabs).
+    $r->get('/m/{section}/settings', static function (string $section) {
+        $def = Settings::section('modules', $section) ?? admin_404();
+        Auth::require('access_admin');
+        Auth::require($def['cap'] ?? 'manage_settings'); // the module decides who may change its settings
+        admin_view('settings', ['tab' => 'modules', 'section' => $section, 'def' => $def, 'title' => $def['label']]);
+    });
+    $r->post('/m/{section}/settings', static fn(string $section) => admin_settings_save('modules', $section));
     foreach (Settings::STANDALONE as $tab => $base) {
+        if ($tab === 'modules') {
+            continue;
+        }
         $r->get('/' . $base, static function () use ($tab) {
             admin_require_settings($tab);
             redirect(Settings::url($tab));
@@ -1850,8 +1861,13 @@ function admin_save_redirects(): void
 /** Save one settings section (Settings, SEO or Appearance) and go back to it. */
 function admin_settings_save(string $tab, string $section): never
 {
-    admin_require_settings($tab);
     $def = Settings::section($tab, $section) ?? admin_404();
+    if ($tab === 'modules') {
+        Auth::require('access_admin');
+        Auth::require($def['cap'] ?? 'manage_settings');
+    } else {
+        admin_require_settings($tab);
+    }
     $oldSlug = admin_slug();
     $errors = [];
     if (!empty($def['fields'])) {

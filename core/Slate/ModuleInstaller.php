@@ -353,6 +353,7 @@ final class ModuleInstaller
                     'download' => preg_match('#^https?://#', (string)($e['download'] ?? '')) ? (string)$e['download'] : '',
                     'sha256' => isset($e['sha256']) && preg_match('/^[a-f0-9]{64}$/i', (string)$e['sha256']) ? (string)$e['sha256'] : null,
                     'tags' => array_slice(array_values(array_filter((array)($e['tags'] ?? []), 'is_string')), 0, 6),
+                    'icon' => preg_replace('/[^a-z0-9-]/', '', strtolower((string)($e['icon'] ?? ''))),
                     'registry' => (string)($data['name'] ?? parse_url($url, PHP_URL_HOST)),
                     'installed' => Modules::get($slug)['version'] ?? null,
                 ];

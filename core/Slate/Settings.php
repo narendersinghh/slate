@@ -335,12 +335,15 @@ final class Settings
     }
 
     /** Groups with their own place in the sidebar (tab => base address) instead of living under Settings. */
-    public const STANDALONE = ['seo' => 'seo', 'appearance' => 'design'];
+    public const STANDALONE = ['seo' => 'seo', 'appearance' => 'design', 'modules' => 'm'];
 
     /** Address of a settings section, wherever it lives (Settings, or its own page such as SEO). */
     public static function url(string $tab, ?string $section = null): string
     {
         $section ??= (string)array_key_first(self::tabs()[$tab]['sections'] ?? ['' => 0]);
+        if ($tab === 'modules') {
+            return admin_url('m/' . $section . '/settings'); // module settings live with the module's own pages
+        }
         return isset(self::STANDALONE[$tab]) ? admin_url(self::STANDALONE[$tab] . '/' . $section) : admin_url("settings/$tab/$section");
     }
 

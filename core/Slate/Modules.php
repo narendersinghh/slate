@@ -608,7 +608,7 @@ final class Modules
         }
         foreach (self::$settings as $m => $s) {
             $groups[$m] ??= ['name' => $all[$m]['name'] ?? $m, 'icon' => ($all[$m]['icon'] ?? '') ?: 'puzzle', 'pages' => [], 'settings' => null];
-            $groups[$m]['settings'] ??= ['label' => 'Settings', 'url' => 'settings/modules/' . $m, 'cap' => $s['cap'], 'icon' => 'settings', 'slug' => ''];
+            $groups[$m]['settings'] ??= ['label' => 'Settings', 'url' => 'm/' . $m . '/settings', 'cap' => $s['cap'], 'icon' => 'settings', 'slug' => ''];
         }
         uasort($groups, static fn($a, $b) => strcasecmp($a['name'], $b['name']));
         return $groups;

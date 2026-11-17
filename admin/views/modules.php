@@ -35,14 +35,26 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
   <?php endif; ?>
 <?php };
 ?>
-<div class="page-head">
-  <div><h1>Modules</h1><p class="muted">Add features to your site. Install from a registry, a zip, GitHub, or write your own, with or without AI.</p></div>
-  <a class="btn" href="<?= e(admin_url('modules/available?refresh=1')) ?>"><?= icon('refresh', 16) ?> Check for updates</a>
-</div>
-
-<nav class="tabs-line" aria-label="Modules">
+<?php
+$more = static function (array $links): string {
+    $links = array_filter($links);
+    if (!$links) {
+        return '';
+    }
+    $h = '<div class="dropdown"><button type="button" class="icon-btn mod-more" data-dropdown aria-label="More actions" title="More">' . icon('more', 16) . '</button><div class="dropdown-menu dropdown-right">';
+    foreach ($links as [$label, $url, $ic, $ext]) {
+        $h .= '<a href="' . e($url) . '"' . ($ext ? ' target="_blank" rel="noopener noreferrer"' : '') . '>' . icon($ic, 15) . ' ' . e($label) . '</a>';
+    }
+    return $h . '</div></div>';
+};
+echo \Slate\AdminUi::header('Modules', 'Add features to your site from a registry, a zip, GitHub, or write your own, with or without AI.', 'puzzle', [
+    'Add module' => [admin_url('modules/add'), 'primary', 'plus'],
+    'Check for updates' => [admin_url('modules/available?refresh=1'), '', 'refresh'],
+]);
+?>
+<nav class="tabs-line mod-tabs" aria-label="Modules">
   <?php foreach ($tabs as $k => [$label, $path, $ic]): ?>
-    <a href="<?= e(admin_url($path)) ?>" class="<?= $k === $activeTab ? 'active' : '' ?>"><?= icon($ic, 16) ?> <?= e($label) ?>
+    <a href="<?= e(admin_url($path)) ?>" class="<?= $k === $activeTab ? 'active' : '' ?>"<?= $k === $activeTab ? ' aria-current="page"' : '' ?>><?= e($label) ?>
       <?php if ($k === 'installed' && $updates): ?><span class="pill pill-accent"><?= count($updates) ?></span><?php endif; ?></a>
   <?php endforeach; ?>
 </nav>
@@ -56,15 +68,6 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
 <?php endif; ?>
 
 <?php /* ================================================================ INSTALLED */ if ($tab === 'installed'): ?>
-  <?php foreach ($errors as $slug => $er): ?>
-    <div class="banner banner-danger"><span class="ic"><?= icon('alert', 18) ?></span>
-      <div><strong><?= e($modules[$slug]['name'] ?? $slug) ?> was switched off automatically</strong> because it crashed
-        (<?= e(time_ago($er['time'] ?? null)) ?>): <code><?= e($er['message']) ?></code><?= !empty($er['file']) ? ' <small class="muted">in ' . e($er['file']) . ':' . (int)$er['line'] . '</small>' : '' ?>
-        <br><small class="muted">Your site kept working. Fix or update the module, then activate it again.</small></div>
-      <form method="post" action="<?= e(admin_url("modules/$slug/dismiss")) ?>"><?= csrf_field() ?><button class="btn btn-sm btn-ghost">Dismiss</button></form>
-    </div>
-  <?php endforeach; ?>
-
   <?php if (!$modules): ?>
     <div class="card empty-state"><?= icon('puzzle', 36) ?><h2>No modules installed</h2>
       <p class="muted">Browse available modules or add your own.</p>
@@ -72,61 +75,60 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
   <?php else: ?>
   <?php
     $groups = Modules::adminGroups();
-    $counts = ['all' => count($modules), 'active' => count(array_filter($modules, static fn($m) => $m['active'])), 'updates' => count($updates)];
+    $counts = ['all' => count($modules), 'active' => count(array_filter($modules, static fn($m) => $m['active'])), 'update' => count($updates)];
     $counts['inactive'] = $counts['all'] - $counts['active'];
   ?>
-  <div class="lt-top module-filter">
-    <nav class="tabs-pill" aria-label="Show" data-module-view>
-      <button type="button" class="active" data-view="all">All <span><?= $counts['all'] ?></span></button>
-      <button type="button" data-view="active">Active <span><?= $counts['active'] ?></span></button>
-      <button type="button" data-view="inactive">Inactive <span><?= $counts['inactive'] ?></span></button>
-      <?php if ($counts['updates']): ?><button type="button" data-view="update">Updates <span><?= $counts['updates'] ?></span></button><?php endif; ?>
-    </nav>
-    <label class="lt-search"><?= icon('search', 15) ?><input class="input" type="search" placeholder="Search installed modules…" data-module-filter aria-label="Search modules"></label>
+  <div class="mod-toolbar">
+    <div class="mod-seg" role="group" aria-label="Show" data-module-view>
+      <?php foreach (['all' => 'All', 'active' => 'Active', 'inactive' => 'Inactive', 'update' => 'Updates'] as $v => $l): if ($v === 'update' && !$counts['update']) continue; ?>
+        <button type="button" class="<?= $v === 'all' ? 'active' : '' ?>" data-view="<?= $v ?>"><?= $l ?> <span><?= $counts[$v] ?></span></button>
+      <?php endforeach; ?>
+    </div>
+    <label class="mod-search"><?= icon('search', 15) ?><input class="input" type="search" placeholder="Search installed modules" data-module-filter aria-label="Search modules"></label>
   </div>
-  <div class="card module-list">
-    <?php foreach ($modules as $m): $slug = $m['slug']; $up = $updates[$slug] ?? null; $deps = $m['depends'];
+  <div class="mod-grid">
+    <?php foreach ($modules as $m): $slug = $m['slug']; $up = $updates[$slug] ?? null; $deps = $m['depends']; $err = $errors[$slug] ?? null;
         $g = $groups[$slug] ?? null;
         $open = $m['active'] && $g && $g['pages'] ? admin_url('m/' . $g['pages'][0]['slug']) : '';
         $settingsUrl = '';
         if ($m['active']) {
-            if (isset(Modules::settingsSections()[$slug])) $settingsUrl = admin_url('settings/modules/' . $slug);
+            if (isset(Modules::settingsSections()[$slug])) $settingsUrl = \Slate\Settings::url('modules', $slug);
             elseif ($g && $g['settings']) $settingsUrl = isset($g['settings']['url']) ? admin_url($g['settings']['url']) : admin_url('m/' . $g['settings']['slug']);
             elseif ($m['settings'] !== '' && isset(Modules::adminPages()[$m['settings']])) $settingsUrl = admin_url('m/' . $m['settings']);
         } ?>
-    <div class="module-row<?= $m['active'] ? ' is-active' : '' ?><?= isset($errors[$slug]) ? ' has-error' : '' ?>"
+    <article class="mod-card<?= $m['active'] ? ' is-active' : '' ?><?= $err ? ' has-error' : '' ?>"
          data-module-card="<?= e(strtolower($m['name'] . ' ' . $m['description'] . ' ' . implode(' ', $m['tags']))) ?>" data-state="<?= $m['active'] ? 'active' : 'inactive' ?><?= $up ? ' update' : '' ?>">
-      <span class="module-icon"><?= icon($m['icon'] ?: 'puzzle', 18) ?></span>
-      <div class="module-main">
-        <div class="module-title"><strong><?= e($m['name']) ?></strong> <small class="muted">v<?= e($m['version']) ?></small>
-          <?php if ($m['active']): ?><span class="pill pill-success">Active</span><?php endif; ?>
-          <?php if (isset($errors[$slug])): ?><span class="pill pill-danger">Crashed</span><?php endif; ?>
-          <?php if ($up): ?><span class="pill pill-accent">Update <?= e($up['version']) ?></span><?php endif; ?>
-        </div>
-        <p class="muted module-desc"><?= e($m['description']) ?></p>
-        <div class="module-meta">
-          <?php if ($m['author']): ?><small class="muted">By <?= e($m['author']) ?></small><?php endif; ?>
-          <?php if ($deps): ?><small class="muted">· Needs</small> <?php foreach ($deps as $d => $c): ?><span class="pill pill-soft"><?= e(($modules[$d]['name'] ?? $d) . ($c !== '*' ? " $c" : '')) ?></span><?php endforeach; ?><?php endif; ?>
-          <span class="module-links">
-            <?php if ($open): ?><a href="<?= e($open) ?>">Open</a><?php endif; ?>
-            <?php if ($settingsUrl): ?><a href="<?= e($settingsUrl) ?>">Settings</a><?php endif; ?>
-            <a href="<?= e(admin_url("modules/$slug/check")) ?>">Details</a>
-            <a href="<?= e(admin_url("modules/$slug/download")) ?>" title="Download as an installable .zip">Download</a>
-            <?php if ($m['homepage'] !== ''): ?><a href="<?= e($m['homepage']) ?>" target="_blank" rel="noopener noreferrer">Website</a><?php endif; ?>
-          </span>
-        </div>
-      </div>
-      <div class="module-actions">
-        <?php if ($up): ?>
-          <form method="post" action="<?= e(admin_url("modules/$slug/update")) ?>"><?= csrf_field() ?>
-            <button class="btn btn-sm btn-primary" type="submit" data-confirm="Update <?= e($m['name']) ?> to <?= e($up['version']) ?>? The current version is backed up first."><?= icon('download', 14) ?> Update</button></form>
-        <?php endif; ?>
+      <div class="mod-card-head">
+        <span class="mod-icon"><?= icon($m['icon'] ?: 'puzzle', 19) ?></span>
+        <div class="mod-title"><strong><?= e($m['name']) ?></strong><small class="muted">v<?= e($m['version']) ?><?= $m['author'] ? ' · ' . e($m['author']) : '' ?></small></div>
         <form method="post" action="<?= e(admin_url("modules/$slug/toggle")) ?>"><?= csrf_field() ?>
-          <button class="btn btn-sm<?= $m['active'] ? ' btn-ghost' : '' ?>" type="submit"><?= $m['active'] ? 'Deactivate' : 'Activate' ?></button></form>
+          <button type="submit" class="mod-switch" role="switch" aria-checked="<?= $m['active'] ? 'true' : 'false' ?>" title="<?= $m['active'] ? 'Active. Click to switch off' : 'Off. Click to activate' ?>" aria-label="<?= e(($m['active'] ? 'Deactivate ' : 'Activate ') . $m['name']) ?>"><span></span></button></form>
       </div>
-    </div>
+      <p class="mod-desc muted"><?= e($m['description']) ?></p>
+      <?php if ($err): ?>
+        <div class="mod-alert is-danger"><?= icon('alert', 15) ?><div><strong>Switched off after a crash</strong> <span class="muted">(<?= e(time_ago($err['time'] ?? null)) ?>)</span><code><?= e($err['message']) ?></code>
+          <form method="post" action="<?= e(admin_url("modules/$slug/dismiss")) ?>"><?= csrf_field() ?><button class="link-btn">Dismiss</button></form></div></div>
+      <?php elseif ($up): ?>
+        <div class="mod-alert"><?= icon('download', 15) ?><div>Version <?= e($up['version']) ?> is available.</div>
+          <form method="post" action="<?= e(admin_url("modules/$slug/update")) ?>"><?= csrf_field() ?>
+            <button class="btn btn-sm btn-primary" type="submit" data-confirm="Update <?= e($m['name']) ?> to <?= e($up['version']) ?>? The current version is backed up first.">Update</button></form></div>
+      <?php endif; ?>
+      <?php if ($deps): ?><div class="mod-deps"><small class="muted">Needs</small><?php foreach ($deps as $d => $c): ?><span class="pill pill-soft"><?= e(($modules[$d]['name'] ?? $d) . ($c !== '*' ? " $c" : '')) ?></span><?php endforeach; ?></div><?php endif; ?>
+      <div class="mod-card-foot">
+        <?php if ($open): ?><a class="btn btn-sm" href="<?= e($open) ?>"><?= icon('external', 14) ?> Open</a><?php endif; ?>
+        <?php if ($settingsUrl): ?><a class="btn btn-sm btn-ghost" href="<?= e($settingsUrl) ?>"><?= icon('settings', 14) ?> Settings</a><?php endif; ?>
+        <?php if (!$open && !$settingsUrl): ?><a class="btn btn-sm btn-ghost" href="<?= e(admin_url("modules/$slug/check")) ?>"><?= icon('info', 14) ?> Details</a><?php endif; ?>
+        <span class="mod-spacer"></span>
+        <?= $more([
+            ($open || $settingsUrl) ? ['Details and code check', admin_url("modules/$slug/check"), 'shield', false] : null,
+            ['Download as .zip', admin_url("modules/$slug/download"), 'download', false],
+            $m['homepage'] !== '' ? ['Website', $m['homepage'], 'globe', true] : null,
+        ]) ?>
+      </div>
+    </article>
     <?php endforeach; ?>
   </div>
+  <p class="muted small mod-none" hidden data-module-none>No module matches.</p>
   <?php endif; ?>
 
 <?php /* ================================================================ AVAILABLE */ elseif ($tab === 'available'): ?>
@@ -138,38 +140,40 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
     <div class="card empty-state"><?= icon('download', 36) ?><h2>No modules listed</h2>
       <p class="muted">Add a registry under <a href="<?= e(admin_url('modules/sources')) ?>">Sources</a>, or install a module from a zip or GitHub address.</p></div>
   <?php else: ?>
-  <div class="row-between module-filter">
-    <input class="input" type="search" placeholder="Search modules…" data-module-filter aria-label="Search modules">
+  <div class="mod-toolbar">
+    <label class="mod-search"><?= icon('search', 15) ?><input class="input" type="search" placeholder="Search modules" data-module-filter aria-label="Search modules"></label>
     <small class="muted"><?= count($available) ?> modules</small>
   </div>
-  <div class="card-grid">
-    <?php foreach ($available as $a): $inst = $a['installed']; $canUpdate = $inst !== null && version_compare($a['version'], $inst, '>'); ?>
-    <div class="card module-card" data-module-card="<?= e(strtolower($a['name'] . ' ' . $a['description'] . ' ' . implode(' ', $a['tags']))) ?>">
-      <div class="card-pad">
-        <div class="row-between">
-          <span class="type-icon"><?= icon('box', 20) ?></span>
-          <?php if ($inst === null): ?>
-            <form method="post" action="<?= e(admin_url('modules/install/' . $a['slug'])) ?>"><?= csrf_field() ?>
-              <button class="btn btn-sm btn-primary"<?= $locked !== '' || version_compare(SLATE_VERSION, $a['requires'], '<') ? ' disabled' : '' ?>><?= icon('download', 15) ?> Install</button></form>
-          <?php elseif ($canUpdate): ?>
-            <form method="post" action="<?= e(admin_url('modules/' . $a['slug'] . '/update')) ?>"><?= csrf_field() ?>
-              <button class="btn btn-sm btn-primary"<?= $locked !== '' ? ' disabled' : '' ?>>Update to <?= e($a['version']) ?></button></form>
-          <?php else: ?>
-            <span class="pill pill-success"><?= icon('check', 13) ?> Installed</span>
-          <?php endif; ?>
-        </div>
-        <h3><?= e($a['name']) ?> <small class="muted">v<?= e($a['version']) ?></small></h3>
-        <p class="muted"><?= e($a['description']) ?></p>
-        <?php if (version_compare(SLATE_VERSION, $a['requires'], '<')): ?><p><span class="pill pill-warn">Needs Slate <?= e($a['requires']) ?></span></p><?php endif; ?>
-        <div class="module-foot">
-          <small class="muted"><?= $a['author'] ? 'By ' . e($a['author']) . ' · ' : '' ?><?= e($a['registry']) ?>
-            <?php foreach ($a['tags'] as $t): ?> · <?= e($t) ?><?php endforeach; ?></small>
-          <?php if ($a['homepage']): ?><a href="<?= e($a['homepage']) ?>" target="_blank" rel="noopener noreferrer">Website</a><?php endif; ?>
-        </div>
+  <div class="mod-grid">
+    <?php foreach ($available as $a): $inst = $a['installed']; $canUpdate = $inst !== null && version_compare($a['version'], $inst, '>'); $tooOld = version_compare(SLATE_VERSION, $a['requires'], '<');
+        $ic = $modules[$a['slug']]['icon'] ?? ($a['icon'] ?? ''); ?>
+    <article class="mod-card<?= $inst !== null ? ' is-active' : '' ?>" data-module-card="<?= e(strtolower($a['name'] . ' ' . $a['description'] . ' ' . implode(' ', $a['tags']))) ?>">
+      <div class="mod-card-head">
+        <span class="mod-icon"><?= icon($ic ?: 'box', 19) ?></span>
+        <div class="mod-title"><strong><?= e($a['name']) ?></strong><small class="muted">v<?= e($a['version']) ?><?= $a['author'] ? ' · ' . e($a['author']) : '' ?></small></div>
+        <?php if ($inst !== null && !$canUpdate): ?><span class="pill pill-success"><?= icon('check', 12) ?> Installed</span><?php endif; ?>
       </div>
-    </div>
+      <p class="mod-desc muted"><?= e($a['description']) ?></p>
+      <?php if ($a['tags']): ?><div class="mod-tags"><?php foreach ($a['tags'] as $t): ?><span><?= e($t) ?></span><?php endforeach; ?></div><?php endif; ?>
+      <?php if ($tooOld): ?><div class="mod-alert is-warn"><?= icon('alert', 15) ?><div>Needs Slate <?= e($a['requires']) ?> or newer.</div></div><?php endif; ?>
+      <div class="mod-card-foot">
+        <?php if ($inst === null): ?>
+          <form method="post" action="<?= e(admin_url('modules/install/' . $a['slug'])) ?>"><?= csrf_field() ?>
+            <button class="btn btn-sm btn-primary"<?= $locked !== '' || $tooOld ? ' disabled' : '' ?>><?= icon('download', 14) ?> Install</button></form>
+        <?php elseif ($canUpdate): ?>
+          <form method="post" action="<?= e(admin_url('modules/' . $a['slug'] . '/update')) ?>"><?= csrf_field() ?>
+            <button class="btn btn-sm btn-primary"<?= $locked !== '' ? ' disabled' : '' ?>><?= icon('download', 14) ?> Update to <?= e($a['version']) ?></button></form>
+        <?php else: ?>
+          <a class="btn btn-sm btn-ghost" href="<?= e(admin_url('modules/' . $a['slug'] . '/check')) ?>"><?= icon('info', 14) ?> Details</a>
+        <?php endif; ?>
+        <span class="mod-spacer"></span>
+        <small class="muted mod-src" title="Registry"><?= e($a['registry']) ?></small>
+        <?php if ($a['homepage']): ?><a class="icon-btn" href="<?= e($a['homepage']) ?>" target="_blank" rel="noopener noreferrer" title="Website" aria-label="Website of <?= e($a['name']) ?>"><?= icon('globe', 15) ?></a><?php endif; ?>
+      </div>
+    </article>
     <?php endforeach; ?>
   </div>
+  <p class="muted small mod-none" hidden data-module-none>No module matches.</p>
   <?php endif; ?>
 
 <?php /* ================================================================ ADD NEW */ elseif ($tab === 'add'): $off = $locked !== '' ? ' disabled' : ''; ?>

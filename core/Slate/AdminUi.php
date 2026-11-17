@@ -8,7 +8,7 @@ namespace Slate;
  * See docs/admin-ui.md for the full kit (ListTable, Modules::settings(), CSS classes).
  *
  *   echo AdminUi::header('Orders', 'Payments and fulfilment.', 'cart', ['New order' => admin_url('m/shop-new')]);
- *   echo AdminUi::tabs(['orders' => ['Orders', admin_url('m/shop'), 12], 'settings' => ['Settings', admin_url('settings/modules/slate-shop')]], 'orders');
+ *   echo AdminUi::tabs(['orders' => ['Orders', admin_url('m/shop'), 12], 'settings' => ['Settings', AdminUi::settingsUrl('slate-shop')]], 'orders');
  *   echo AdminUi::kpis(['Revenue (30 days)' => '$1,240', 'Orders' => 18]);
  */
 final class AdminUi
@@ -137,6 +137,6 @@ final class AdminUi
     /** Dashboard URL of a module's declarative settings screen (Modules::settings()). */
     public static function settingsUrl(string $module): string
     {
-        return admin_url('settings/modules/' . $module);
+        return Settings::url('modules', $module);
     }
 }

@@ -6,7 +6,14 @@ use Slate\Settings;
 $tabs = Settings::settingsTabs();
 $tabDef = Settings::tabs()[$tab] ?? null;
 $solo = $tabDef && isset(Settings::STANDALONE[$tab]); // SEO, Appearance: own page with tabs, not under Settings
-if ($solo) {
+if ($solo && $tab === 'modules') {
+    // A module's settings: the module's own header and tabs (its pages and Settings), like its other screens.
+    $grp = \Slate\Modules::adminGroups()[$section] ?? null;
+    $meta = \Slate\Modules::all()[$section] ?? [];
+    echo \Slate\AdminUi::header($grp['name'] ?? $def['label'], (string)($meta['description'] ?? ''), (string)($grp['icon'] ?? 'puzzle'));
+    $nav = \Slate\AdminUi::moduleNav($section, Settings::url('modules', $section));
+    echo $nav !== '' ? $nav : \Slate\AdminUi::tabs(['s' => ['Settings', Settings::url('modules', $section)]], 's');
+} elseif ($solo) {
     echo \Slate\AdminUi::header($tabDef['label'], $tabDef['description'] ?? '', $tabDef['icon']);
     $secTabs = [];
     foreach ($tabDef['sections'] as $sk => $sct) {
@@ -75,7 +82,6 @@ if ($solo) {
     <div class="settings-head">
       <div class="crumbs"><a href="<?= e(admin_url('settings')) ?>">Settings</a><?= icon('chevron-right', 13) ?><span><?= e($tabDef['label']) ?></span></div>
       <h1><?= e($def['label']) ?></h1>
-      <?php if ($tab === 'modules'): ?><?= \Slate\AdminUi::moduleNav($section, admin_url("settings/modules/$section")) ?><?php endif; ?>
       <?php if (!empty($def['intro'])): ?><p class="muted"><?= e($def['intro']) ?></p><?php endif; ?>
     </div>
     <?php endif; ?>

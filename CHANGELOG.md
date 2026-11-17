@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.18.0: edit everything on the page, Goraiya everywhere, safer and more automatic
+- **Templates editable on the page**: the fixed texts, buttons and images of a template can be changed right on
+  the page. Page-specific designs (Home, Leaders) say "This page's design"; shared templates show how many pages a
+  change affects first. Every template keeps its last 20 versions with Undo. Live lists keep working.
+- **Goraiya everywhere**: a redesigned drawer (status, starting cards, formatted replies, result cards, Copy and Try
+  again). In the editor and on the page: select text or a section and Goraiya improves, shortens, changes the tone,
+  revamps or deletes it, always with a preview. The old AI box is gone. New Goraiya icon.
+- **On-page editor**: design pass over every panel (spacing, grouping, sizes, phones); text toolbar no longer hides
+  behind the save bar.
+- **Import pages**: several files for one page (HTML, CSS, JS) linked automatically, import from a link (with the
+  page's styles, fonts, images and linked pages), and a choice per page: keep the original design or use the site's
+  styles (switchable later).
+- **SEO and Appearance have their own sections**, and module settings live with each module (tabs at the top).
+- **Styles editor**: colour cards, custom CSS variables, typography with live samples, global classes with live
+  preview, snippets and hover styles, layout sliders.
+- **SEO**: structured data per content type with field mapping, item lists on taxonomy pages, instant indexing
+  (Google Indexing API and IndexNow, automatic and on request, also in bulk), descriptions without shortcodes.
+- **Templates screen and editor**: one card per page type; editor with live preview of unsaved code, tag palette,
+  line numbers, Ctrl/Cmd S.
+- **Content model** screens rebuilt: clear lists, simpler type and taxonomy editors, field group builder with
+  drag and drop and preview. Field names never change when a label is renamed.
+- **Modules**: one card design with on/off switches; modules update automatically (checked twice a day) with
+  backup, migration, verification and automatic undo, and a clear report with Try again when an update fails.
+- **MCP**: AI agents can build a complete site (content model, templates, design system, designed pages, menus,
+  SEO, media, settings, forms); sensitive features are excluded.
+- Forms 2.1 and Site Migration 2.0 (separate modules): visual form builder and a much more complete WordPress import.
+- Fixes: saving an existing item in the dashboard posted to a wrong address; the dashboard editor writes paragraphs;
+  one scrollbar in the editor; AI HTML is cleaned before it is shown or inserted.
+
 ## 0.17.0: edit every page, easier settings and menus
 - **Edit on the page now works on every page**, not only imported and AI-made ones: content shown by a Template or the
   theme, the item's title, custom fields and featured image, and term pages (name and term fields). Stored content is

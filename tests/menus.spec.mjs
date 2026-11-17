@@ -1,4 +1,4 @@
-// End-to-end: the menu builder (Settings › Appearance › Menus): search to add, custom links, nesting, order, save.
+// End-to-end: the menu builder (Appearance › Menus): search to add, custom links, nesting, order, save.
 // Needs a running Slate site: SLATE_URL, SLATE_USER, SLATE_PASS.
 import { test, expect } from '@playwright/test';
 
@@ -22,7 +22,7 @@ test('menu builder: search and add, custom link, nest, reorder, save', async ({ 
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await login(page);
-  await page.goto(`${BASE}/admin/settings/appearance/menus`);
+  await page.goto(`${BASE}/admin/design/menus`);
   await expect(page.locator('.mb-head')).toBeVisible();
 
   // A fresh menu, so the test does not depend on what the site already has.

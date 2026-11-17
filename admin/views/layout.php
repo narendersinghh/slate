@@ -120,15 +120,19 @@ window.SLATE = <?= json_encode([
       <?php endif; ?>
       <?php endif; ?>
 
-      <?php if (Auth::can('manage_content_model') || Auth::can('manage_settings')): ?>
+      <?php if (Auth::can('manage_content_model') || admin_can_settings('appearance') || admin_can_settings('seo')): ?>
       <div class="nav-label">Design</div>
       <?php if (Auth::can('manage_content_model')): ?>
         <?= $navItem(admin_url('templates'), 'code', 'Templates', $is('/templates')) ?>
       <?php endif; ?>
-      <?php if (admin_can_settings('appearance')): ?>
-        <?= $navItem(admin_url('settings/appearance/menus'), 'menu', 'Menus', $is('/settings/appearance/menus')) ?>
-        <?= $navItem(admin_url('settings/appearance/design'), 'palette', 'Theme & styles', $is('/settings/appearance/design') || $is('/settings/appearance/theme')) ?>
-      <?php endif; ?>
+      <?php foreach (['appearance' => 'appearance', 'seo' => 'seo'] as $own): if (!admin_can_settings($own)) continue; $ot = \Slate\Settings::tabs()[$own]; $ob = '/' . \Slate\Settings::STANDALONE[$own]; ?>
+        <div class="nav-group<?= $is($ob) ? ' open' : '' ?>" data-nav-group="<?= e($own) ?>">
+          <?= $navItem(\Slate\Settings::url($own), $ot['icon'], $ot['label'], $is($ob), '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show ' . e(strtolower($ot['label'])) . ' menu">' . icon('chevron-down', 14) . '</button>') ?>
+          <div class="nav-sub">
+            <?php foreach ($ot['sections'] as $osk => $os): ?><a href="<?= e(\Slate\Settings::url($own, $osk)) ?>" class="<?= $is($ob . '/' . $osk) ? 'active' : '' ?>"><?= e($os['label']) ?></a><?php endforeach; ?>
+          </div>
+        </div>
+      <?php endforeach; ?>
       <?php endif; ?>
 
       <div class="nav-label">Administration</div>
@@ -145,12 +149,12 @@ window.SLATE = <?= json_encode([
       <?php if (Auth::can('manage_users')): ?>
         <?= $navItem(admin_url('users'), 'users', 'Users', $is('/users')) ?>
       <?php endif; ?>
-      <?php $setOpen = $is('/settings') && !$is('/settings/appearance/menus') && !$is('/settings/appearance/design') && !$is('/settings/appearance/theme') && !$is('/settings/modules'); ?>
+      <?php $setOpen = $is('/settings') && !$is('/settings/modules'); ?>
       <div class="nav-group<?= $setOpen ? ' open' : '' ?>" data-nav-group="settings">
         <?= $navItem(admin_url('settings'), 'settings', 'Settings', $setOpen, ($hasUpdate ? '<span class="badge-dot" title="Update available"></span>' : '') . '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show settings menu">' . icon('chevron-down', 14) . '</button>') ?>
         <div class="nav-sub">
-          <?php foreach (\Slate\Settings::tabs() as $stk => $st): if (!admin_can_settings($stk) || $stk === 'modules') continue; ?>
-            <a href="<?= e(admin_url("settings/$stk/" . array_key_first($st['sections']))) ?>" class="<?= $is("/settings/$stk") ? 'active' : '' ?>"><?= e($st['label']) ?></a>
+          <?php foreach (\Slate\Settings::settingsTabs() as $stk => $st): if (!admin_can_settings($stk) || $stk === 'modules') continue; ?>
+            <a href="<?= e(\Slate\Settings::url($stk)) ?>" class="<?= $is("/settings/$stk") ? 'active' : '' ?>"><?= e($st['label']) ?></a>
           <?php endforeach; ?>
         </div>
       </div>
@@ -192,7 +196,7 @@ window.SLATE = <?= json_encode([
             <div class="dropdown-head"><strong>Settings</strong><small>Ctrl/⌘ K finds any setting</small></div>
             <a href="<?= e(admin_url('settings')) ?>"><?= icon('grid', 15) ?> Overview</a>
             <?php foreach (\Slate\Settings::tabs() as $stk => $st): if (!admin_can_settings($stk)) continue; ?>
-              <a href="<?= e(admin_url("settings/$stk/" . array_key_first($st['sections']))) ?>"><?= icon($st['icon'], 15) ?> <?= e($st['label']) ?></a>
+              <a href="<?= e(\Slate\Settings::url($stk)) ?>"><?= icon($st['icon'], 15) ?> <?= e($st['label']) ?></a>
             <?php endforeach; ?>
           </div>
         </div>

@@ -1,4 +1,4 @@
-/* Slate menu builder (Settings → Appearance → Menus): search to add, drag and drop to order and nest. */
+/* Slate menu builder (Appearance › Menus): search to add, drag and drop to order and nest. */
 (function () {
   'use strict';
   const { esc, $, $$, debounce } = window.Slate;
@@ -26,7 +26,8 @@
     check: svg('<path d="M20 6 9 17l-5-5"/>', 14), warn: svg('<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>', 14),
   };
 
-  const sync = () => { out.value = JSON.stringify(menus); const f = root.closest('form'); if (f) f.dispatchEvent(new Event('input', { bubbles: true })); };
+  let ready = false; // the first render is not a change
+  const sync = () => { out.value = JSON.stringify(menus); const f = root.closest('form'); if (ready && f) f.dispatchEvent(new Event('input', { bubbles: true })); };
   const ref = (it) => (it.type === 'post' || it.type === 'term') ? (refs[it.type][it.object_id] || null) : null;
   const titleOf = (it) => it.label || (ref(it) || {}).label || it.url || 'Untitled';
   const kindOf = (it) => it.type === 'custom' ? 'Custom link' : ((ref(it) || {}).group || (it.type === 'term' ? 'Term' : 'Content'));
@@ -264,4 +265,5 @@
   root.addEventListener('dragend', () => { dragId = null; clearMarks(); $$('.is-dragging', root).forEach((x) => x.classList.remove('is-dragging')); });
 
   render();
+  ready = true;
 })();

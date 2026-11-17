@@ -3,10 +3,20 @@ use Slate\Media;
 use Slate\Options;
 use Slate\Settings;
 
-$tabs = Settings::tabs();
-$tabDef = $tabs[$tab] ?? null;
+$tabs = Settings::settingsTabs();
+$tabDef = Settings::tabs()[$tab] ?? null;
+$solo = $tabDef && isset(Settings::STANDALONE[$tab]); // SEO, Appearance: own page with tabs, not under Settings
+if ($solo) {
+    echo \Slate\AdminUi::header($tabDef['label'], $tabDef['description'] ?? '', $tabDef['icon']);
+    $secTabs = [];
+    foreach ($tabDef['sections'] as $sk => $sct) {
+        $secTabs[$sk] = [$sct['label'], Settings::url($tab, $sk)];
+    }
+    echo \Slate\AdminUi::tabs($secTabs, $section);
+}
 ?>
-<div class="settings-shell">
+<div class="settings-shell<?= $solo ? ' is-solo' : '' ?>">
+  <?php if (!$solo): ?>
   <aside class="settings-nav" aria-label="Settings">
     <div class="settings-search">
       <?= icon('search', 15) ?>
@@ -18,7 +28,7 @@ $tabDef = $tabs[$tab] ?? null;
       <option value="<?= e(admin_url('settings')) ?>"<?= $tab === '' ? ' selected' : '' ?>>Overview</option>
       <?php foreach ($tabs as $tk => $t): if (!admin_can_settings($tk)) continue; ?>
         <optgroup label="<?= e($t['label']) ?>">
-          <?php foreach ($t['sections'] as $sk => $sct): ?><option value="<?= e(admin_url("settings/$tk/$sk")) ?>"<?= $tk === $tab && $sk === $section ? ' selected' : '' ?>><?= e($sct['label']) ?></option><?php endforeach; ?>
+          <?php foreach ($t['sections'] as $sk => $sct): ?><option value="<?= e(Settings::url($tk, $sk)) ?>"<?= $tk === $tab && $sk === $section ? ' selected' : '' ?>><?= e($sct['label']) ?></option><?php endforeach; ?>
         </optgroup>
       <?php endforeach; ?>
     </select>
@@ -34,6 +44,7 @@ $tabDef = $tabs[$tab] ?? null;
       </details>
     <?php endforeach; ?>
   </aside>
+  <?php endif; ?>
 
   <?php if (!$tabDef): ?>
   <div class="settings-main">
@@ -44,26 +55,30 @@ $tabDef = $tabs[$tab] ?? null;
     <div class="settings-cats">
       <?php foreach ($tabs as $tk => $t): if (!admin_can_settings($tk)) continue; ?>
         <div class="settings-cat card">
-          <a class="settings-cat-head" href="<?= e(admin_url("settings/$tk/" . array_key_first($t['sections']))) ?>">
+          <a class="settings-cat-head" href="<?= e(Settings::url($tk)) ?>">
             <span class="settings-cat-icon"><?= icon($t['icon'], 18) ?></span>
             <span><strong><?= e($t['label']) ?></strong><small class="muted"><?= e($t['description'] ?? '') ?></small></span>
           </a>
           <div class="settings-cat-links">
-            <?php foreach ($t['sections'] as $sk => $sct): ?><a href="<?= e(admin_url("settings/$tk/$sk")) ?>"><?= e($sct['label']) ?></a><?php endforeach; ?>
+            <?php foreach ($t['sections'] as $sk => $sct): ?><a href="<?= e(Settings::url($tk, $sk)) ?>"><?= e($sct['label']) ?></a><?php endforeach; ?>
           </div>
         </div>
       <?php endforeach; ?>
     </div>
   </div>
   <?php else: ?>
-  <form class="settings-main" method="post" action="<?= e(admin_url("settings/$tab/$section")) ?>" data-settings-form>
+  <form class="settings-main" method="post" action="<?= e(Settings::url($tab, $section)) ?>" data-settings-form>
     <?= csrf_field() ?>
+    <?php if ($solo): ?>
+    <?php if (!empty($def['intro'])): ?><p class="muted settings-intro"><?= e($def['intro']) ?></p><?php endif; ?>
+    <?php else: ?>
     <div class="settings-head">
       <div class="crumbs"><a href="<?= e(admin_url('settings')) ?>">Settings</a><?= icon('chevron-right', 13) ?><span><?= e($tabDef['label']) ?></span></div>
       <h1><?= e($def['label']) ?></h1>
       <?php if ($tab === 'modules'): ?><?= \Slate\AdminUi::moduleNav($section, admin_url("settings/modules/$section")) ?><?php endif; ?>
       <?php if (!empty($def['intro'])): ?><p class="muted"><?= e($def['intro']) ?></p><?php endif; ?>
     </div>
+    <?php endif; ?>
 
     <?php if (!empty($def['render_first']) && !empty($def['render'])): ?>
       <div class="settings-custom"><?php require __DIR__ . '/settings/' . basename($def['render']) . '.php'; ?></div>
@@ -152,4 +167,4 @@ $tabDef = $tabs[$tab] ?? null;
   </form>
   <?php endif; ?>
 </div>
-<?php if ($tabDef && ($def['render'] ?? '') === 'menus') { $scripts = ['menus.js']; } ?>
+<?php if ($tabDef && in_array($def['render'] ?? '', ['menus', 'design-system'], true)) { $scripts = [$def['render'] . '.js']; } ?>

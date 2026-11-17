@@ -492,7 +492,7 @@
       const words = q.split(/\s+/);
       const hits = index.filter((r) => { const hay = (r[0] + ' ' + r[1] + ' ' + r[2] + ' ' + r[3]).toLowerCase(); return words.every((w) => hay.includes(w)); }).slice(0, 12);
       box.innerHTML = hits.length
-        ? hits.map((r) => '<a href="' + esc(inp.dataset.base + '/' + r[4]) + '"><strong>' + esc(r[0]) + '</strong><small>' + esc(r[2] + (r[3] ? ' › ' + r[3] : '')) + '</small></a>').join('')
+        ? hits.map((r) => '<a href="' + esc(r[4]) + '"><strong>' + esc(r[0]) + '</strong><small>' + esc(r[2] + (r[3] ? ' › ' + r[3] : '')) + '</small></a>').join('')
         : '<div class="muted small">No setting matches “' + esc(inp.value) + '”.</div>';
       box.hidden = false;
     };

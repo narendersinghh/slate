@@ -178,7 +178,7 @@ function admin_dispatch(string $path): void
             'noalt' => (int)DB::val("SELECT COUNT(*) FROM {{media}} WHERE mime LIKE 'image/%' AND alt = ''")];
         $seoIssues = [];
         if (Options::get('seo_noindex_site')) {
-            $seoIssues[] = ['danger', 'The whole website is set to noindex, search engines will not index it.', admin_url('settings/seo/indexing')];
+            $seoIssues[] = ['danger', 'The whole website is set to noindex, search engines will not index it.', Settings::url('seo', 'indexing')];
         }
         $noDesc = (int)DB::val("SELECT COUNT(*) FROM {{posts}} WHERE status = 'publish' AND (seo IS NULL OR seo NOT LIKE '%\"description\":\"_%')");
         if ($noDesc) {
@@ -1047,7 +1047,7 @@ function admin_dispatch(string $path): void
         if (!Auth::can('manage_settings')) {
             foreach (Settings::tabs() as $tab => $t) {
                 if (admin_can_settings($tab)) {
-                    redirect(admin_url("settings/$tab/" . array_key_first($t['sections'])));
+                    redirect(Settings::url($tab));
                 }
             }
             admin_404();
@@ -1075,48 +1075,45 @@ function admin_dispatch(string $path): void
             default => $on ? 'Page cache is on.' : 'Page cache is off.',
         }]);
     });
-    $r->get('/settings/{tab}', static function (string $tab) {
-        if (isset(Settings::MOVED[$tab])) {
-            redirect(admin_url('settings/' . Settings::MOVED[$tab]), 301);
+    // Old addresses: renamed sections (MOVED) and groups that now have their own page (SEO, Appearance).
+    $moved = static function (string $tab, ?string $section = null): ?string {
+        $key = $section === null ? $tab : "$tab/$section";
+        if (isset(Settings::MOVED[$key])) {
+            [$tab, $section] = array_pad(explode('/', Settings::MOVED[$key], 2), 2, null);
+            return isset(Settings::STANDALONE[$tab]) ? Settings::url($tab, $section) : admin_url('settings/' . Settings::MOVED[$key]);
         }
-        $t = Settings::tabs()[$tab] ?? admin_404();
-        redirect(admin_url("settings/$tab/" . array_key_first($t['sections'])));
+        return isset(Settings::STANDALONE[$tab]) ? Settings::url($tab, $section) : null;
+    };
+    $r->get('/settings/{tab}', static function (string $tab) use ($moved) {
+        if ($to = $moved($tab)) {
+            redirect($to, 301);
+        }
+        Settings::tabs()[$tab] ?? admin_404();
+        redirect(Settings::url($tab));
     });
-    $r->get('/settings/{tab}/{section}', static function (string $tab, string $section) {
-        if (isset(Settings::MOVED["$tab/$section"])) {
-            redirect(admin_url('settings/' . Settings::MOVED["$tab/$section"]), 301);
+    $r->get('/settings/{tab}/{section}', static function (string $tab, string $section) use ($moved) {
+        if ($to = $moved($tab, $section)) {
+            redirect($to, 301);
         }
         admin_require_settings($tab);
         $def = Settings::section($tab, $section) ?? admin_404();
         admin_view('settings', ['tab' => $tab, 'section' => $section, 'def' => $def, 'title' => 'Settings']);
     });
-    $r->post('/settings/{tab}/{section}', static function (string $tab, string $section) {
-        admin_require_settings($tab);
-        $def = Settings::section($tab, $section) ?? admin_404();
-        $oldSlug = admin_slug();
-        $errors = [];
-        if (!empty($def['fields'])) {
-            $errors = Settings::save($tab, $section, $_POST['s'] ?? []);
-        }
-        match ($def['render'] ?? '') {
-            'seo-types' => admin_save_seo_types(),
-            'redirects' => admin_save_redirects(),
-            'menus' => admin_save_menus(),
-            'design-system' => admin_save_design(),
-            default => null,
-        };
-        log_activity('settings_saved', "$tab/$section");
-        if ($errors) {
-            Session::flash('error', implode(' ', $errors));
-        } else {
-            Session::flash('success', 'Settings saved.');
-        }
-        $newSlug = (string)Options::get('security_admin_slug', 'admin');
-        if ($newSlug !== $oldSlug) {
-            Session::flash('warn', 'Your admin URL is now ' . url($newSlug) . ', bookmark it.');
-        }
-        redirect(admin_url("settings/$tab/$section"));
-    });
+    $r->post('/settings/{tab}/{section}', static fn(string $tab, string $section) => admin_settings_save($tab, $section));
+
+    // SEO and Appearance: same settings, their own place in the sidebar.
+    foreach (Settings::STANDALONE as $tab => $base) {
+        $r->get('/' . $base, static function () use ($tab) {
+            admin_require_settings($tab);
+            redirect(Settings::url($tab));
+        });
+        $r->get('/' . $base . '/{section}', static function (string $section) use ($tab) {
+            admin_require_settings($tab);
+            $def = Settings::section($tab, $section) ?? admin_404();
+            admin_view('settings', ['tab' => $tab, 'section' => $section, 'def' => $def, 'title' => Settings::tabs()[$tab]['label']]);
+        });
+        $r->post('/' . $base . '/{section}', static fn(string $section) => admin_settings_save($tab, $section));
+    }
     // ---------- Dashboard access: private domain + IP allow-list ----------
     $r->post('/system/admin-host/check', static function () {
         Auth::require('manage_settings');
@@ -1811,6 +1808,36 @@ function admin_save_redirects(): void
     PageCache::clear();
 }
 
+/** Save one settings section (Settings, SEO or Appearance) and go back to it. */
+function admin_settings_save(string $tab, string $section): never
+{
+    admin_require_settings($tab);
+    $def = Settings::section($tab, $section) ?? admin_404();
+    $oldSlug = admin_slug();
+    $errors = [];
+    if (!empty($def['fields'])) {
+        $errors = Settings::save($tab, $section, $_POST['s'] ?? []);
+    }
+    match ($def['render'] ?? '') {
+        'seo-types' => admin_save_seo_types(),
+        'redirects' => admin_save_redirects(),
+        'menus' => admin_save_menus(),
+        'design-system' => admin_save_design(),
+        default => null,
+    };
+    log_activity('settings_saved', "$tab/$section");
+    if ($errors) {
+        Session::flash('error', implode(' ', $errors));
+    } else {
+        Session::flash('success', 'Settings saved.');
+    }
+    $newSlug = (string)Options::get('security_admin_slug', 'admin');
+    if ($newSlug !== $oldSlug) {
+        Session::flash('warn', 'Your admin URL is now ' . url($newSlug) . ', bookmark it.');
+    }
+    redirect(Settings::url($tab, $section));
+}
+
 function admin_save_menus(): void
 {
     $data = json_decode((string)input('menus_json', '[]'), true);
@@ -1821,6 +1848,12 @@ function admin_save_menus(): void
 
 function admin_save_design(): void
 {
+    // The styles editor (admin/assets/design-system.js) posts everything as one JSON document.
+    $json = json_decode((string)input('ds_json', ''), true);
+    if (is_array($json)) {
+        \Slate\DesignSystem::save($json + \Slate\DesignSystem::get());
+        return;
+    }
     $in = (array)input('ds', []);
     $colors = [];
     foreach ((array)($in['color_id'] ?? []) as $i => $id) {

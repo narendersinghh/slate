@@ -87,13 +87,13 @@ final class Settings
                 ]],
             ]],
 
-            'appearance' => ['label' => 'Appearance', 'icon' => 'palette', 'description' => 'Theme, design system and menus.', 'sections' => [
-                'design' => ['label' => 'Styles (design system)', 'render' => 'design-system'],
+            'appearance' => ['label' => 'Appearance', 'icon' => 'palette', 'description' => 'Colours, fonts, variables and classes of your website, its menus and theme.', 'sections' => [
+                'styles' => ['label' => 'Styles', 'render' => 'design-system'],
+                'menus' => ['label' => 'Menus', 'render' => 'menus'],
                 'theme' => ['label' => 'Theme', 'fields' => [
                     ['key' => 'theme', 'type' => 'select', 'label' => 'Active theme', 'default' => 'default', 'options' => 'themes'],
                     ['key' => 'admin_bar_frontend', 'type' => 'toggle', 'label' => 'Show admin bar on the website when logged in', 'default' => true],
                 ]],
-                'menus' => ['label' => 'Menus', 'render' => 'menus'],
             ]],
 
             'seo' => ['label' => 'SEO', 'icon' => 'search', 'description' => 'Titles, indexing, sitemap, schema, social and redirects.', 'sections' => [
@@ -311,15 +311,31 @@ final class Settings
         return self::$tabs = $tabs;
     }
 
+    /** Groups with their own place in the sidebar (tab => base address) instead of living under Settings. */
+    public const STANDALONE = ['seo' => 'seo', 'appearance' => 'design'];
+
+    /** Address of a settings section, wherever it lives (Settings, or its own page such as SEO). */
+    public static function url(string $tab, ?string $section = null): string
+    {
+        $section ??= (string)array_key_first(self::tabs()[$tab]['sections'] ?? ['' => 0]);
+        return isset(self::STANDALONE[$tab]) ? admin_url(self::STANDALONE[$tab] . '/' . $section) : admin_url("settings/$tab/$section");
+    }
+
+    /** The groups shown under Settings (without those that have their own page). */
+    public static function settingsTabs(): array
+    {
+        return array_diff_key(self::tabs(), self::STANDALONE);
+    }
+
     /** Old settings addresses (before 0.13) that moved. */
     public const MOVED = [
         'general/writing' => 'content/writing', 'general/email' => 'email/delivery', 'media/optimization' => 'content/optimization',
         'media/uploads' => 'content/uploads', 'integrations/google' => 'integrations/analytics', 'integrations/other' => 'integrations/verification',
-        'media' => 'content/optimization', 'email' => 'email/delivery',
+        'media' => 'content/optimization', 'email' => 'email/delivery', 'appearance/design' => 'appearance/styles',
     ];
 
     /**
-     * Flat index of every setting (for the search box): [label, help, tab label, section label, url-path].
+     * Flat index of every setting (for the search box): [label, help, tab label, section label, url].
      * @return array<int, array{0:string,1:string,2:string,3:string,4:string}>
      */
     public static function index(): array
@@ -327,10 +343,10 @@ final class Settings
         $out = [];
         foreach (self::tabs() as $tk => $t) {
             foreach ($t['sections'] as $sk => $sec) {
-                $out[] = [$sec['label'], $t['description'] ?? '', $t['label'], '', "$tk/$sk"];
+                $out[] = [$sec['label'], $t['description'] ?? '', $t['label'], '', self::url($tk, $sk)];
                 foreach ($sec['fields'] ?? [] as $f) {
                     if (!empty($f['label']) && ($f['type'] ?? '') !== 'info') {
-                        $out[] = [$f['label'], (string)($f['help'] ?? ''), $t['label'], $sec['label'], "$tk/$sk"];
+                        $out[] = [$f['label'], (string)($f['help'] ?? ''), $t['label'], $sec['label'], self::url($tk, $sk)];
                     }
                 }
             }

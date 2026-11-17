@@ -19,7 +19,7 @@ $canSettings = Auth::can('manage_settings');
 
 if ($canSettings) {
     $hidden = (bool)Options::get('seo_noindex_site');
-    $add($hidden ? 'warn' : 'ok', 'search', 'Search engines', $hidden ? 'Hidden, site is noindexed' : 'Visible to Google & others', admin_url('settings/seo/indexing'), 'seo_noindex_site', !$hidden);
+    $add($hidden ? 'warn' : 'ok', 'search', 'Search engines', $hidden ? 'Hidden, site is noindexed' : 'Visible to Google & others', \Slate\Settings::url('seo', 'indexing'), 'seo_noindex_site', !$hidden);
     $maint = (bool)Options::get('maintenance_mode');
     $add($maint ? 'warn' : 'ok', 'monitor', 'Website', $maint ? 'Maintenance mode, visitors see a notice' : 'Online for everyone', admin_url('settings/system/maintenance'), 'maintenance_mode', !$maint);
     $cache = (bool)Options::get('cache_pages', true);

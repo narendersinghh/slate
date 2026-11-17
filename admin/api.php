@@ -178,7 +178,7 @@ function admin_api_routes(Router $r): void
             foreach ($tab['sections'] as $sk => $sec) {
                 $hay = mb_strtolower($tab['label'] . ' ' . $sec['label'] . ' ' . implode(' ', array_column($sec['fields'] ?? [], 'label')));
                 if ($ql === '' || str_contains($hay, $ql)) {
-                    $out[] = ['group' => 'Settings', 'label' => $tab['label'] . ' › ' . $sec['label'], 'hint' => '', 'url' => admin_url("settings/$tk/$sk"), 'icon' => $tab['icon']];
+                    $out[] = ['group' => isset(Settings::STANDALONE[$tk]) ? $tab['label'] : 'Settings', 'label' => $tab['label'] . ' › ' . $sec['label'], 'hint' => '', 'url' => Settings::url($tk, $sk), 'icon' => $tab['icon']];
                 }
             }
         }

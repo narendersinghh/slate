@@ -87,7 +87,7 @@ if (Auth::can('use_ai') && Auth::can('edit_posts') && (!$aiReady || $pageCount <
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>SEO health</h2><a class="btn btn-ghost btn-sm" href="<?= e(admin_url('settings/seo/titles')) ?>">SEO settings</a></div>
+    <div class="card-head"><h2>SEO health</h2><a class="btn btn-ghost btn-sm" href="<?= e(\Slate\Settings::url('seo')) ?>">SEO settings</a></div>
     <?php if (!$seoIssues): ?>
       <div class="card-pad"><div class="alert alert-success"><?= icon('check', 16) ?> Everything looks good.</div></div>
     <?php else: ?>
@@ -144,7 +144,7 @@ if (Auth::can('use_ai') && Auth::can('edit_posts') && (!$aiReady || $pageCount <
     <div class="card-head"><h2>Settings</h2></div>
     <nav class="dash-links">
       <?php foreach (\Slate\Settings::tabs() as $tk => $t): if (!admin_can_settings($tk)) continue; ?>
-        <a href="<?= e(admin_url("settings/$tk/" . array_key_first($t['sections']))) ?>"><?= icon($t['icon'], 15) ?><span><?= e($t['label']) ?></span><?= icon('chevron-right', 14) ?></a>
+        <a href="<?= e(\Slate\Settings::url($tk)) ?>"><?= icon($t['icon'], 15) ?><span><?= e($t['label']) ?></span><?= icon('chevron-right', 14) ?></a>
       <?php endforeach; ?>
     </nav>
   </section>

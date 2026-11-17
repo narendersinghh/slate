@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Global design system for the website frontend (Settings › Appearance › Design system):
+ * Global design system for the website frontend (Appearance › Styles):
  * colours, typography (fonts + type scale), layout tokens, buttons and reusable global CSS classes.
  * Output as CSS custom properties + classes in <head>; Elementor's --e-global-* variables are aliased
  * so imported Elementor designs follow these settings too.
@@ -46,6 +46,7 @@ final class DesignSystem
             'apply_elements' => true,
             'responsive' => true,
             'admin_match' => false,
+            'vars' => [],
             'classes' => [
                 ['name' => 'btn', 'css' => "display:inline-flex;align-items:center;gap:.5em;padding:.9em 1.6em;border-radius:var(--radius-button);\nbackground:var(--color-primary);color:#fff;font:var(--type-button);text-decoration:none;transition:filter .2s;"],
                 ['name' => 'btn-outline', 'css' => "display:inline-flex;align-items:center;padding:.85em 1.5em;border-radius:var(--radius-button);\nborder:1.5px solid currentColor;color:var(--color-primary);text-decoration:none;"],
@@ -101,7 +102,20 @@ final class DesignSystem
             if ($name === '' || !preg_match('/^[a-zA-Z_-]/', $name)) {
                 continue;
             }
-            $classes[] = ['name' => $name, 'css' => self::cleanCss((string)($c['css'] ?? ''))];
+            $cls = ['name' => $name, 'css' => self::cleanCss((string)($c['css'] ?? ''))];
+            if (($hover = self::cleanCss((string)($c['hover'] ?? ''))) !== '') {
+                $cls['hover'] = $hover;
+            }
+            $classes[$name] = $cls;
+        }
+        $vars = [];
+        foreach ((array)($in['vars'] ?? []) as $v) {
+            $name = trim(preg_replace('/[^a-z0-9-]/', '', strtolower(str_replace([' ', '_'], '-', ltrim((string)($v['name'] ?? ''), '-')))), '-');
+            $val = trim(str_replace([';', '{', '}', '<', '>'], '', (string)($v['value'] ?? '')));
+            if ($name === '' || $val === '' || str_starts_with($name, 'color-') || isset($vars[$name])) {
+                continue;
+            }
+            $vars[$name] = ['name' => $name, 'value' => mb_substr($val, 0, 300)];
         }
         $font = static fn($f, $def) => self::validFont((string)$f) ? (string)$f : $def;
         Options::set('design_system', [
@@ -118,7 +132,8 @@ final class DesignSystem
             'apply_elements' => !empty($in['apply_elements']),
             'responsive' => !empty($in['responsive']),
             'admin_match' => !empty($in['admin_match']),
-            'classes' => $classes,
+            'classes' => array_values($classes),
+            'vars' => array_values($vars),
         ]);
         PageCache::clear();
     }
@@ -193,6 +208,9 @@ final class DesignSystem
         $v[] = '--radius-button:' . $ds['layout']['button_radius'] . 'px';
         $v[] = '--section-space:' . $ds['layout']['section_space'] . 'px';
         $v[] = '--accent:var(--color-primary)';
+        foreach ($ds['vars'] ?? [] as $cv) {
+            $v[] = '--' . $cv['name'] . ':' . $cv['value'];
+        }
         $css = ':root{' . implode(';', $v) . '}';
         if ($ds['apply_elements']) {
             $css .= 'body{font:var(--type-body);color:var(--color-text);letter-spacing:' . $ds['type']['body']['tracking'] . 'em}';
@@ -208,6 +226,9 @@ final class DesignSystem
         foreach ($ds['classes'] as $c) {
             if ($c['css'] !== '') {
                 $css .= '.' . $c['name'] . '{' . str_replace("\n", '', $c['css']) . '}';
+            }
+            if (($c['hover'] ?? '') !== '') {
+                $css .= '.' . $c['name'] . ':hover{' . str_replace("\n", '', $c['hover']) . '}';
             }
         }
         return Hooks::filter('design_system_css', $css, $ds);

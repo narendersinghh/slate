@@ -17,7 +17,7 @@ $mainGroups = array_filter($groups, static fn($g) => ($g['position'] ?? 'main') 
 $sideGroups = array_filter($groups, static fn($g) => ($g['position'] ?? 'main') === 'side');
 $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : '';
 ?>
-<form method="post" action="<?= e(admin_url("content/$slug/save")) ?>" class="editor-form" data-post-form data-type="<?= e($slug) ?>" novalidate>
+<form method="post" action="<?= e(admin_url("content/$slug/save")) ?>" class="editor-form" data-post-form data-type="<?= e($slug) ?>" data-ai="<?= \Slate\Ai::enabled() && Auth::can('use_ai') ? '1' : '0' ?>" novalidate>
   <?= csrf_field() ?>
   <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
 
@@ -32,6 +32,9 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
       <span class="save-state muted" data-save-state></span>
     </div>
     <div class="page-actions">
+      <?php if (Auth::can('use_ai') && $supports('editor')): ?>
+        <button type="button" class="btn btn-ghost gor-guide-btn" data-gor-guide aria-haspopup="dialog" title="Write with Goraiya"><?= icon('sparrow', 16) ?> <span class="hide-sm">Goraiya</span></button>
+      <?php endif; ?>
       <?php if ($post): ?>
         <a class="btn btn-ghost" href="<?= e(Posts::permalink($post) . ($post['status'] !== 'publish' ? '?preview=' . $post['id'] : '')) ?>" target="_blank" rel="noopener" data-view-link><?= icon('eye', 16) ?> <span class="hide-sm"><?= $post['status'] === 'publish' ? 'View' : 'Preview' ?></span></a>
       <?php endif; ?>
@@ -70,7 +73,7 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
 
       <?php if ($supports('excerpt')): ?>
       <section class="card">
-        <div class="card-head"><h2>Excerpt</h2><?php if (\Slate\Ai::enabled()): ?><button type="button" class="btn btn-ghost btn-sm btn-ai" data-ai-excerpt><?= icon('sparkles', 14) ?> Write with AI</button><?php endif; ?></div>
+        <div class="card-head"><h2>Excerpt</h2><?php if (\Slate\Ai::enabled()): ?><button type="button" class="btn btn-ghost btn-sm" data-ai-excerpt><?= icon('sparrow', 14) ?> Write with Goraiya</button><?php endif; ?></div>
         <div class="card-pad"><textarea class="input" name="excerpt" rows="3" placeholder="A short summary shown in listings and used as the default meta description."><?= e($p['excerpt']) ?></textarea></div>
       </section>
       <?php endif; ?>
@@ -125,21 +128,7 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
         </div>
       </section>
 
-      <?php if (\Slate\Ai::enabled() && Auth::can('use_ai') && $supports('editor')): ?>
-      <section class="card ai-card">
-        <div class="card-head"><h2><?= icon('sparkles', 16) ?> AI assistant</h2></div>
-        <div class="card-pad stack-sm">
-          <select class="input" data-ai-action>
-            <?php foreach (\Slate\Ai::ACTIONS as $k => $a): if (in_array($k, ['seo_meta', 'excerpt', 'alt'], true)) continue; ?>
-              <option value="<?= e($k) ?>"><?= e($a['label']) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <textarea class="input" rows="2" data-ai-input placeholder="Instruction or brief (for “Custom” and “Draft”)"></textarea>
-          <button type="button" class="btn btn-ai btn-block" data-ai-run><?= icon('sparkles', 15) ?> Run</button>
-          <small class="help">Applies to the selected text, or the whole content if nothing is selected. You can review before applying.</small>
-        </div>
-      </section>
-      <?php endif; ?>
+      <?php /* Goraiya works inside the editor: the button in the header and the sparrow next to selected text. */ ?>
 
       <?php if ($supports('page_attributes') || $type['hierarchical'] || !empty($templates)): ?>
       <section class="card">

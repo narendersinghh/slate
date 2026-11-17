@@ -205,6 +205,12 @@
       this.area.innerHTML = this.store.value;
       // Form widgets are placeholders: keep them as one locked block while editing.
       this.area.querySelectorAll('[data-slate-form-widget]').forEach((w) => { w.contentEditable = 'false'; w.classList.add('ed-form-widget'); w.title = 'Form: click to change or edit it'; });
+      // Write paragraphs (<p>), not bare text and <div>s.
+      this.area.addEventListener('focus', () => { try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { /* older browsers */ } });
+      this.area.addEventListener('input', () => {
+        const first = this.area.firstChild;
+        if (first && first.nodeType === 3 && first.textContent.trim() !== '' && this.area.childNodes.length === 1) document.execCommand('formatBlock', false, 'p');
+      });
       this.src = document.createElement('textarea');
       this.src.className = 'ed-source';
       this.src.hidden = true;
@@ -493,36 +499,190 @@
     });
   }
 
-  // ---------- AI assistant ----------
-  const runBtn = $('[data-ai-run]');
-  function aiResult(text, isHtml, onApply) {
+  // ---------- Goraiya in the editor: a guide in the header, a sparrow next to selected text or the current block ----------
+  const postForm = $('[data-post-form]');
+  const aiOn = postForm?.dataset.ai === '1';
+  const SPARROW = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 19.6A8.6 8.6 0 1 0 4.3 16L2.5 21.5Z"/><path d="M19.35 7.9 22.6 9.2l-2.25 1.5"/><circle cx="15.2" cy="9.6" r="1.05" fill="currentColor" stroke="none"/></svg>';
+  const connectGoraiya = () => { const b = document.querySelector('[data-goraiya-open]'); if (b) b.click(); else toast('Ask an administrator to connect an AI provider for Goraiya.', 'error'); };
+  // AI output is untrusted: no scripts, styles, frames or event handlers, no javascript: links.
+  function cleanAiHtml(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = String(html).replace(/^\s*```(?:html)?\s*|\s*```\s*$/g, '');
+    tpl.content.querySelectorAll('script,style,iframe,object,embed,link,meta,base,form').forEach((n) => n.remove());
+    tpl.content.querySelectorAll('*').forEach((el) => {
+      [...el.attributes].forEach((a) => {
+        if (/^on/i.test(a.name) || (/^(href|src|action|formaction|xlink:href)$/i.test(a.name) && /^\s*(javascript|data|vbscript):/i.test(a.value) && !/^\s*data:image\//i.test(a.value))) el.removeAttribute(a.name);
+      });
+    });
+    return tpl.innerHTML.trim();
+  }
+  function aiResult(text, isHtml, onApply, labels) {
+    if (isHtml) text = cleanAiHtml(text);
     const body = document.createElement('div');
     body.innerHTML = '<div class="ai-preview">' + (isHtml ? text : esc(text).replace(/\n/g, '<br>')) + '</div>';
     const foot = document.createElement('div');
-    foot.style.cssText = 'display:flex;gap:8px';
-    foot.innerHTML = '<button class="btn" data-close type="button">Discard</button>' + (isHtml ? '<button class="btn" data-mode="append" type="button">Insert below</button>' : '') + '<button class="btn btn-primary" data-mode="replace" type="button">' + (isHtml ? 'Replace' : 'Use') + '</button>';
-    const m = modal({ title: 'AI suggestion', body, foot });
+    foot.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    labels = labels || { replace: isHtml ? 'Replace' : 'Use', append: isHtml ? 'Insert below' : '' };
+    foot.innerHTML = '<button class="btn" data-close type="button">Discard</button>' + (labels.append ? '<button class="btn" data-mode="append" type="button">' + esc(labels.append) + '</button>' : '') + '<button class="btn btn-primary" data-mode="replace" type="button">' + esc(labels.replace) + '</button>';
+    const m = modal({ title: 'Goraiya suggests', body, foot });
     $$('[data-mode]', m).forEach((b) => b.addEventListener('click', () => { onApply(b.dataset.mode); m.close(); }));
   }
-  runBtn?.addEventListener('click', async () => {
-    const action = $('[data-ai-action]').value;
-    const input = $('[data-ai-input]').value;
-    const selection = mainEditor?.getSelectionHtml() || '';
-    const content = selection || mainEditor?.store.value || '';
-    if (['custom', 'draft'].includes(action) && !input.trim()) return toast('Write an instruction or brief first.', 'error');
-    runBtn.classList.add('is-loading');
+  async function askGoraiya(action, input, content, busyEl) {
+    if (!aiOn) { connectGoraiya(); return null; }
+    busyEl?.classList.add('is-loading');
     const r = await api('/ai', { body: { action, input, content, title: $('[data-title]')?.value || '' } });
-    runBtn.classList.remove('is-loading');
-    if (!r.ok) return toast(r.error, 'error', 7000);
-    aiResult(r.text, r.html, (mode) => {
-      if (!mainEditor) return;
-      if (!r.html) { navigator.clipboard?.writeText(r.text); toast('Copied to clipboard'); return; }
-      if (selection && mode === 'replace') { mainEditor.area.focus(); document.execCommand('insertHTML', false, r.text); mainEditor.sync(); }
-      else if (mode === 'replace') mainEditor.setHtml(r.text);
-      else mainEditor.setHtml(mainEditor.store.value + r.text);
+    busyEl?.classList.remove('is-loading');
+    if (!r.ok) { toast(r.error, 'error', 7000); return null; }
+    return r;
+  }
+
+  if (mainEditor && postForm) {
+    const area = mainEditor.area;
+    const fab = document.createElement('button');
+    fab.type = 'button';
+    fab.className = 'gor-fab';
+    fab.hidden = true;
+    fab.innerHTML = SPARROW + '<span>Goraiya</span>';
+    const pop = document.createElement('div');
+    pop.className = 'gor-pop';
+    pop.hidden = true;
+    pop.setAttribute('role', 'dialog');
+    document.body.append(fab, pop);
+    let target = null; // {kind:'text', range, html} | {kind:'block', el}
+
+    const blockOf = (node) => { let n = node && node.nodeType === 3 ? node.parentNode : node; while (n && n.parentNode !== area) n = n.parentNode; return n && n !== area && n.nodeType === 1 ? n : null; };
+    const place = (el, rect, side) => {
+      const w = el.offsetWidth || 120;
+      let left = side === 'left' ? rect.left - w - 8 : rect.right + 8;
+      if (left + w > window.innerWidth - 8) left = Math.max(8, rect.left);
+      if (left < 8) left = 8;
+      el.style.left = left + 'px';
+      el.style.top = Math.max(8, Math.min(window.innerHeight - 40, rect.top)) + 'px';
+    };
+    const hideAll = () => { fab.hidden = true; pop.hidden = true; area.querySelectorAll('.gor-block').forEach((b) => b.classList.remove('gor-block')); };
+    const update = () => {
+      if (!pop.hidden) return;
+      const sel = window.getSelection();
+      if (!sel.rangeCount || !area.contains(sel.anchorNode)) { fab.hidden = true; return; }
+      const range = sel.getRangeAt(0);
+      area.querySelectorAll('.gor-block').forEach((b) => b.classList.remove('gor-block'));
+      if (!sel.isCollapsed && sel.toString().trim()) {
+        target = { kind: 'text', range: range.cloneRange(), html: mainEditor.getSelectionHtml() };
+        fab.hidden = false; fab.classList.remove('is-block');
+        place(fab, range.getBoundingClientRect(), 'right');
+      } else {
+        const el = blockOf(range.startContainer);
+        if (!el || el.matches('[data-slate-form-widget]')) { fab.hidden = true; return; }
+        target = { kind: 'block', el };
+        el.classList.add('gor-block');
+        fab.hidden = false; fab.classList.add('is-block');
+        const r = el.getBoundingClientRect();
+        fab.style.left = (area.getBoundingClientRect().left + 2) + 'px'; // inside the writing area's left padding
+        fab.style.top = Math.max(8, r.top - 2) + 'px';
+      }
+    };
+    document.addEventListener('selectionchange', debounce(update, 120));
+    window.addEventListener('scroll', () => { if (pop.hidden) update(); else pop.hidden = true; }, { passive: true });
+    document.addEventListener('mousedown', (e) => { if (!pop.contains(e.target) && !fab.contains(e.target) && !area.contains(e.target)) hideAll(); });
+
+    const TEXT_ACTIONS = [['improve', 'Improve'], ['shorten', 'Shorter'], ['expand', 'Longer'], ['fix', 'Fix spelling'], ['tone', 'Change tone']];
+    const BLOCK_ACTIONS = [['improve', 'Revamp'], ['shorten', 'Shorter'], ['expand', 'Longer'], ['fix', 'Fix spelling'], ['delete', 'Delete']];
+    const openPop = () => {
+      const t = target;
+      if (!t) return;
+      const acts = t.kind === 'text' ? TEXT_ACTIONS : BLOCK_ACTIONS;
+      pop.innerHTML = '<div class="gor-pop-head">' + SPARROW + '<strong>' + (t.kind === 'text' ? 'Selected text' : 'This ' + esc(blockName(t.el))) + '</strong><button type="button" class="icon-btn" data-gor-close aria-label="Close"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>' +
+        '<div class="gor-pop-actions">' + acts.map(([k, l]) => '<button type="button" class="btn btn-sm' + (k === 'delete' ? ' btn-ghost btn-danger' : '') + '" data-gor="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<form class="gor-pop-ask" data-gor-ask><input class="input input-sm" placeholder="' + (t.kind === 'text' ? 'Or say what to change…' : 'Or say what to change in this part…') + '" aria-label="Instruction for Goraiya"><button class="btn btn-sm btn-primary" type="submit">Go</button></form>' +
+        (aiOn ? '' : '<p class="gor-pop-note">Connect an AI to use Goraiya. <button type="button" class="link" data-gor-connect>Connect</button></p>');
+      pop.hidden = false;
+      place(pop, fab.getBoundingClientRect(), 'right');
+      if (aiOn) $('input', pop).focus();
+    };
+    const blockName = (el) => ({ P: 'paragraph', H1: 'heading', H2: 'heading', H3: 'heading', H4: 'heading', UL: 'list', OL: 'list', BLOCKQUOTE: 'quote', TABLE: 'table', FIGURE: 'image' })[el.tagName] || 'section';
+    fab.addEventListener('mousedown', (e) => e.preventDefault()); // keep the selection
+    fab.addEventListener('click', openPop);
+
+    const apply = (t, html, mode) => {
+      if (t.kind === 'text') {
+        mainEditor.restoreRange(t.range);
+        document.execCommand('insertHTML', false, mode === 'append' ? t.html + html : html);
+      } else {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = html;
+        if (mode === 'append') t.el.after(tpl.content); else t.el.replaceWith(tpl.content);
+      }
+      mainEditor.sync();
       toast('Applied. Remember to save.');
+    };
+    const run = async (action, input, btn) => {
+      const t = target;
+      if (!t) return;
+      if (action === 'delete') {
+        const el = t.el, parent = el.parentNode, next = el.nextSibling;
+        el.classList.remove('gor-block');
+        el.remove(); mainEditor.sync(); hideAll();
+        toast('Deleted.', 'success', 8000, { label: 'Undo', onClick: () => { parent.insertBefore(el, next); mainEditor.sync(); } });
+        return;
+      }
+      let act = action, instr = input || '';
+      if (action === 'tone') { const tone = prompt('Which tone? For example: friendly, formal, confident, simple', 'friendly'); if (!tone) return; act = 'custom'; instr = 'Rewrite this in a ' + tone + ' tone. Keep the meaning and the HTML structure.'; }
+      if (action === 'ask') act = 'custom';
+      const content = t.kind === 'text' ? t.html : t.el.outerHTML;
+      const r = await askGoraiya(act, instr, content, btn);
+      if (!r) return;
+      pop.hidden = true;
+      aiResult(r.text, true, (mode) => apply(t, r.html ? cleanAiHtml(r.text) : esc(r.text), mode), { replace: 'Replace', append: 'Insert below' });
+    };
+    pop.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.hasAttribute('data-gor-close')) { hideAll(); return; }
+      if (b.hasAttribute('data-gor-connect')) { hideAll(); connectGoraiya(); return; }
+      if (b.dataset.gor) run(b.dataset.gor, '', b);
     });
-  });
+    pop.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = $('input', pop).value.trim();
+      if (v) run('ask', v, $('button[type=submit]', pop));
+    });
+    pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideAll(); });
+
+    // The guide behind the header button: how to use Goraiya, and whole-content actions.
+    $('[data-gor-guide]')?.addEventListener('click', () => {
+      const body = document.createElement('div');
+      body.className = 'gor-guide';
+      body.innerHTML = '<ul class="gor-tips">' +
+        '<li>' + SPARROW + '<div><strong>Select text</strong><span>A sparrow appears next to it: improve, shorten, change the tone, or say what you want.</span></div></li>' +
+        '<li>' + SPARROW + '<div><strong>Click into a paragraph, heading or list</strong><span>The sparrow on the left works on that whole part: revamp it, rewrite it your way, or delete it.</span></div></li>' +
+        '<li>' + SPARROW + '<div><strong>On the website</strong><span>Open the page and click Edit page: Goraiya works the same way on any text or section.</span></div></li></ul>' +
+        (aiOn ? '<h3 class="small-label">The whole content</h3><div class="gor-guide-actions">' +
+          [['improve', 'Improve writing'], ['fix', 'Fix spelling'], ['faq', 'Add a FAQ section'], ['title', 'Suggest titles']].map(([k, l]) => '<button type="button" class="btn btn-sm" data-whole="' + k + '">' + l + '</button>').join('') + '</div>' +
+          '<form class="gor-guide-ask" data-whole-ask><textarea class="input" rows="2" placeholder="Or describe a page and Goraiya writes a draft, e.g. A friendly About page for a leadership directory"></textarea><button class="btn btn-primary btn-sm" type="submit">' + SPARROW + ' Write draft</button></form>'
+          : '<div class="gor-guide-connect"><p class="muted">Goraiya needs an AI provider first (Claude, OpenAI, Gemini or a local model).</p><button type="button" class="btn btn-primary btn-sm" data-gor-connect>Connect Goraiya</button></div>');
+      const m = modal({ title: 'Write with Goraiya', body });
+      const whole = async (action, input, btn) => {
+        const r = await askGoraiya(action, input, action === 'draft' ? '' : mainEditor.store.value, btn);
+        if (!r) return;
+        m.close();
+        if (!r.html) { aiResult(r.text, false, () => { navigator.clipboard?.writeText(r.text); toast('Copied to clipboard'); }, { replace: 'Copy' }); return; }
+        aiResult(r.text, true, (mode) => { if (mode === 'replace' && action !== 'faq') mainEditor.setHtml(cleanAiHtml(r.text)); else mainEditor.setHtml(mainEditor.store.value + cleanAiHtml(r.text)); toast('Applied. Remember to save.'); },
+          action === 'faq' ? { replace: 'Add below' } : { replace: 'Replace the content', append: 'Add below' });
+      };
+      body.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.hasAttribute('data-gor-connect')) { m.close(); connectGoraiya(); }
+        if (b.dataset.whole) whole(b.dataset.whole, '', b);
+      });
+      body.querySelector('[data-whole-ask]')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const v = e.target.querySelector('textarea').value.trim();
+        if (!v) return toast('Describe the page first.', 'error');
+        whole('draft', v, e.target.querySelector('button'));
+      });
+    });
+  }
   $('[data-ai-excerpt]')?.addEventListener('click', async (e) => {
     const b = e.currentTarget;
     b.classList.add('is-loading');

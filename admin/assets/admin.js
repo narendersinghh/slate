@@ -21,14 +21,24 @@
     return data;
   }
 
-  function toast(message, type = 'success', ms = 3800) {
+  /** A short message. Optional action: {label, onClick}, e.g. an Undo button. */
+  function toast(message, type = 'success', ms = 3800, action = null) {
     const wrap = $('#toasts');
-    if (!wrap) return;
+    if (!wrap) return null;
     const el = document.createElement('div');
     el.className = 'toast toast-' + type;
     el.innerHTML = '<span>' + esc(message) + '</span>';
+    if (action && action.label) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'toast-action';
+      b.textContent = action.label;
+      b.addEventListener('click', () => { action.onClick?.(); el.remove(); });
+      el.appendChild(b);
+    }
     wrap.appendChild(el);
     setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 250); }, ms);
+    return el;
   }
 
   function modal({ title = '', body = '', foot = '', size = '' } = {}) {

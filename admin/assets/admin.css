@@ -206,19 +206,12 @@ html.nav-collapsed .nav-link { justify-content: center; }
 .btn-danger { color: var(--danger); }
 .btn-danger:not(.btn-ghost) { border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 .btn-danger:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
-.btn-ai { background: var(--ink); color: #fff; border: 0; position: relative; overflow: hidden; }
-.btn-ai::before { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 20%, rgba(242, 107, 45, .55) 50%, transparent 80%); transform: translateX(-100%); transition: transform .6s; }
-.btn-ai:hover { color: #fff; background: var(--ink-2); }
-.btn-ai:hover::before { transform: translateX(100%); }
-.btn-ai .ic { color: var(--o-400); }
-[data-mode="dark"] .btn-ai { background: var(--o-500); }
-[data-mode="dark"] .btn-ai .ic { color: #fff; }
 .btn-sm { height: 32px; padding: 0 12px; font-size: 12.5px; border-radius: 9px; }
 .btn-lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
 .btn-block { width: 100%; }
 .btn.is-loading { position: relative; color: transparent !important; pointer-events: none; }
 .btn.is-loading::after { content: ""; position: absolute; width: 16px; height: 16px; border: 2px solid var(--muted); border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
-.btn-primary.is-loading::after, .btn-ai.is-loading::after { border-color: #fff; border-right-color: transparent; }
+.btn-primary.is-loading::after { border-color: #fff; border-right-color: transparent; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; border: 0; background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
 .icon-btn:hover { background: var(--surface-3); color: var(--text); }
@@ -538,7 +531,7 @@ label.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; c
 
 /* ---------- Editor screen ---------- */
 .editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) 344px; gap: 26px; align-items: start; }
-.editor-side { position: sticky; top: calc(var(--topbar-h) + 86px); max-height: calc(100vh - var(--topbar-h) - 104px); overflow-y: auto; scrollbar-width: thin; padding-bottom: 20px; }
+.editor-side { padding-bottom: 20px; } /* scrolls with the page: one scrollbar */
 .editor-side .card { margin-bottom: 14px; }
 .editor-side .card-head { padding: 13px 18px; min-height: 50px; }
 .editor-side .card-head h2 { font-size: 19px; }
@@ -1584,3 +1577,32 @@ html.goraiya-open .main-wrap { margin-right: 0; }
 .mod-src { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
 .mod-card-foot .icon-btn { width: 32px; height: 32px; }
 .mod-none { margin-top: 12px; }
+
+/* Goraiya in the editor */
+.gor-guide-btn .ic { color: var(--accent); }
+.gor-fab { position: fixed; z-index: 60; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 8px; border: 0; border-radius: 99px;
+  background: linear-gradient(135deg, var(--o-500), var(--o-700)); color: #fff; font: 600 12.5px var(--font); box-shadow: 0 6px 18px -6px rgba(219, 84, 25, .6); cursor: pointer; }
+.gor-fab:hover { filter: brightness(1.08); }
+.gor-fab.is-block { width: 26px; height: 26px; padding: 0; justify-content: center; }
+.gor-fab.is-block span { display: none; }
+.gor-pop { position: fixed; z-index: 61; width: min(340px, calc(100vw - 16px)); padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-lg, 0 18px 40px -12px rgba(0, 0, 0, .25)); display: flex; flex-direction: column; gap: 10px; }
+.gor-pop-head { display: flex; align-items: center; gap: 8px; }
+.gor-pop-head .ic { color: var(--accent); }
+.gor-pop-head strong { flex: 1; font-size: 13.5px; }
+.gor-pop-head .icon-btn { width: 28px; height: 28px; }
+.gor-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.gor-pop-ask { display: flex; gap: 6px; }
+.gor-pop-ask .input { flex: 1; min-width: 0; }
+.gor-pop-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+.ed-area .gor-block { outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 4px; border-radius: 4px; }
+.gor-tips { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.gor-tips li { display: flex; gap: 10px; align-items: flex-start; }
+.gor-tips li > .ic { color: var(--accent); margin-top: 3px; flex-shrink: 0; }
+.gor-tips li div { display: flex; flex-direction: column; gap: 2px; }
+.gor-tips li span { color: var(--muted); font-size: 13.5px; }
+.gor-guide-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+.gor-guide-ask { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.gor-guide-ask textarea { width: 100%; }
+.gor-guide-connect { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.toast-action { margin-left: 12px; border: 0; background: rgba(255, 255, 255, .16); color: inherit; font: 600 12.5px var(--font); padding: 4px 10px; border-radius: 7px; cursor: pointer; }
+.toast-action:hover { background: rgba(255, 255, 255, .26); }

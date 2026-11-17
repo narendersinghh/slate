@@ -46,7 +46,7 @@ $ogm = $seo['og_image'] ? Media::find((int)$seo['og_image']) : null;
       <ul class="seo-checks" data-seo-checks></ul>
       <?php endif; ?>
       <?php if (\Slate\Ai::enabled() && \Slate\Auth::can('use_ai')): ?>
-        <button type="button" class="btn btn-sm btn-ai" data-ai-seo><?= icon('sparkles', 15) ?> Generate with AI</button>
+        <button type="button" class="btn btn-sm" data-ai-seo><?= icon('sparrow', 15) ?> Write with Goraiya</button>
       <?php endif; ?>
       <?php if ($kind === 'post' && !empty($post['id']) && \Slate\Indexing::enabled() && \Slate\Auth::can('publish_posts')):
         $idxLast = \Slate\Indexing::lastFor((int)$post['id']);

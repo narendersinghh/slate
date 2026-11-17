@@ -134,10 +134,17 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
       <section class="card" data-page-design>
         <div class="card-head"><h2>Design</h2></div>
         <div class="card-pad stack-sm">
-          <?php foreach (\Slate\HtmlPages::DESIGNS as $k => $label): ?>
-          <label class="choice-card"><input type="radio" name="html_design" value="<?= e($k) ?>"<?= $dmode === $k ? ' checked' : '' ?>> <?= icon($k === 'site' ? 'palette' : 'layers', 15) ?> <?= e($label) ?></label>
+          <?php $dparts = \Slate\HtmlPages::parts((array)\Slate\HtmlPages::data($post)) ?: ['typography']; foreach (\Slate\HtmlPages::DESIGNS as $k => $label): ?>
+          <label class="choice-card"><input type="radio" name="html_design" value="<?= e($k) ?>"<?= $dmode === $k ? ' checked' : '' ?>> <?= icon($k === 'keep' ? 'layers' : 'palette', 15) ?> <?= e($label) ?></label>
+          <?php if ($k === 'partial'): ?>
+          <div class="page-design-parts choice-list">
+            <?php foreach (\Slate\HtmlPages::PARTS as $pk => [$plabel, $phelp]): ?>
+            <label class="choice" title="<?= e($phelp) ?>"><input type="checkbox" name="html_parts[]" value="<?= e($pk) ?>"<?= in_array($pk, $dparts, true) ? ' checked' : '' ?>> <?= e($plabel) ?></label>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
           <?php endforeach; ?>
-          <small class="help">"Keep the original design" uses the page's own CSS. "Use my site's styles" removes it and applies your design system (Appearance &rsaquo; Styles) and global classes. Texts and images stay the same; switch back any time.</small>
+          <small class="help">"Keep the original design" uses the page's own CSS. "Use my site's styles for..." keeps it and applies your design system (Appearance &rsaquo; Styles) only to what you tick. "Completely" removes the page's CSS and uses your styles and global classes. Texts and images stay the same; switch back any time.</small>
           <?php if ($src !== ''): ?><small class="help"><?= icon('link', 12) ?> Imported from <a href="<?= e($src) ?>" target="_blank" rel="noopener noreferrer"><?= e($src) ?></a></small><?php endif; ?>
         </div>
       </section>

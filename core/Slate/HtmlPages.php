@@ -11,8 +11,10 @@ namespace Slate;
  *   'body'  => the body HTML; editable elements carry data-se="<id>", repeating groups data-se-loop / data-se-item,
  *   'html_attrs', 'body_attrs', 'source' => 'import'|'ai', 'next' => next free element id, 'v' => 1,
  *   'design' => 'keep' (default: the page's own CSS, design-system CSS stays out) | 'site' (the page's own CSS is left
- *               out at render time and the site's design system styles it, see designHead()/designBody()),
- *   'hints'  => layout hints read from the page's CSS for the 'site' design: ['grid' => [class => columns], 'flex' => [class => 1]],
+ *               out at render time and the site's design system styles it, see designHead()/designBody()) | 'partial'
+ *               (the page's own CSS stays; the design system overrides only the groups in 'site_parts', see PARTS),
+ *   'site_parts' => for 'partial': list of PARTS keys,
+ *   'hints'  => hints read from the page's CSS: ['grid' => [class => columns], 'flex' => [class => 1], 'bg' => [class => 1]],
  * ]
  * and post content holds the page's text (search, excerpts, feeds). Visitors get the page as its own document with
  * Slate's SEO tags; loops bound to content ({{#query}}) are filled in by the template engine. Team members can edit
@@ -225,14 +227,14 @@ final class HtmlPages
         }
         // A rewrite of the whole page (Goraiya, MCP) keeps the chosen design and where the page was imported from.
         $old = self::data($post) ?? [];
-        foreach (['design', 'import'] as $k) {
+        foreach (['design', 'site_parts', 'import'] as $k) {
             if (!array_key_exists($k, $data) && isset($old[$k])) {
                 $data[$k] = $old[$k];
             }
         }
-        if (self::design($data) === 'site' && (!isset($data['hints']) || (isset($old['head']) && ($data['head'] ?? null) !== $old['head']))) {
+        if (($mode = self::design($data)) !== 'keep' && (!isset($data['hints']) || (isset($old['head']) && ($data['head'] ?? null) !== $old['head']))) {
             unset($data['hints']);
-            $data = self::withDesign($data, 'site');
+            $data = self::withDesign($data, $mode, self::parts($data));
         }
         if (!$sanitized && !Auth::can('unfiltered_html') && PHP_SAPI !== 'cli') {
             $data['head'] = self::stripScripts((string)$data['head']);
@@ -287,7 +289,17 @@ final class HtmlPages
 
     // ------------------------------------------------------------------ design: the page's own CSS or the site's styles
 
-    public const DESIGNS = ['keep' => "Keep the original design", 'site' => "Use my site's styles"];
+    public const DESIGNS = ['keep' => "Keep the original design", 'partial' => "Use my site's styles for...", 'site' => "Use my site's styles completely"];
+    /** Groups of the design system a 'partial' page takes over; everything else keeps the page's own CSS. */
+    public const PARTS = [
+        'typography' => ['Typography', 'Fonts, heading sizes (h1 to h6), body text, line height and letter spacing from your type scale'],
+        'colors' => ['Colours', 'Text, heading and link colours from your palette (sections with their own background keep their colours)'],
+        'backgrounds' => ['Section backgrounds', 'The page and its sections use your background colour (background photos stay)'],
+        'buttons' => ['Buttons', 'Buttons and button-like links get your global btn / btn-outline look'],
+        'links' => ['Links', 'Text links in your primary colour'],
+        'images' => ['Images', "Your site's corner radius on images"],
+        'spacing' => ['Spacing and containers', 'Your container width and section spacing'],
+    ];
 
     /** Inline style properties kept in the 'site' design (layout only; colours, fonts, borders, backgrounds go). */
     private const LAYOUT_PROPS = '/^(display|flex|flex-[a-z-]+|grid|grid-[a-z-]+|gap|row-gap|column-gap|align-[a-z-]+|justify-[a-z-]+|place-[a-z-]+|order|text-align|width|max-width|min-width|aspect-ratio|object-fit|object-position|background-image|background-size|background-position|background-repeat)$/'; // background images are content (hero photos); colours and fonts follow the site
@@ -296,14 +308,32 @@ final class HtmlPages
 
     public static function design(array $d): string
     {
-        return ($d['design'] ?? 'keep') === 'site' ? 'site' : 'keep';
+        $m = (string)($d['design'] ?? 'keep');
+        return $m === 'site' ? 'site' : ($m === 'partial' && self::parts($d) ? 'partial' : 'keep');
+    }
+
+    /** The chosen PARTS of a 'partial' page (cleaned, in PARTS order). */
+    public static function parts(array $d): array
+    {
+        return self::cleanParts((array)($d['site_parts'] ?? []));
+    }
+
+    public static function cleanParts(array $parts): array
+    {
+        return array_values(array_intersect(array_keys(self::PARTS), array_map('strval', $parts)));
     }
 
     /** Page data with the design switched; layout hints are read from the page's CSS the first time 'site' is chosen. */
-    public static function withDesign(array $d, string $mode): array
+    public static function withDesign(array $d, string $mode, array $parts = []): array
     {
-        $d['design'] = $mode === 'site' ? 'site' : 'keep';
-        if ($d['design'] === 'site' && !isset($d['hints'])) {
+        $parts = self::cleanParts($parts);
+        $d['design'] = $mode === 'site' ? 'site' : ($mode === 'partial' && $parts ? 'partial' : 'keep');
+        if ($d['design'] === 'partial') {
+            $d['site_parts'] = $parts;
+        } else {
+            unset($d['site_parts']);
+        }
+        if ($d['design'] !== 'keep' && (!isset($d['hints']) || ($d['design'] === 'partial' && !isset($d['hints']['bg'])))) {
             $d['hints'] = self::layoutHints((string)($d['head'] ?? ''), (string)($d['body'] ?? ''));
         }
         return $d;
@@ -312,6 +342,10 @@ final class HtmlPages
     /** What follows Slate's own head tags. 'keep' prints the page's head exactly as before. */
     public static function designHead(array $d): string
     {
+        if (self::design($d) === 'partial') {
+            // The page's own CSS first, then the design-system variables and the overrides for the chosen groups.
+            return "\n" . (string)($d['head'] ?? '') . "\n" . self::partsHead(self::parts($d)) . "\n";
+        }
         if (self::design($d) !== 'site') {
             return "\n" . (string)($d['head'] ?? '') . "\n";
         }
@@ -320,19 +354,169 @@ final class HtmlPages
 
     public static function designBody(array $d, string $body): string
     {
-        return self::design($d) === 'site' ? self::siteBody($body, (array)($d['hints'] ?? [])) : $body;
+        return match (self::design($d)) {
+            'site' => self::siteBody($body, (array)($d['hints'] ?? [])),
+            'partial' => self::partsBody($body, self::parts($d), (array)($d['hints'] ?? [])),
+            default => $body,
+        };
     }
 
     public static function bodyAttrs(array $d): string
     {
         $attrs = (string)($d['body_attrs'] ?? '');
-        if (self::design($d) !== 'site') {
+        $mode = self::design($d);
+        if ($mode === 'keep') {
             return $attrs;
         }
+        $class = $mode === 'site' ? 'slate-site-styles' : 'slate-parts';
         if (preg_match('/(^|\s)class="([^"]*)"/', $attrs)) {
-            return (string)preg_replace('/(^|\s)class="([^"]*)"/', '$1class="$2 slate-site-styles"', $attrs, 1);
+            return (string)preg_replace('/(^|\s)class="([^"]*)"/', '$1class="$2 ' . $class . '"', $attrs, 1);
         }
-        return trim($attrs . ' class="slate-site-styles"');
+        return trim($attrs . ' class="' . $class . '"');
+    }
+
+    // ------------------------------------------------------------------ design: 'partial' (chosen groups only)
+
+    /** Design-system variables (and fonts when typography is chosen) plus the overrides, printed after the page's CSS. */
+    public static function partsHead(array $parts): string
+    {
+        $ds = DesignSystem::get();
+        $out = '';
+        if (in_array('typography', $parts, true) && ($url = DesignSystem::fontsUrl($ds))) {
+            $out .= '<link rel="stylesheet" href="' . e($url) . '">';
+        }
+        // Only the :root variables: the design system's element rules and classes would restyle everything else.
+        $vars = preg_match('/^:root\{[^}]*\}/', DesignSystem::css($ds), $m) ? $m[0] : '';
+        return $out . '<style id="slate-site-parts">' . $vars . self::partsCss($parts, $ds) . '</style>';
+    }
+
+    /**
+     * Overrides for the chosen groups, scoped to body.slate-parts with !important on just the properties of each group,
+     * so they win over the page's own stylesheets. Elements inside a section with its own background (sl-own-bg) keep
+     * their text and link colours unless "Section backgrounds" is chosen too.
+     */
+    public static function partsCss(array $parts, ?array $ds = null): string
+    {
+        $ds ??= DesignSystem::get();
+        $b = 'html body.slate-parts';
+        $own = in_array('backgrounds', $parts, true) ? '' : ':not(.sl-own-bg,.sl-own-bg *)';
+        $noIcon = ':not(i,[class*="icon"],[class*="fa-"],.fa,[class^="bi-"],[class*=" bi-"],.material-icons,.material-symbols-outlined)';
+        // Slate's own UI on the page (admin bar, page editor) keeps its look.
+        $ui = ':not(#slate-bar,#slate-bar *,#slate-picker *,#slate-fmt *,.slate-toast *,.se-ui,.se-ui *,.se-tb *,.se-pop *)';
+        $noIcon .= $ui;
+        $own .= $ui;
+        $t = $ds['type'];
+        $css = '';
+        foreach ($parts as $part) {
+            switch ($part) {
+                case 'typography':
+                    $body = $t['body'];
+                    $css .= "$b, $b :is(p,li,dd,dt,td,th,blockquote,figcaption,label,small,cite,a,span,div,input,textarea,select,button)$noIcon{font-family:var(--font-body)!important}"
+                        . "$b :is(p,li,dd,dt,td,th,blockquote,figcaption,label)$ui{font-size:var(--fs-body)!important;line-height:{$body['line']}!important;letter-spacing:{$body['tracking']}em!important}"
+                        . "$b :is(small,figcaption,cite)$ui{font-size:var(--fs-small)!important}";
+                    foreach (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as $h) {
+                        $css .= "$b $h$ui{font:var(--type-$h)!important;letter-spacing:{$t[$h]['tracking']}em!important}";
+                    }
+                    $css .= "$b :is(h1,h2,h3,h4,h5,h6) *$noIcon{font-family:inherit!important}";
+                    break;
+                case 'colors':
+                    $css .= "$b{color:var(--color-text)!important}"
+                        . "$b :is(p,li,dd,dt,td,th,blockquote,figcaption,label,small,cite,span,strong,em,div)$own:not(.btn *,.btn-outline *,button *){color:var(--color-text)!important}"
+                        . "$b :is(h1,h2,h3,h4,h5,h6)$own{color:var(--color-secondary,var(--color-text))!important}"
+                        . "$b a:not(.btn,.btn-outline)$own{color:var(--color-primary)!important}";
+                    break;
+                case 'backgrounds':
+                    $css .= "$b{background-color:var(--color-background,#fff)!important}"
+                        . "$b .sl-own-bg{background-color:var(--color-background,#fff)!important}";
+                    break;
+                case 'links':
+                    $css .= "$b :is(p,li,dd,td,blockquote,figcaption,span,div) a:not(.btn,.btn-outline)$own{color:var(--color-primary)!important;text-decoration:underline!important;text-underline-offset:.2em}"
+                        . "$b :is(p,li,dd,td,blockquote,figcaption,span,div) a:not(.btn,.btn-outline):hover{opacity:.8}";
+                    break;
+                case 'buttons':
+                    $cls = [];
+                    foreach ($ds['classes'] as $c) {
+                        $cls[$c['name']] = $c;
+                    }
+                    foreach (['btn' => "display:inline-flex;align-items:center;gap:.5em;padding:.9em 1.6em;border-radius:var(--radius-button);background:var(--color-primary);color:#fff;font:var(--type-button);text-decoration:none;border:0",
+                        'btn-outline' => "display:inline-flex;align-items:center;padding:.85em 1.5em;border-radius:var(--radius-button);border:1.5px solid currentColor;color:var(--color-primary);background:transparent;text-decoration:none"] as $name => $fallback) {
+                        $css .= "$b .$name{" . self::important((string)($cls[$name]['css'] ?? $fallback)) . 'cursor:pointer;box-shadow:none!important}';
+                        if (($cls[$name]['hover'] ?? '') !== '') {
+                            $css .= "$b .$name:hover{" . self::important((string)$cls[$name]['hover']) . '}';
+                        } else {
+                            $css .= "$b .$name:hover{filter:brightness(1.08)}";
+                        }
+                    }
+                    break;
+                case 'images':
+                    $css .= "$b img$ui:not([class*=\"logo\"],[src*=\"logo\"],[width=\"16\"],[width=\"24\"],[width=\"32\"]){border-radius:var(--radius)!important}";
+                    break;
+                case 'spacing':
+                    $css .= "$b .sl-container{width:100%!important;max-width:var(--container)!important;margin-inline:auto!important}"
+                        . "$b .sl-section{padding-block:var(--section-space)!important}";
+                    break;
+            }
+        }
+        return $css;
+    }
+
+    /** "a:b;c:d" -> "a:b!important;c:d!important;" (declarations only, from the design system's own classes). */
+    private static function important(string $decls): string
+    {
+        $out = '';
+        foreach (explode(';', str_replace("\n", '', $decls)) as $decl) {
+            $decl = trim(str_replace(['!important', '{', '}', '<'], '', $decl));
+            if ($decl !== '' && str_contains($decl, ':')) {
+                $out .= $decl . '!important;';
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The body for a 'partial' page: nothing is removed. Classes are only added where a chosen group needs them:
+     * "btn"/"btn-outline" on buttons, "sl-container"/"sl-section" for spacing, "sl-own-bg" on sections that have their
+     * own background (from the page's CSS or an inline style) so colours there stay readable.
+     */
+    public static function partsBody(string $html, array $parts, array $hints = []): string
+    {
+        $buttons = in_array('buttons', $parts, true);
+        $spacing = in_array('spacing', $parts, true);
+        $colours = (bool)array_intersect(['colors', 'links', 'backgrounds'], $parts);
+        if (!$buttons && !$spacing && !$colours) {
+            return $html;
+        }
+        [$doc, $root] = self::fragment($html);
+        $bg = (array)($hints['bg'] ?? []);
+        foreach (iterator_to_array($root->getElementsByTagName('*')) as $el) {
+            /** @var \DOMElement $el */
+            $tag = strtolower($el->tagName);
+            if ($tag === 'svg' || self::insideSvg($el)) {
+                continue;
+            }
+            $classes = preg_split('/\s+/', trim($el->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY);
+            $cls = ' ' . strtolower(implode(' ', $classes)) . ' ';
+            $add = [];
+            if ($buttons && ($tag === 'button' || ($tag === 'input' && in_array(strtolower($el->getAttribute('type')), ['submit', 'button'], true))
+                || ($tag === 'a' && (preg_match('/[\s_-](btn|button|cta)[\s_-]/', $cls) || strtolower($el->getAttribute('role')) === 'button')))) {
+                $add[] = preg_match('/outline|secondary|ghost|border|light|link/', $cls) && $tag === 'a' ? 'btn-outline' : 'btn';
+            }
+            if ($spacing && preg_match('/[\s_-](wrapper|wrap|inner|container|container-fluid|site-width|page-width|content-width)\s/', $cls)) {
+                $add[] = 'sl-container';
+            }
+            if ($spacing && $tag === 'section') {
+                $add[] = 'sl-section';
+            }
+            if ($colours && (array_intersect_key($bg, array_flip($classes))
+                || preg_match('/(^|;)\s*background(-color|-image)?\s*:\s*(?!none|transparent|inherit|initial|unset)/i', $el->getAttribute('style')))) {
+                $add[] = 'sl-own-bg';
+            }
+            $add = array_diff(array_unique($add), $classes);
+            if ($add) {
+                $el->setAttribute('class', trim(implode(' ', array_merge($classes, $add))));
+            }
+        }
+        return self::inner($doc, $root);
     }
 
     /** The page's head without its stylesheets (icon fonts stay); scripts, icons and meta stay. */
@@ -447,10 +631,18 @@ final class HtmlPages
             }
         }
         $css = (string)preg_replace('#/\*.*?\*/#s', '', $css);
-        $out = ['grid' => [], 'flex' => []];
+        $out = ['grid' => [], 'flex' => [], 'bg' => []];
         if (preg_match_all('/([^{}@;]+)\{([^{}]*)\}/', $css, $rules, PREG_SET_ORDER)) {
             foreach ($rules as [, $selectors, $decls]) {
                 $decls = strtolower($decls);
+                // Sections that paint their own background (colour, gradient or photo).
+                if (preg_match('/(^|;)\s*background(-color|-image)?\s*:\s*(?!none|transparent|inherit|initial|unset|#fff\b|#ffffff\b|white\b)/', $decls)) {
+                    foreach (explode(',', $selectors) as $sel) {
+                        if (preg_match('/^\.([a-zA-Z_][\w-]*)$/', trim($sel), $cm) && count($out['bg']) < 200) {
+                            $out['bg'][$cm[1]] = 1;
+                        }
+                    }
+                }
                 $kind = preg_match('/(^|;)\s*display\s*:\s*(inline-)?grid/', $decls) ? 'grid'
                     : (preg_match('/(^|;)\s*display\s*:\s*(inline-)?flex/', $decls) && !preg_match('/flex-direction\s*:\s*column/', $decls) ? 'flex' : '');
                 if ($kind === '') {

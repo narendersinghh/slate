@@ -13,7 +13,8 @@ namespace Slate;
  *   2. scan(): the HTML pages found, with titles (and the address each came from).
  *   3. import(): one Slate page per chosen HTML file (HtmlPages format): asset URLs point at the folder, links between
  *      the imported pages point at their new addresses, editable elements and repeating groups are marked, and the
- *      chosen design is stored per page ('keep' the page's own CSS, or 'site' = the site's design system).
+ *      chosen design is stored per page ('keep' the page's own CSS, 'partial' = the site's design system for chosen
+ *      groups such as typography only, or 'site' = the site's design system completely).
  *
  * Per-import facts live in <folder>/.pages/import.json (never served: dot folder): source, pages => [path => [url,
  * base, assets, failed]], assets (URL => file), links (URL => page path), linked, unused, failed, fetched, bytes.
@@ -647,7 +648,8 @@ final class SiteImport
 
     /**
      * Create pages. $opts: paths (list to import; default all), status (draft|publish), home (path of the homepage or ''),
-     * type (default 'page'), design ('keep' the page's own CSS, default | 'site' the site's styles), attach (CSS/JS
+     * type (default 'page'), design ('keep' the page's own CSS, default | 'partial' the site's styles for the groups in
+     * site_parts (HtmlPages::PARTS) | 'site' the site's styles completely), attach (CSS/JS
      * files of the upload to add to every page). Returns ['ok' => bool, 'pages' => [[id, title, path, url, report,
      * design, source, fetched, failed]], 'error' => ?string].
      */
@@ -674,7 +676,10 @@ final class SiteImport
         }
         // Pass 2: parse, rewrite URLs, annotate, save.
         $meta = self::meta($folder);
-        $design = ($opts['design'] ?? 'keep') === 'site' ? 'site' : 'keep';
+        $parts = HtmlPages::cleanParts((array)($opts['site_parts'] ?? []));
+        $design = (string)($opts['design'] ?? 'keep');
+        $design = $design === 'site' ? 'site' : ($design === 'partial' && $parts ? 'partial' : 'keep');
+        self::saveDefaults($design, $parts);
         $attach = array_values(array_intersect(array_map('strval', (array)($opts['attach'] ?? [])), (array)$meta['unused']));
         $out = [];
         foreach ($pages as $p) {
@@ -685,7 +690,7 @@ final class SiteImport
             // Keep the page's own <title> and description exactly.
             $seo = ['seo' => array_filter(['title' => $parsed['title'], 'description' => $parsed['description']], static fn($v) => $v !== '')];
             $data = HtmlPages::withDesign($parsed['data'] + ['import' => array_filter(['folder' => $folder, 'path' => $p['path'], 'at' => now(),
-                'url' => (string)($src['url'] ?? '')], static fn($v) => $v !== '')], $design);
+                'url' => (string)($src['url'] ?? '')], static fn($v) => $v !== '')], $design, $parts);
             HtmlPages::save($id, $data, ['status' => $status] + $seo);
             $post = Posts::find($id);
             $report = self::check($html, $parsed['data'], $folder, (string)($src['url'] ?? ''));
@@ -712,7 +717,7 @@ final class SiteImport
                     array_map(static fn($f) => $f[0] . ' (' . $f[1] . ')', $src['failed'])];
             }
             $out[] = ['id' => $id, 'title' => $post['title'], 'path' => $p['path'], 'url' => Posts::permalink($post), 'edit' => admin_url("content/$type/$id"),
-                'report' => $report, 'design' => $design, 'source' => (string)($src['url'] ?? ''), 'fetched' => (int)($src['assets'] ?? 0)];
+                'report' => $report, 'design' => $design, 'site_parts' => $design === 'partial' ? $parts : [], 'source' => (string)($src['url'] ?? ''), 'fetched' => (int)($src['assets'] ?? 0)];
         }
         if (($opts['home'] ?? '') !== '' && isset($ids[$opts['home']]) && $type === 'page') {
             Options::set('front_page', 'page');
@@ -834,10 +839,10 @@ final class SiteImport
     }
 
     /**
-     * A standalone preview of one page in a design ('keep' | 'site'), for the review step. Shown in a sandboxed frame
+     * A standalone preview of one page in a design ('keep' | 'partial' with $parts | 'site'), for the review step. Shown in a sandboxed frame
      * without scripts; links between pages are not rewritten yet.
      */
-    public static function preview(string $folder, string $path, string $design): ?string
+    public static function preview(string $folder, string $path, string $design, array $parts = []): ?string
     {
         $folder = self::cleanFolder($folder);
         if (!in_array($path, array_column(self::scan($folder), 'path'), true)) {
@@ -846,7 +851,7 @@ final class SiteImport
         $meta = self::meta($folder);
         $html = self::withAttached((string)file_get_contents(self::root() . "/$folder/.pages/$path"), (array)$meta['unused']);
         $parsed = HtmlPages::fromDocument($html, self::rewriter($folder, $path, [], $meta), 'import');
-        $d = HtmlPages::withDesign($parsed['data'], $design);
+        $d = HtmlPages::withDesign($parsed['data'], $design, $parts);
         return '<!doctype html><html ' . ($d['html_attrs'] !== '' ? $d['html_attrs'] : 'lang="en"') . '><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             . '<title>' . e($parsed['title']) . '</title>' . HtmlPages::designHead($d) . '</head><body ' . HtmlPages::bodyAttrs($d) . '>'
             . HtmlPages::designBody($d, (string)$d['body']) . '</body></html>';
@@ -936,6 +941,19 @@ final class SiteImport
     private static function cleanFolder(string $f): string
     {
         return preg_replace('/[^0-9a-f-]/i', '', $f);
+    }
+
+    /** The design chosen at the last import, preselected at the next one: ['design' => ..., 'parts' => [...]]. */
+    public static function defaults(): array
+    {
+        $d = (array)Options::get('import_design', []);
+        $parts = HtmlPages::cleanParts((array)($d['parts'] ?? []));
+        return ['design' => in_array($d['design'] ?? '', ['keep', 'partial', 'site'], true) ? $d['design'] : 'keep', 'parts' => $parts ?: ['typography']];
+    }
+
+    private static function saveDefaults(string $design, array $parts): void
+    {
+        Options::set('import_design', ['design' => $design, 'parts' => $parts]);
     }
 
     /** Earlier imports (folders), newest first. */

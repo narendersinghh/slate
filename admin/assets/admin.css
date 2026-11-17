@@ -1740,3 +1740,11 @@ input[type=file][hidden] { display: none; }
 body.tpl-all .tpl-group .tpl-group-title { display: block; }
 .tpl-group { margin-top: 0; }
 body.tpl-all .tpl-group + .tpl-group { margin-top: 18px; }
+.import-designs:has(.import-design:nth-child(3)) { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.import-parts { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+.import-parts .choice { align-items: flex-start; padding: 3px 0; }
+.import-parts .choice input { margin-top: 3px; }
+.import-parts .choice > span { display: flex; flex-direction: column; font-size: 13px; font-weight: 550; line-height: 1.35; }
+.import-parts .choice small { font-weight: 400; font-size: 11.5px; }
+[data-page-design]:not(:has(input[value="partial"]:checked)) .page-design-parts { display: none; }
+.page-design-parts { padding: 2px 0 6px 14px; gap: 2px; font-size: 13px; }

@@ -213,11 +213,13 @@ final class McpSite
         $t['import_pages_from_url'] = ['group' => 'Designed pages', 'title' => 'Import pages from a website', 'write' => true, 'cap' => 'unfiltered_html',
             'annotations' => ['readOnlyHint' => false, 'destructiveHint' => false, 'idempotentHint' => false, 'openWorldHint' => true],
             'description' => 'Fetch public web pages (with their CSS, images, fonts and scripts) and save each as a designed page, editable by clicking on the live page. '
-                . 'design "keep" keeps the page\'s own CSS, "site" uses this site\'s design system. Pages are drafts unless publish is true. Needs a user allowed to use unfiltered HTML (imported pages bring their own scripts).',
+                . 'design "keep" keeps the page\'s own CSS, "site" uses this site\'s design system completely, "partial" keeps the page\'s CSS and applies the design system only for site_parts '
+                . '(' . implode(', ', array_keys(HtmlPages::PARTS)) . '), e.g. ["typography"]. Pages are drafts unless publish is true. Needs a user allowed to use unfiltered HTML (imported pages bring their own scripts).',
             'inputSchema' => self::obj([
                 'urls' => ['type' => 'array', 'minItems' => 1, 'maxItems' => 20, 'items' => ['type' => 'string', 'maxLength' => 2000]],
                 'follow_links' => ['type' => 'boolean', 'description' => 'Also import the pages these pages link to on the same site (up to 20 pages).'],
-                'design' => ['type' => 'string', 'enum' => ['keep', 'site']],
+                'design' => ['type' => 'string', 'enum' => ['keep', 'partial', 'site']],
+                'site_parts' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => array_keys(HtmlPages::PARTS)], 'description' => 'With design "partial": which parts follow the design system.'],
                 'type' => $str(39, 'Content type of the new items. Default "page".'),
                 'publish' => ['type' => 'boolean'],
             ], ['urls'])];
@@ -832,7 +834,7 @@ final class McpSite
             throw new ToolError((string)$folder);
         }
         $res = SiteImport::import((string)$folder, ['status' => !empty($a['publish']) && Mcp::canPublish() ? 'publish' : 'draft', 'type' => $type,
-            'design' => (string)($a['design'] ?? 'keep')]);
+            'design' => (string)($a['design'] ?? 'keep'), 'site_parts' => (array)($a['site_parts'] ?? [])]);
         if (!$res['ok']) {
             throw new ToolError((string)$res['error']);
         }

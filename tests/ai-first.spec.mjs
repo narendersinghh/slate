@@ -33,6 +33,7 @@ test('import a site: pages keep their design, links and assets work, parts becom
   // The current homepage is kept unless a page is chosen: make the imported index the homepage on purpose.
   await expect(page.locator('input[name=home][value=""]')).toBeChecked();
   await page.locator('input[name=home]:not([value=""])').first().check();
+  await page.check('input[name=design][value=keep]'); // the last import's choice is preselected
   await page.click('button[type=submit]:has-text("Import pages")');
   await expect(page.getByText('Imported 3 pages')).toBeVisible();
   // Built-in migration report (no AI involved)

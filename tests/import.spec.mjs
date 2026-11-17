@@ -1,6 +1,6 @@
 // End-to-end: Import pages (core/Slate/SiteImport.php): a page picked file by file (HTML + separate CSS), a page
-// imported by its address with every file it uses, and the two designs ("Keep the original design" / "Use my site's
-// styles"), switched later in the page settings.
+// imported by its address with every file it uses, and the designs ("Keep the original design", "Use my site's styles
+// for..." chosen parts such as typography only, "Use my site's styles completely"), switched later in the page settings.
 // Needs a running Slate site (SLATE_URL, SLATE_USER, SLATE_PASS). The link import needs tests/fixtures served where the
 // site can reach it and private addresses allowed for the test (bin/ci-import):
 //   php -S 127.0.0.1:8191 -t tests/fixtures &   php bin/ci-import
@@ -39,8 +39,14 @@ async function visitor(url) {
 }
 
 // Review step: pick the design, keep the current homepage, publish, import. Returns the report rows.
-async function finishImport(page, design) {
+async function finishImport(page, design, parts = []) {
   await page.check(`input[name=design][value=${design}]`);
+  if (design === 'partial') {
+    for (const box of await page.locator('[data-import-part]').all()) {
+      const want = parts.includes(await box.getAttribute('value'));
+      if ((await box.isChecked()) !== want) await box.click();
+    }
+  }
   await page.check('input[name=home][value=""]');
   await page.selectOption('select[name=status]', 'publish');
   await page.click('button[type=submit]:has-text("Import pages")');
@@ -73,7 +79,6 @@ test('separate HTML and CSS files make one page; unlinked CSS can be attached; b
   // Review: one page, the unused stylesheet offered for attaching, two designs with previews.
   await expect(page.locator('input[name="paths[]"]')).toHaveCount(1);
   await expect(page.locator('input[name="attach[]"][value="extra.css"]')).toBeChecked();
-  await expect(page.locator('input[name=design][value=keep]')).toBeChecked();
   await expect(page.locator('[data-import-thumb="keep"]')).toHaveCount(1);
   await expect(page.locator('[data-import-thumb="site"]')).toHaveCount(1);
   const before = await page.locator('[data-import-thumb="keep"]').getAttribute('src');
@@ -123,6 +128,85 @@ test('separate HTML and CSS files make one page; unlinked CSS can be attached; b
   await expect(page.locator('h1')).not.toHaveCSS('color', 'rgb(10, 20, 30)');
   await expect(page.locator('ul.cards')).toHaveCSS('display', 'grid');
   await page.screenshot({ path: `${SHOTS}/import-site-styles.png`, fullPage: true });
+});
+
+test("site's styles for typography only: the page keeps its sections and layout; colours and buttons added later", async ({ page }) => {
+  await login(page);
+  await page.goto(`${BASE}/admin/import`);
+  await page.setInputFiles('[data-import-files]', [single('page.html'), single('page.css'), single('extra.css')]);
+  await page.click('[data-import-go]');
+  await page.waitForURL(/\/admin\/import\/[0-9a-f-]+$/);
+  // The partial preview follows the ticked parts.
+  await page.check('input[name=design][value=partial]');
+  for (const box of await page.locator('[data-import-part]').all()) {
+    if ((await box.getAttribute('value')) !== 'typography' && await box.isChecked()) await box.click();
+  }
+  if (!(await page.locator('[data-import-part][value=typography]').isChecked())) await page.locator('[data-import-part][value=typography]').click();
+  await expect(page.locator('[data-import-thumb="partial"]')).toHaveAttribute('src', /design=partial&parts=typography$/);
+  const thumb = await page.locator('[data-import-thumb="partial"]').getAttribute('src');
+  const prev = await (await page.request.get(new URL(thumb, BASE).toString())).text();
+  expect(prev).toContain('id="slate-site-parts"');
+  expect(prev).toMatch(/assets\/page\.css/);                                  // the page's own CSS stays
+  await page.locator('.import-designs').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${SHOTS}/import-partial-choice.png`, fullPage: true });
+
+  const rows = await finishImport(page, 'partial', ['typography']);
+  await expect(rows.first()).toContainText("Site's styles for: Typography");
+  const url = (await rows.first().locator('a:has-text("Open and edit")').getAttribute('href')).replace(/\?preview=\d+$/, '');
+  const edit = await rows.first().locator('a:has-text("Settings")').getAttribute('href');
+  const html = await visitor(url);
+  expect(html).toMatch(ownCss);                                               // own stylesheet still loaded
+  expect(html).toContain('style="background:#123;padding:40px"');             // section background kept
+  expect(html).toContain('id="slate-site-parts"');
+  expect(html).toContain('--font-heading');                                   // design-system variables
+  expect(html).not.toContain('id="ds-vars"');                                 // but not its element rules and classes
+  expect(html).toContain('class="slate-parts"');
+  expect(html).toMatch(/<h1[^>]*data-se="e\d+"/);
+  expect(html).toMatch(/data-se-loop="l\d+"/);
+  expect(html).not.toMatch(/class="button btn"/);                             // buttons not chosen
+  // Page CSS order: the overrides come after the page's own stylesheet.
+  expect(html.indexOf('id="slate-site-parts"')).toBeGreaterThan(html.search(ownCss));
+
+  await page.goto(new URL(url, BASE).toString());
+  await expect(page.locator('section.intro')).toHaveCSS('background-color', 'rgb(17, 34, 51)'); // section background
+  await expect(page.locator('ul.cards')).toHaveCSS('display', 'grid');        // layout from page.css
+  await expect(page.locator('h1')).toHaveCSS('font-family', /Instrument Serif/); // design-system heading font
+  await expect(page.locator('ul.cards p').first()).toHaveCSS('font-family', /Inter/); // design-system body font
+  await expect(page.locator('h1')).toHaveCSS('color', 'rgb(10, 20, 30)');     // colours not chosen: the page's own
+  await expect(page.locator('ul.cards p').first()).toHaveCSS('color', 'rgb(40, 50, 60)');
+  await page.screenshot({ path: `${SHOTS}/import-partial-typography.png`, fullPage: true });
+
+  // The choice is remembered for the next import.
+  await page.goto(`${BASE}/admin/import`);
+  await page.setInputFiles('[data-import-files]', [single('page.html')]);
+  await page.click('[data-import-go]');
+  await page.waitForURL(/\/admin\/import\/[0-9a-f-]+$/);
+  await expect(page.locator('input[name=design][value=partial]')).toBeChecked();
+  await expect(page.locator('[data-import-part][value=typography]')).toBeChecked();
+  await expect(page.locator('[data-import-part][value=colors]')).not.toBeChecked();
+
+  // Later, in the page settings: add colours and buttons.
+  await page.goto(new URL(edit, BASE).toString());
+  const card = page.locator('[data-page-design]');
+  await expect(card.locator('input[name=html_design][value=partial]')).toBeChecked();
+  await expect(card.locator('input[name="html_parts[]"][value=typography]')).toBeChecked();
+  await card.locator('input[name="html_parts[]"][value=colors]').check();
+  await card.locator('input[name="html_parts[]"][value=buttons]').check();
+  await card.screenshot({ path: `${SHOTS}/import-partial-setting.png` });
+  await page.click('[data-save=publish]');
+  await expect(page.locator('[data-save-state]')).toHaveText(/^Saved /, { timeout: 15_000 });
+  const html2 = await visitor(url);
+  expect(html2).toMatch(/class="button btn"/);
+  expect(html2).toContain('intro sl-own-bg');
+  expect(html2).toMatch(ownCss);
+  await page.goto(new URL(url, BASE).toString());
+  await expect(page.locator('a.button')).toHaveCSS('background-color', 'rgb(242, 107, 45)'); // global btn look
+  await expect(page.locator('ul.cards p').first()).toHaveCSS('color', 'rgb(31, 31, 31)');   // palette text colour
+  await expect(page.locator('section.intro p')).toHaveCSS('color', 'rgb(40, 50, 60)');      // own-background section keeps its colours
+  await expect(page.locator('section.intro')).toHaveCSS('background-color', 'rgb(17, 34, 51)');
+  await expect(page.locator('h1')).toHaveCSS('font-family', /Instrument Serif/);
+  await page.screenshot({ path: `${SHOTS}/import-partial-colours-buttons.png`, fullPage: true });
 });
 
 test('import from a link: page, linked page and every file they use; switch the design later', async ({ page }) => {

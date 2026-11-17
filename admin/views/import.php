@@ -68,11 +68,13 @@ echo AdminUi::steps(['upload' => 'Upload or link', 'review' => 'Choose pages and
 <?php elseif ($step === 'review'):
     $first = $pages[0]['path'];
     $fromUrl = ($meta['source'] ?? '') === 'url';
-    $prev = static fn(string $path, string $mode) => admin_url('import/' . $folder . '/preview') . '?path=' . rawurlencode($path) . '&design=' . $mode;
+    $def = SiteImport::defaults();
+    $prev = static fn(string $path, string $mode) => admin_url('import/' . $folder . '/preview') . '?path=' . rawurlencode($path) . '&design=' . $mode
+        . ($mode === 'partial' ? '&parts=' . implode(',', $def['parts']) : '');
     $unused = (array)($meta['unused'] ?? []);
     $failed = (array)($meta['failed'] ?? []);
 ?>
-<form class="stack" method="post" action="<?= e(admin_url('import/' . $folder)) ?>" data-import-review data-preview="<?= e(admin_url('import/' . $folder . '/preview')) ?>">
+<form class="stack" method="post" action="<?= e(admin_url('import/' . $folder)) ?>" data-import-review data-preview="<?= e(admin_url('import/' . $folder . '/preview')) ?>" data-first="<?= e($first) ?>">
   <?= csrf_field() ?>
   <?php if ($fromUrl): ?>
   <div class="alert <?= $failed ? '' : 'alert-success' ?>"><?= icon($failed ? 'info' : 'check-circle', 16) ?><div>
@@ -124,14 +126,25 @@ echo AdminUi::steps(['upload' => 'Upload or link', 'review' => 'Choose pages and
       <p class="muted small">Choose how the imported pages look. Either way texts, images and repeating parts stay editable, and you can switch later in each page's settings.</p>
       <div class="import-designs">
         <label class="import-design">
-          <span class="import-design-head"><input type="radio" name="design" value="keep" checked> <strong>Keep the original design</strong></span>
+          <span class="import-design-head"><input type="radio" name="design" value="keep"<?= $def['design'] === 'keep' ? ' checked' : '' ?>> <strong>Keep the original design</strong></span>
           <span class="muted small">The page keeps its own CSS exactly. Your site's colours, fonts and global classes stay out, so it looks the same as before.</span>
           <span class="import-thumb"><iframe src="<?= e($prev($first, 'keep')) ?>" title="Preview: original design" sandbox="" loading="lazy" tabindex="-1" data-import-thumb="keep"></iframe></span>
           <a class="small" href="<?= e($prev($first, 'keep')) ?>" target="_blank" rel="noopener" data-import-open="keep"><?= icon('external', 13) ?> Open full size</a>
         </label>
+        <label class="import-design" data-import-partial>
+          <span class="import-design-head"><input type="radio" name="design" value="partial"<?= $def['design'] === 'partial' ? ' checked' : '' ?>> <strong>Use my site's styles for...</strong></span>
+          <span class="muted small">The page keeps its own CSS (sections, layout, backgrounds); only what you tick follows your design system (Appearance &rsaquo; Styles).</span>
+          <span class="import-parts">
+            <?php foreach (HtmlPages::PARTS as $k => [$label, $help]): ?>
+            <span class="choice" title="<?= e($help) ?>"><input type="checkbox" name="site_parts[]" value="<?= e($k) ?>" id="part-<?= e($k) ?>"<?= in_array($k, $def['parts'], true) ? ' checked' : '' ?> data-import-part> <span><?= e($label) ?><small class="muted"><?= e($help) ?></small></span></span>
+            <?php endforeach; ?>
+          </span>
+          <span class="import-thumb"><iframe src="<?= e($prev($first, 'partial')) ?>" title="Preview: your site's styles for the ticked parts" sandbox="" loading="lazy" tabindex="-1" data-import-thumb="partial"></iframe></span>
+          <a class="small" href="<?= e($prev($first, 'partial')) ?>" target="_blank" rel="noopener" data-import-open="partial"><?= icon('external', 13) ?> Open full size</a>
+        </label>
         <label class="import-design">
-          <span class="import-design-head"><input type="radio" name="design" value="site"> <strong>Use my site's styles</strong></span>
-          <span class="muted small">The page's own CSS and inline colours are removed. Headings, paragraphs, quotes, images, lists, links and buttons follow your design system (Appearance &rsaquo; Styles); button-like links get the global <code>btn</code> class. A light base layout keeps sections, containers, grids and rows readable.</span>
+          <span class="import-design-head"><input type="radio" name="design" value="site"<?= $def['design'] === 'site' ? ' checked' : '' ?>> <strong>Use my site's styles completely</strong></span>
+          <span class="muted small">The page's own CSS and inline colours are removed. Headings, paragraphs, quotes, images, lists, links and buttons follow your design system; button-like links get the global <code>btn</code> class. A light base layout keeps sections, containers, grids and rows readable.</span>
           <span class="import-thumb"><iframe src="<?= e($prev($first, 'site')) ?>" title="Preview: your site's styles" sandbox="" loading="lazy" tabindex="-1" data-import-thumb="site"></iframe></span>
           <a class="small" href="<?= e($prev($first, 'site')) ?>" target="_blank" rel="noopener" data-import-open="site"><?= icon('external', 13) ?> Open full size</a>
         </label>
@@ -172,7 +185,7 @@ echo AdminUi::steps(['upload' => 'Upload or link', 'review' => 'Choose pages and
         <div><strong><?= e($p['title']) ?></strong><small class="muted"><?= e($p['path']) ?> · <?= (int)$r['editable'] ?> editable parts<?= $r['loops'] ? ' · ' . (int)$r['loops'] . ' repeating group' . ($r['loops'] === 1 ? '' : 's') : '' ?><?= ($p['source'] ?? '') !== '' ? ' · ' . (int)$p['fetched'] . ' file' . ((int)$p['fetched'] === 1 ? '' : 's') . ' fetched' : '' ?></small>
           <?php if (($p['source'] ?? '') !== ''): ?><small class="import-src-line"><?= icon('link', 12) ?> <a href="<?= e($p['source']) ?>" target="_blank" rel="noopener noreferrer"><?= e($p['source']) ?></a></small><?php endif; ?>
         </div>
-        <span class="pill pill-soft" title="Change it in the page's settings"><?= icon($mode === 'site' ? 'palette' : 'layers', 12) ?> <?= e(HtmlPages::DESIGNS[$mode]) ?></span>
+        <span class="pill pill-soft" title="Change it in the page's settings"><?= icon($mode === 'keep' ? 'layers' : 'palette', 12) ?> <?= e($mode === 'partial' ? "Site's styles for: " . implode(', ', array_map(static fn($k) => HtmlPages::PARTS[$k][0], (array)($p['site_parts'] ?? []))) : HtmlPages::DESIGNS[$mode]) ?></span>
         <span class="pill <?= $warn ? 'pill-warn' : 'pill-success' ?>"><?= $warn ? count($warn) . ' to check' : 'Looks good' ?></span>
         <span class="page-actions">
           <a class="btn btn-sm btn-primary" href="<?= e($p['url']) ?>?preview=<?= (int)$p['id'] ?>" target="_blank" rel="noopener"><?= icon('edit', 14) ?> Open and edit</a>

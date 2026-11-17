@@ -180,14 +180,32 @@
     const all = $('[data-import-all]', form);
     if (all) all.addEventListener('change', () => $$('input[name="paths[]"]', form).forEach((c) => { c.checked = all.checked; }));
     const pick = $('[data-import-preview-page]', form);
-    if (pick) pick.addEventListener('change', () => {
-      ['keep', 'site'].forEach((mode) => {
-        const url = form.dataset.preview + '?path=' + encodeURIComponent(pick.value) + '&design=' + mode;
+    const parts = () => $$('[data-import-part]:checked', form).map((c) => c.value);
+    // Previews follow the page picked and the ticked parts ("Use my site's styles for...").
+    const refresh = (modes) => {
+      const path = pick ? pick.value : form.dataset.first;
+      modes.forEach((mode) => {
+        const url = form.dataset.preview + '?path=' + encodeURIComponent(path) + '&design=' + mode + (mode === 'partial' ? '&parts=' + parts().join(',') : '');
         const frame = $('[data-import-thumb="' + mode + '"]', form);
         const link = $('[data-import-open="' + mode + '"]', form);
-        if (frame) frame.src = url;
+        if (frame && frame.getAttribute('src') !== url) frame.src = url;
         if (link) link.href = url;
       });
+    };
+    if (pick) pick.addEventListener('change', () => refresh(['keep', 'partial', 'site']));
+    let timer;
+    $$('[data-import-part]', form).forEach((c) => c.addEventListener('change', () => {
+      const radio = $('input[name=design][value=partial]', form);
+      if (c.checked && radio) radio.checked = true;
+      clearTimeout(timer);
+      timer = setTimeout(() => refresh(['partial']), 150);
+    }));
+    form.addEventListener('submit', (e) => {
+      const radio = $('input[name=design][value=partial]', form);
+      if (radio && radio.checked && !parts().length) {
+        e.preventDefault();
+        alert('Tick at least one part to use your site\'s styles for, or choose another design.');
+      }
     });
   });
 })();

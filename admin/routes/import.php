@@ -62,7 +62,7 @@ return static function (Router $r): void {
     // Preview of one page in a design, shown in a sandboxed frame on the review step (scripts never run here).
     $r->get('/import/{folder:[0-9a-f-]+}/preview', static function (string $folder) use ($guard) {
         $guard();
-        $html = SiteImport::preview($folder, (string)input('path', ''), (string)input('design', 'keep'));
+        $html = SiteImport::preview($folder, (string)input('path', ''), (string)input('design', 'keep'), array_filter(explode(',', (string)input('parts', ''))));
         if ($html === null) {
             admin_404();
         }
@@ -76,7 +76,7 @@ return static function (Router $r): void {
         $guard();
         @set_time_limit(300);
         $res = SiteImport::import($folder, ['paths' => array_map('strval', (array)input('paths', [])), 'status' => (string)input('status', 'draft'),
-            'home' => (string)input('home', ''), 'type' => (string)input('type', 'page'), 'design' => (string)input('design', 'keep'),
+            'home' => (string)input('home', ''), 'type' => (string)input('type', 'page'), 'design' => (string)input('design', 'keep'), 'site_parts' => array_map('strval', (array)input('site_parts', [])),
             'attach' => array_map('strval', (array)input('attach', []))]);
         if (!$res['ok']) {
             Session::flash('error', $res['error']);

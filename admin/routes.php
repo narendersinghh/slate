@@ -1680,9 +1680,12 @@ function admin_save_post(string $type): void
         back();
     }
     // Designed pages (imported / AI): keep the page's own CSS or use the site's styles (HtmlPages 'design').
-    if ($existing && \Slate\HtmlPages::active($existing) && in_array($mode = (string)input('html_design', ''), array_keys(\Slate\HtmlPages::DESIGNS), true)
-        && $mode !== \Slate\HtmlPages::design((array)\Slate\HtmlPages::data($existing))) {
-        $data['fields']['_html'] = \Slate\HtmlPages::withDesign((array)\Slate\HtmlPages::data($existing), $mode);
+    if ($existing && \Slate\HtmlPages::active($existing) && in_array($mode = (string)input('html_design', ''), array_keys(\Slate\HtmlPages::DESIGNS), true)) {
+        $old = (array)\Slate\HtmlPages::data($existing);
+        $new = \Slate\HtmlPages::withDesign($old, $mode, (array)input('html_parts', []));
+        if (\Slate\HtmlPages::design($new) !== \Slate\HtmlPages::design($old) || \Slate\HtmlPages::parts($new) !== \Slate\HtmlPages::parts($old)) {
+            $data['fields']['_html'] = $new;
+        }
     }
     if ($existing) {
         \Slate\Revisions::snapshot($existing, $data);

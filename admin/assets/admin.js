@@ -715,16 +715,29 @@
   (() => {
     const box = $('#goraiya');
     if (!box) return;
+    const backdrop = $('.goraiya-backdrop');
     const log = $('[data-goraiya-log]', box);
     const form = $('[data-goraiya-form]', box);
     const text = $('[data-goraiya-text]', box);
     const welcome = $('[data-goraiya-welcome]', box);
     const store = 'goraiya_' + box.dataset.user;
+    const SPARROW = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 19.6A8.6 8.6 0 1 0 4.3 16L2.5 21.5Z"/><path d="M19.35 7.9 22.6 9.2l-2.25 1.5"/><circle cx="15.2" cy="9.6" r="1.05" fill="currentColor" stroke="none"/></svg>';
+    const ICON = {
+      copy: '<svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+      retry: '<svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
+      page: '<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+      code: '<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg>',
+    };
     let history = [];
     try { history = JSON.parse(sessionStorage.getItem(store) || '[]'); } catch (e) { history = []; }
     const keep = () => { try { sessionStorage.setItem(store, JSON.stringify(history.slice(-30))); } catch (e) {} };
-    const open = () => { box.hidden = false; document.documentElement.classList.add('goraiya-open'); setTimeout(() => text && !form.hidden && text.focus(), 50); };
-    const close = () => { box.hidden = true; document.documentElement.classList.remove('goraiya-open'); };
+    const grow = () => { if (!text) return; text.style.height = 'auto'; text.style.height = Math.min(text.scrollHeight, 180) + 'px'; };
+    const open = () => {
+      box.hidden = false; if (backdrop) backdrop.hidden = false;
+      document.documentElement.classList.add('goraiya-open');
+      setTimeout(() => { if (text && !form.hidden) { text.focus(); grow(); } }, 50);
+    };
+    const close = () => { box.hidden = true; if (backdrop) backdrop.hidden = true; document.documentElement.classList.remove('goraiya-open'); };
     document.addEventListener('click', (e) => {
       if (e.target.closest('[data-goraiya-open]')) { box.hidden ? open() : close(); }
       else if (e.target.closest('[data-goraiya-close]')) close();
@@ -733,34 +746,61 @@
       if (e.key === 'Escape' && !box.hidden) close();
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); box.hidden ? open() : close(); }
     });
-    const bubble = (role, html) => {
+
+    // Replies: escaped text with a little formatting (bold, lists, paragraphs).
+    const format = (t) => {
+      const lines = esc(String(t || '')).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').split('\n');
+      let html = '', list = false;
+      lines.forEach((l) => {
+        const m = l.match(/^\s*(?:[-*]|\d+[.)])\s+(.*)$/);
+        if (m) { if (!list) { html += '<ul>'; list = true; } html += '<li>' + m[1] + '</li>'; return; }
+        if (list) { html += '</ul>'; list = false; }
+        if (l.trim() !== '') html += '<p>' + l + '</p>';
+      });
+      return html + (list ? '</ul>' : '');
+    };
+    const resultCard = (r) => r.ok
+      ? '<div class="goraiya-result"><span class="goraiya-result-ic">' + (r.kind === 'template' ? ICON.code : ICON.page) + '</span><div class="goraiya-result-main"><strong>' + esc(r.title || '') + '</strong><small>' + esc(r.message || '') + '</small>'
+        + '<span class="goraiya-result-actions">' + (r.preview ? '<a class="btn btn-sm btn-primary" href="' + esc(r.preview) + '" target="_blank" rel="noopener">Preview and edit</a>' : '')
+        + (r.edit ? '<a class="btn btn-sm" href="' + esc(r.edit) + '">Open in dashboard</a>' : '') + '</span></div>'
+        + (r.status ? '<span class="pill' + (r.status === 'publish' ? ' pill-success' : '') + '">' + esc(r.status === 'draft' ? 'Draft' : r.status === 'publish' ? 'Published' : r.status) + '</span>' : '') + '</div>'
+      : '<div class="goraiya-result is-error">' + esc(r.error || 'That did not work.') + '</div>';
+    const row = (role, inner) => {
       const el = document.createElement('div');
-      el.className = 'goraiya-msg goraiya-' + role;
-      el.innerHTML = html;
+      el.className = 'goraiya-row goraiya-' + role;
+      el.innerHTML = (role === 'assistant' ? '<span class="goraiya-avatar">' + SPARROW + '</span>' : '') + '<div class="goraiya-msg">' + inner + '</div>';
       log.appendChild(el);
       log.scrollTop = log.scrollHeight;
       return el;
     };
-    const resultCard = (r) => r.ok
-      ? '<div class="goraiya-result"><strong>' + esc(r.title || '') + '</strong><small>' + esc(r.message || '') + '</small><span>'
-        + (r.preview ? '<a class="btn btn-sm btn-primary" href="' + esc(r.preview) + '" target="_blank" rel="noopener">Preview and edit</a>' : '')
-        + (r.edit ? '<a class="btn btn-sm btn-ghost" href="' + esc(r.edit) + '">Open</a>' : '') + '</span></div>'
-      : '<div class="goraiya-result is-error">' + esc(r.error || 'That did not work.') + '</div>';
-    const replay = () => history.forEach((m) => bubble(m.role, m.role === 'user' ? esc(m.text) : esc(m.text).replace(/\n/g, '<br>') + (m.results || []).map(resultCard).join('')));
+    const tools = (raw) => '<div class="goraiya-tools"><button type="button" class="goraiya-tool" data-goraiya-copy="' + esc(raw) + '" title="Copy">' + ICON.copy + ' Copy</button></div>';
+    const assistantHtml = (m) => format(m.text) + (m.results || []).map(resultCard).join('') + (m.text ? tools(m.text) : '');
+    const replay = () => history.forEach((m) => row(m.role, m.role === 'user' ? esc(m.text).replace(/\n/g, '<br>') : assistantHtml(m)));
     if (history.length) { welcome.hidden = true; replay(); }
     $('[data-goraiya-new]', box).addEventListener('click', () => {
       history = []; keep();
-      $$('.goraiya-msg', log).forEach((m) => m.remove());
+      $$('.goraiya-row', log).forEach((m) => m.remove());
       if (box.dataset.ready === '1') welcome.hidden = false;
+      text?.focus();
     });
-    $$('[data-goraiya-chip]', box).forEach((c) => c.addEventListener('click', () => { text.value = c.textContent; text.focus(); }));
-    const send = async () => {
-      const msg = text.value.trim();
+    const prefill = (v) => { text.value = v; text.focus(); text.setSelectionRange(v.length, v.length); grow(); };
+    box.addEventListener('click', (e) => {
+      const c = e.target.closest('[data-goraiya-chip]');
+      if (c) { prefill(c.textContent.trim()); return; }
+      const p = e.target.closest('[data-goraiya-prefill]');
+      if (p) { prefill(p.dataset.goraiyaPrefill); return; }
+      const cp = e.target.closest('[data-goraiya-copy]');
+      if (cp) { navigator.clipboard?.writeText(cp.dataset.goraiyaCopy).then(() => toast('Copied')); return; }
+      const rt = e.target.closest('[data-goraiya-retry]');
+      if (rt) { const msg = rt.dataset.goraiyaRetry; rt.closest('.goraiya-row')?.remove(); send(msg, true); }
+    });
+    const send = async (msg, isRetry) => {
+      msg = (msg ?? text.value).trim();
       if (!msg) return;
       welcome.hidden = true;
-      bubble('user', esc(msg));
-      text.value = '';
-      const wait = bubble('assistant', '<span class="goraiya-typing"><i></i><i></i><i></i></span> Working on it… a full page can take a minute.');
+      if (!isRetry) { row('user', esc(msg).replace(/\n/g, '<br>')); text.value = ''; grow(); }
+      const wait = row('assistant', '<span class="goraiya-typing"><i></i><i></i><i></i></span><span class="muted">Working on it. A full page can take a minute.</span>');
+      const msgEl = $('.goraiya-msg', wait);
       const btn = $('button[type=submit]', form);
       btn.disabled = true;
       try {
@@ -769,18 +809,20 @@
           body: JSON.stringify({ message: msg, history: history.map((h) => ({ role: h.role, text: h.text })), context: { post_id: +box.dataset.post || 0, path: location.pathname } }) });
         const d = await r.json().catch(() => ({ ok: false, error: 'Unexpected response (' + r.status + ').' }));
         if (!d.ok) throw new Error(d.error || 'Goraiya could not answer.');
-        wait.innerHTML = esc(d.reply || 'Done.').replace(/\n/g, '<br>') + (d.results || []).map(resultCard).join('');
-        history.push({ role: 'user', text: msg }, { role: 'assistant', text: d.reply || '', results: d.results || [] });
+        const m = { role: 'assistant', text: d.reply || 'Done.', results: d.results || [] };
+        msgEl.innerHTML = assistantHtml(m);
+        history.push({ role: 'user', text: msg }, m);
         keep();
       } catch (err) {
         wait.classList.add('is-error');
-        wait.textContent = err.message;
+        msgEl.innerHTML = '<p>' + esc(err.message) + '</p><div class="goraiya-tools"><button type="button" class="goraiya-tool" data-goraiya-retry="' + esc(msg) + '">' + ICON.retry + ' Try again</button></div>';
       }
       btn.disabled = false;
       log.scrollTop = log.scrollHeight;
     };
     form.addEventListener('submit', (e) => { e.preventDefault(); send(); });
-    text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+    text?.addEventListener('input', grow);
+    text?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
 
     // Quick setup
     const setup = $('[data-goraiya-setup]', box);
@@ -800,6 +842,8 @@
           const d = await r.json().catch(() => ({ ok: false, error: 'Unexpected response.' }));
           if (!d.ok) throw new Error(d.error);
           setup.remove(); box.dataset.ready = '1'; welcome.hidden = false; form.hidden = false; text.focus();
+          const st = $('[data-goraiya-status]', box);
+          if (st) st.innerHTML = '<span class="goraiya-dot"></span> ' + esc(prov.selectedOptions[0].textContent);
           toast('Goraiya is ready.');
         } catch (err) { msgEl.className = 'alert alert-error'; msgEl.textContent = err.message; go.disabled = false; }
       });

@@ -1270,34 +1270,8 @@ input[type=file][hidden] { display: none; }
 /* Goraiya: the AI drawer */
 .goraiya-btn { gap: 7px; background: linear-gradient(135deg, var(--o-500), var(--o-700)); color: #fff; border-color: transparent; }
 .goraiya-btn:hover { color: #fff; background: linear-gradient(135deg, var(--o-500), var(--o-700)); border-color: transparent; filter: brightness(1.08); }
-.goraiya { position: fixed; z-index: 80; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); display: flex; flex-direction: column;
-  background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg); animation: goraiya-in .2s ease; }
-@keyframes goraiya-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
-html.goraiya-open .main-wrap { margin-right: 440px; }
-.goraiya-head { display: flex; align-items: center; gap: 10px; padding: 14px 14px 14px 16px; border-bottom: 1px solid var(--border); }
-.goraiya-head > div { flex: 1; display: flex; flex-direction: column; line-height: 1.25; }
-.goraiya-head small { color: var(--muted); font-size: 12px; }
-.goraiya-logo { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--o-500), var(--o-700)); color: #fff; }
-.goraiya-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.goraiya-setup, .goraiya-welcome { display: flex; flex-direction: column; gap: 12px; }
-.goraiya-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); border-radius: 99px; padding: 6px 12px; font: 13px var(--font); cursor: pointer; text-align: left; }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
-.goraiya-msg { max-width: 92%; padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.5; }
-.goraiya-user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
-.goraiya-assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-.goraiya-assistant.is-error { background: var(--danger-soft); color: var(--danger); }
-.goraiya-result { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
-.goraiya-result small { color: var(--muted); }
-.goraiya-result span { display: flex; gap: 6px; flex-wrap: wrap; }
-.goraiya-result.is-error { color: var(--danger); }
-.goraiya-typing { display: inline-flex; gap: 3px; margin-right: 6px; vertical-align: middle; }
-.goraiya-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: goraiya-dot 1s infinite ease-in-out; }
-.goraiya-typing i:nth-child(2) { animation-delay: .15s; } .goraiya-typing i:nth-child(3) { animation-delay: .3s; }
-@keyframes goraiya-dot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
-.goraiya-input { display: flex; gap: 8px; align-items: flex-end; padding: 12px; border-top: 1px solid var(--border); }
-.goraiya-input textarea { flex: 1; resize: none; max-height: 160px; }
-@media (max-width: 1100px) { html.goraiya-open .main-wrap { margin-right: 0; } }
 
 /* Dashboard: start with AI */
 .ai-start { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 20px 22px; margin-bottom: 18px;
@@ -1306,8 +1280,6 @@ html.goraiya-open .main-wrap { margin-right: 440px; }
 .ai-start ol { margin: 8px 0 0; padding-left: 18px; color: var(--text-2); font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
 .ai-start .page-actions { flex-direction: column; align-items: stretch; }
 @media (max-width: 760px) { .ai-start { grid-template-columns: 1fr; } }
-html.goraiya-open .main-wrap { margin-right: 0; }
-@media (min-width: 1600px) { html.goraiya-open .main-wrap { margin-right: 440px; } }
 
 /* Import report */
 .import-page { padding: 14px 18px; border-bottom: 1px solid var(--border); }
@@ -1606,3 +1578,85 @@ html.goraiya-open .main-wrap { margin-right: 0; }
 .gor-guide-connect { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .toast-action { margin-left: 12px; border: 0; background: rgba(255, 255, 255, .16); color: inherit; font: 600 12.5px var(--font); padding: 4px 10px; border-radius: 7px; cursor: pointer; }
 .toast-action:hover { background: rgba(255, 255, 255, .26); }
+
+/* Goraiya drawer */
+.goraiya-backdrop { position: fixed; inset: 0; z-index: 79; background: rgba(12, 10, 8, .28); backdrop-filter: blur(2px); animation: goraiya-fade .2s ease; }
+@keyframes goraiya-fade { from { opacity: 0; } to { opacity: 1; } }
+.goraiya { position: fixed; z-index: 80; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); display: flex; flex-direction: column;
+  background: var(--surface); border-left: 1px solid var(--border); box-shadow: -24px 0 60px -30px rgba(0, 0, 0, .35); animation: goraiya-in .22s ease; }
+@keyframes goraiya-in { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (min-width: 1600px) {
+  html.goraiya-open .main-wrap { margin-right: 460px; }
+  .goraiya-backdrop { display: none; }
+  .goraiya { box-shadow: none; }
+}
+.goraiya-head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--border); min-height: 64px; }
+.goraiya-logo { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--o-500), var(--o-700)); color: #fff; flex-shrink: 0; }
+.goraiya-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+.goraiya-id strong { font-size: 15px; }
+.goraiya-id small { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goraiya-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); flex-shrink: 0; }
+.goraiya-head .icon-btn { width: 36px; height: 36px; }
+.goraiya-body { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; }
+/* welcome and setup */
+.goraiya-setup, .goraiya-welcome { display: flex; flex-direction: column; gap: 18px; }
+.goraiya-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 8px 8px 0; }
+.goraiya-hero-mark { width: 60px; height: 60px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: var(--accent); background: var(--accent-soft); margin-bottom: 4px; }
+.goraiya-hero h2 { font-size: 19px; margin: 0; }
+.goraiya-hero p { margin: 0; font-size: 13.5px; max-width: 340px; }
+.goraiya-starts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.goraiya-start { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); text-align: left; font: inherit; color: var(--text); cursor: pointer; transition: border-color .15s, background .15s; }
+.goraiya-start:hover { border-color: var(--accent); background: var(--accent-soft); }
+.goraiya-start-ic { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--surface-3); color: var(--accent); margin-bottom: 4px; }
+.goraiya-start strong { font-size: 13.5px; }
+.goraiya-start small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.goraiya-try { display: flex; flex-direction: column; gap: 2px; }
+.goraiya-try .small-label { margin-bottom: 4px; }
+.goraiya-try-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: 9px; background: transparent; text-align: left; font: 13.5px var(--font); color: var(--text-2); cursor: pointer; }
+.goraiya-try-item .ic { color: var(--muted); flex-shrink: 0; }
+.goraiya-try-item:hover { background: var(--surface-3); color: var(--text); }
+.goraiya-note { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
+.goraiya-note .ic { margin-top: 2px; flex-shrink: 0; }
+.goraiya-setup-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-2); }
+.goraiya-setup-card .field { margin: 0; }
+.goraiya-setup-card .field > span { display: flex; justify-content: space-between; align-items: center; }
+.goraiya-keylink { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; }
+.goraiya-setup-card p { margin: 0; display: flex; gap: 6px; align-items: center; }
+/* messages */
+.goraiya-row { display: flex; gap: 10px; align-items: flex-start; }
+.goraiya-user { justify-content: flex-end; }
+.goraiya-avatar { width: 28px; height: 28px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.goraiya-msg { min-width: 0; max-width: 88%; font-size: 14px; line-height: 1.55; }
+.goraiya-user .goraiya-msg { padding: 9px 13px; border-radius: 16px 16px 4px 16px; background: var(--surface-3); color: var(--text); white-space: normal; overflow-wrap: anywhere; }
+.goraiya-assistant .goraiya-msg { flex: 1; max-width: none; padding-top: 4px; color: var(--text); }
+.goraiya-msg p { margin: 0 0 8px; }
+.goraiya-msg p:last-child { margin-bottom: 0; }
+.goraiya-msg ul { margin: 0 0 8px; padding-left: 20px; }
+.goraiya-assistant.is-error .goraiya-msg { color: var(--danger); }
+.goraiya-tools { display: flex; gap: 4px; margin-top: 6px; }
+.goraiya-tool { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--muted); font: 500 12px var(--font); padding: 4px 8px; border-radius: 7px; cursor: pointer; }
+.goraiya-tool:hover { background: var(--surface-3); color: var(--text); }
+.goraiya-result { display: flex; gap: 12px; align-items: flex-start; margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.goraiya-result-ic { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; }
+.goraiya-result-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.goraiya-result-main strong { font-size: 14px; overflow-wrap: anywhere; }
+.goraiya-result-main small { color: var(--muted); font-size: 12.5px; }
+.goraiya-result-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.goraiya-result.is-error { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.goraiya-typing { display: inline-flex; gap: 4px; margin-right: 8px; vertical-align: middle; }
+.goraiya-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: goraiya-dot 1s infinite ease-in-out; }
+.goraiya-typing i:nth-child(2) { animation-delay: .15s; } .goraiya-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes goraiya-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+/* composer */
+.goraiya-composer { padding: 10px 14px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+.goraiya-context { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; max-width: 100%; padding: 4px 10px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); font-size: 12px; }
+.goraiya-context span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goraiya-box { display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 14px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface); transition: border-color .15s, box-shadow .15s; }
+.goraiya-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.goraiya-box textarea { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--text); font: 14px/1.5 var(--font); padding: 7px 0; max-height: 180px; }
+.goraiya-send { width: 36px; height: 36px; flex-shrink: 0; border: 0; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; cursor: pointer; }
+.goraiya-send:hover { filter: brightness(1.08); }
+.goraiya-send:disabled { opacity: .5; cursor: default; }
+.goraiya-hint { color: var(--muted); font-size: 11.5px; padding-left: 4px; }
+@media (max-width: 480px) { .goraiya-starts { grid-template-columns: minmax(0, 1fr); } .goraiya-hint { display: none; } }
+.goraiya-box textarea, .goraiya-box textarea:focus, .goraiya-box textarea:focus-visible { border: 0; outline: 0; box-shadow: none; background: transparent; }

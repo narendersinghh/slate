@@ -841,6 +841,34 @@ function admin_dispatch(string $path): void
         Session::flash('success', 'Template saved.');
         redirect(admin_url('templates/' . $id));
     });
+    // Live preview of unsaved changes: keep the draft in this user's session, return the address to show.
+    $r->post('/templates/preview', static function () {
+        Auth::require('manage_content_model');
+        $in = ['kind' => (string)input('kind', 'single'), 'target' => (string)input('target', ''), 'html' => (string)input('html', ''),
+            'css' => (string)input('css', ''), 'wrap' => (bool)input('wrap')];
+        \Slate\Templates::putDraft($in);
+        $url = admin_template_preview_url(['id' => 'draft'] + $in, (int)input('item', 0));
+        json_response($url !== '' ? ['ok' => true, 'url' => $url . '&_=' . time()] : ['ok' => false, 'error' => 'Nothing to preview yet: create at least one item of this type first.']);
+    });
+    // Items to preview a template with (search by title).
+    $r->get('/template-items', static function () {
+        Auth::require('manage_content_model');
+        $kind = (string)($_GET['kind'] ?? 'single');
+        $target = explode('__', preg_replace('/[^a-z0-9_-]/', '', (string)($_GET['target'] ?? '')), 2)[0];
+        $q = trim((string)($_GET['q'] ?? ''));
+        $out = [];
+        if ($kind === 'single') {
+            $res = \Slate\Posts::query(['type' => $target, 'status' => ['publish', 'private', 'draft'], 'search' => $q, 'limit' => 20, 'count' => false, 'orderby' => 'updated_at', 'order' => 'DESC']);
+            foreach ($res['items'] as $p) {
+                $out[] = ['id' => (int)$p['id'], 'label' => $p['title'] ?: '(no title)'];
+            }
+        } elseif ($kind === 'term') {
+            foreach (array_slice(array_filter(\Slate\Terms::all($target), static fn($t) => $q === '' || stripos($t['name'], $q) !== false), 0, 20) as $t) {
+                $out[] = ['id' => (int)$t['id'], 'label' => $t['name']];
+            }
+        }
+        json_response(['ok' => true, 'items' => $out]);
+    });
     $r->post('/templates/{id}/delete', static function (string $id) {
         Auth::require('manage_content_model');
         \Slate\Templates::delete($id);
@@ -1869,22 +1897,28 @@ function admin_save_design(): void
 }
 
 /** A frontend URL that shows the template (even when not enabled) to its editors. */
-function admin_template_preview_url(?array $t): string
+function admin_template_preview_url(?array $t, int $item = 0): string
 {
     if (!$t || $t['id'] === '') {
         return '';
     }
     $q = 'slate_template=' . rawurlencode($t['id']);
+    $type = explode('__', (string)$t['target'], 2)[0];
     switch ($t['kind']) {
         case 'single':
-            $p = \Slate\Posts::query(['type' => $t['target'], 'limit' => 1, 'count' => false])['items'][0] ?? null;
+            $p = $item ? \Slate\Posts::find($item) : null;
+            if (!$p || $p['type'] !== $type) {
+                $p = \Slate\Posts::query(['type' => $type, 'status' => 'publish', 'limit' => 1, 'count' => false])['items'][0]
+                    ?? \Slate\Posts::query(['type' => $type, 'limit' => 1, 'count' => false])['items'][0] ?? null;
+            }
             return $p ? \Slate\Posts::permalink($p) . '?' . $q : '';
         case 'archive':
             $type = \Slate\ContentModel::type($t['target']);
             $base = trim((string)($type['rewrite'] ?? ''), '/');
             return $t['target'] === 'post' || $base === '' || str_contains($base, '%') ? url('?' . $q) : url(\Slate\Posts::trail('/' . $base)) . '?' . $q;
         case 'term':
-            $term = \Slate\Terms::all($t['target'])[0] ?? null;
+            $term = $item ? \Slate\Terms::find($item) : null;
+            $term = $term && $term['taxonomy'] === $t['target'] ? $term : (\Slate\Terms::all($t['target'])[0] ?? null);
             return $term ? \Slate\Terms::link($term) . '?' . $q : '';
         default:
             return $t['target'] === 'search' ? url('?s=a&' . $q) : url('slate-preview-not-found/?' . $q);

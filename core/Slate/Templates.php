@@ -68,8 +68,17 @@ final class Templates
     public static function resolve(string $kind, string $target): ?array
     {
         $preview = (string)($_GET['slate_template'] ?? '');
-        if ($preview !== '' && Auth::can('manage_content_model') && ($t = self::find($preview)) && $t['kind'] === $kind) {
-            return $t;
+        if ($preview !== '' && Auth::can('manage_content_model')) {
+            // "draft": the unsaved code from the template editor's live preview (this user's session only).
+            if ($preview === 'draft') {
+                Session::start();
+                $t = is_array($_SESSION['tpl_draft'] ?? null) ? $_SESSION['tpl_draft'] : null;
+            } else {
+                $t = self::find($preview);
+            }
+            if ($t && $t['kind'] === $kind) {
+                return $t;
+            }
         }
         foreach (self::all() as $t) {
             if (!empty($t['enabled']) && $t['kind'] === $kind && $t['target'] === $target) {
@@ -83,10 +92,25 @@ final class Templates
         return null;
     }
 
+    /** Keep the editor's unsaved template for its live preview (see resolve()). */
+    public static function putDraft(array $in): void
+    {
+        Session::start();
+        $kind = array_key_exists($in['kind'] ?? '', self::KINDS) ? $in['kind'] : 'single';
+        $_SESSION['tpl_draft'] = [
+            'id' => 'draft', 'name' => 'Preview', 'kind' => $kind, 'target' => preg_replace('/[^a-z0-9_-]/', '', (string)($in['target'] ?? '')),
+            'html' => str_replace("\r\n", "\n", (string)($in['html'] ?? '')), 'css' => str_ireplace('</style', '', (string)($in['css'] ?? '')),
+            'wrap' => !empty($in['wrap']), 'enabled' => false, 'updated_at' => now(),
+        ];
+    }
+
     public static function save(array $in): string
     {
         $all = self::all();
         $id = preg_replace('/[^a-z0-9]/', '', (string)($in['id'] ?? '')) ?: 't' . bin2hex(random_bytes(4));
+        if ($id === 'draft') {
+            $id = 't' . bin2hex(random_bytes(4));
+        }
         $kind = array_key_exists($in['kind'] ?? '', self::KINDS) ? $in['kind'] : 'single';
         $target = preg_replace('/[^a-z0-9_-]/', '', (string)($in['target'] ?? ''));
         if (!empty($in['enabled'])) {

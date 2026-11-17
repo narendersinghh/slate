@@ -21,7 +21,7 @@ test('SEO and Appearance live outside Settings; old addresses redirect; sections
   await login(page);
   await page.goto(`${BASE}/admin/settings/seo/sitemap`);
   await expect(page).toHaveURL(/\/admin\/seo\/sitemap$/);
-  await expect(page.locator('.mod-tabs a.active')).toHaveText('XML sitemap');
+  await expect(page.locator('.mod-tabs a.active')).toHaveText('Sitemap');
   await expect(page.locator('.settings-nav')).toHaveCount(0);
   await page.goto(`${BASE}/admin/settings/appearance/design`);
   await expect(page).toHaveURL(/\/admin\/design\/styles$/);

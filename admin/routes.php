@@ -246,6 +246,7 @@ function admin_dispatch(string $path): void
             back();
         }
         $n = 0;
+        $indexUrls = [];
         foreach ($ids as $id) {
             $p = Posts::find($id);
             if (!$p || $p['type'] !== $type || !admin_can_edit($p)) {
@@ -260,9 +261,16 @@ function admin_dispatch(string $path): void
                 'author' => Auth::can('edit_others_posts') ? DB::update('posts', ['author_id' => (int)$value, 'updated_at' => now()], ['id' => $id]) : null,
                 'term_add', 'term_remove' => admin_bulk_term($id, $action, (int)$value),
                 'seo_index' => in_array($value, ['index', 'noindex'], true) ? Posts::save(['seo' => ['robots_index' => $value === 'noindex' ? 'noindex' : 'default']], $id) : null,
+                'seo_request' => Auth::can('publish_posts') && \Slate\Indexing::blocked($p) === null ? $indexUrls[] = Posts::permalink($p) : null,
                 default => null,
             };
             $n++;
+        }
+        if ($action === 'seo_request') {
+            // One request for all selected items that may be indexed (published, public, not noindex).
+            [$ok, $msg] = $indexUrls ? \Slate\Indexing::request($indexUrls) : [false, 'None of the selected items can be indexed (drafts, hidden from search engines, or not public).'];
+            Session::flash($ok ? 'success' : 'error', count($indexUrls) . ' of ' . $n . ' sent. ' . $msg);
+            back();
         }
         PageCache::clear();
         Session::flash('success', number_format($n) . ' item' . ($n === 1 ? '' : 's') . ' updated.');
@@ -1404,6 +1412,9 @@ function admin_content_table(array $def): \Slate\ListTable
             $bulk['author'] = ['label' => 'Change author', 'options' => $authors];
         }
         $bulk['seo_index'] = ['label' => 'Search engines', 'options' => ['index' => 'Allow indexing', 'noindex' => 'Hide (noindex)']];
+        if (Auth::can('publish_posts') && \Slate\Indexing::enabled()) {
+            $bulk['seo_request'] = 'Request indexing';
+        }
         $bulk['trash'] = ['label' => 'Move to trash', 'danger' => true];
     }
 

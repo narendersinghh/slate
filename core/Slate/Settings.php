@@ -106,7 +106,7 @@ final class Settings
                     ['key' => 'seo_home_description', 'type' => 'textarea', 'label' => 'Homepage meta description', 'default' => '', 'counter' => 160],
                     ['key' => 'seo_auto_description', 'type' => 'toggle', 'label' => 'Auto-generate missing descriptions', 'help' => 'Falls back to the excerpt / first paragraph.', 'default' => true],
                 ]],
-                'indexing' => ['label' => 'Indexing & robots meta', 'fields' => [
+                'indexing' => ['label' => 'Indexing', 'fields' => [
                     ['key' => 'seo_noindex_site', 'type' => 'toggle', 'label' => 'Noindex the entire website', 'danger' => true,
                         'help' => 'Adds noindex, nofollow to every page and disallows everything in robots.txt. Use for staging sites.', 'default' => false],
                     ['key' => 'seo_noindex_search', 'type' => 'toggle', 'label' => 'Noindex search results', 'default' => true],
@@ -130,19 +130,19 @@ final class Settings
                         'placeholder' => 'sc-domain:example.com or https://example.com/',
                         'help' => 'Only for submitting your sitemap to Search Console. Empty: this website\'s address.'],
                 ]],
-                'types' => ['label' => 'Post types & taxonomies', 'render' => 'seo-types'],
-                'sitemap' => ['label' => 'XML sitemap', 'fields' => [
+                'types' => ['label' => 'Content types', 'render' => 'seo-types'],
+                'sitemap' => ['label' => 'Sitemap', 'fields' => [
                     ['key' => 'seo_sitemap_enabled', 'type' => 'toggle', 'label' => 'Enable XML sitemap', 'default' => true, 'help' => 'Available at /sitemap.xml'],
                     ['key' => 'seo_sitemap_images', 'type' => 'toggle', 'label' => 'Include featured images', 'default' => true],
                     ['key' => 'seo_sitemap_per_page', 'type' => 'number', 'label' => 'URLs per sitemap file', 'default' => 1000, 'min' => 100, 'max' => 50000],
-                    ['type' => 'info', 'label' => 'What is included', 'help' => 'Choose which post types and taxonomies appear in the sitemap under SEO › Post types & taxonomies. Noindexed content is excluded automatically.'],
+                    ['type' => 'info', 'label' => 'What is included', 'help' => 'Choose which post types and taxonomies appear in the sitemap under SEO › Content types. Noindexed content is excluded automatically.'],
                 ]],
                 'robots' => ['label' => 'robots.txt', 'fields' => [
                     ['key' => 'seo_robots_txt', 'type' => 'code', 'label' => 'robots.txt content', 'rows' => 12,
                         'default' => "User-agent: *\nDisallow: /admin/\nDisallow: /?s=\n\nSitemap: {sitemap}",
                         'help' => '{sitemap} is replaced with your sitemap URL. Served virtually at /robots.txt'],
                 ]],
-                'schema' => ['label' => 'Schema (structured data)', 'fields' => [
+                'schema' => ['label' => 'Schema', 'fields' => [
                     ['key' => 'seo_schema_enabled', 'type' => 'toggle', 'label' => 'Output JSON-LD schema', 'default' => true],
                     ['key' => 'seo_schema_entity', 'type' => 'select', 'label' => 'Website represents', 'default' => 'Organization',
                         'options' => ['Organization' => 'Organization', 'LocalBusiness' => 'Local business', 'Person' => 'Person']],
@@ -162,7 +162,7 @@ final class Settings
                 'schema-types' => ['label' => 'Schema by type', 'render' => 'seo-schema', 'fields' => [
                     ['type' => 'info', 'label' => 'How it works', 'help' => 'Each content type gets a schema.org type. Map its properties to built-in values, custom fields or taxonomies; empty values are left out, links become absolute and dates use the ISO 8601 format. Single items can override the type in their SEO panel (Advanced).'],
                 ]],
-                'social' => ['label' => 'Social (Open Graph)', 'fields' => [
+                'social' => ['label' => 'Social', 'fields' => [
                     ['key' => 'seo_og_enabled', 'type' => 'toggle', 'label' => 'Open Graph & Twitter meta tags', 'default' => true],
                     ['key' => 'seo_og_default_image', 'type' => 'media', 'label' => 'Default share image', 'help' => '1200×630px recommended. Each content type can have its own under SEO › Schema by type.', 'default' => null],
                     ['key' => 'seo_twitter_card', 'type' => 'select', 'label' => 'Twitter/X card type', 'default' => 'summary_large_image',

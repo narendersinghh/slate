@@ -512,7 +512,7 @@ final class Indexing
             return [false, 'Save a Google service account key first.'];
         }
         if (!Options::get('seo_sitemap_enabled', true)) {
-            return [false, 'The XML sitemap is turned off (SEO, XML sitemap).'];
+            return [false, 'The XML sitemap is turned off (SEO › Sitemap).'];
         }
         $url = self::endpoint('google_webmasters') . '/sites/' . rawurlencode(self::gscProperty()) . '/sitemaps/' . rawurlencode(site_url('sitemap.xml'));
         $r = self::googleCall('PUT', $url);

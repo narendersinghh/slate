@@ -73,7 +73,7 @@ Modules::adminPage('Orders', 'my-shop-orders', function (): void {
     echo \Slate\AdminUi::header('Orders', 'Everything people bought.', 'cart');
 }, 'manage_settings', 'cart');
 
-// Settings: rendered by the standard settings screen (Settings → Modules → My Shop) and searchable.
+// Settings: rendered by the standard settings screen (the module's Settings tab, /admin/m/my-shop/settings) and searchable.
 Modules::settings([
     ['key' => 'my_shop_currency', 'type' => 'select', 'label' => 'Currency', 'default' => 'USD', 'options' => ['USD' => 'US dollar', 'EUR' => 'Euro']],
 ]);

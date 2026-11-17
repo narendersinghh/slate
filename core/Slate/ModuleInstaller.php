@@ -7,7 +7,7 @@ namespace Slate;
  * Installs, updates and removes modules, from an uploaded zip, any zip URL, a GitHub repository (or a folder inside one,
  * e.g. https://github.com/me/slate-modules/tree/main/shop) or a module registry.
  *
- * Registries are plain JSON files anyone can publish (Settings › Modules › Registries):
+ * Registries are plain JSON files anyone can publish (Modules › Sources):
  *   {"name": "My registry", "modules": [{"slug": "shop", "name": "Shop", "description": "…", "version": "1.0.0",
  *     "requires": "0.6.0", "author": "…", "homepage": "…", "download": "https://github.com/me/repo/tree/main/shop",
  *     "sha256": "optional checksum of the zip", "tags": ["ecommerce"]}]}

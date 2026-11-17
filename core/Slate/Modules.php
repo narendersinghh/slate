@@ -561,7 +561,7 @@ final class Modules
     }
 
     /**
-     * Declarative settings for a module, rendered by the standard settings screen (Settings › Modules › <name>) and
+     * Declarative settings for a module, rendered by the standard settings screen (the module's Settings tab, /admin/m/<name>/settings) and
      * linked as "Settings" in the module's sidebar group. Same field format as core settings:
      *   Modules::settings([['key' => 'shop_currency', 'type' => 'select', 'label' => 'Currency', 'options' => [...], 'default' => 'USD'], ...]);
      * Optional: 'label' (defaults to the module name), 'help' (intro text), 'render' => callable printing extra HTML below the fields.

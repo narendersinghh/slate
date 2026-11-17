@@ -8,7 +8,7 @@ markup; the result stays consistent when the dashboard design changes.
 - **Sidebar.** Every page a module registers with `Modules::adminPage()` is listed under **Modules → your module name**
   (the module's `name` from module.json, with its `icon`). One page shows as a single link; several pages become a
   group. A badge callable shows a count (e.g. unread items) on the page and on the group.
-- **Settings.** Declare settings with `Modules::settings()`. They appear in *Settings → Modules → your module*, in the
+- **Settings.** Declare settings with `Modules::settings()`. They appear on your module's own Settings tab (`/admin/m/your-module/settings`), in the
   settings search, and as a **Settings** link at the end of your sidebar group. Do not build your own settings forms.
 - **Content.** Data that is really content (products, events, forms) should be a post type, so it gets the standard
   list table, editor, revisions, SEO and API for free.

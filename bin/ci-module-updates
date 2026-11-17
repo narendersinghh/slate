@@ -3,7 +3,7 @@
  * Pipeline tests for automatic module updates, against a throwaway site and the fake registry (bin/mock-registry).
  *
  *   php -S 127.0.0.1:8199 bin/mock-registry &
- *   php tests/module-updates.php [http://127.0.0.1:8199]
+ *   php bin/ci-module-updates [http://127.0.0.1:8199]
  *
  * Runs every case through ModuleUpdater::run() exactly like the scheduled task does, and checks that a success
  * migrates the data and every failure puts files AND data back, records the report and leaves the site working.

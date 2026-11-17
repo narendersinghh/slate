@@ -3,7 +3,7 @@
 // runner: MOCK_REGISTRY (default http://127.0.0.1:8199). Uses the "upd-ui" test module it serves.
 // Covers: the "installs automatically" notice, the per-module and site-wide auto-update switches, a manual update,
 // a failed update with its notice, error report, dashboard banner, "Try again" and "Skip this version", and the update log.
-// The pipeline cases themselves (rollback of files and data, hangs, stuck updates) are in tests/module-updates.php.
+// The pipeline cases themselves (rollback of files and data, hangs, stuck updates) are in bin/ci-module-updates.
 import { test, expect } from '@playwright/test';
 
 const BASE = process.env.SLATE_URL || 'http://127.0.0.1:8000';

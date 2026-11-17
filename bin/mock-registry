@@ -4,7 +4,7 @@
  *
  *   php -S 127.0.0.1:8199 bin/mock-registry
  *
- *   GET /registry.json                      lists modules "upd-demo" (tests/module-updates.php) and "upd-ui"
+ *   GET /registry.json                      lists modules "upd-demo" (bin/ci-module-updates) and "upd-ui"
  *                                           (tests/module-updates.spec.mjs), each in the version of its scenario
  *   GET /zip/<slug>-<variant>.zip           that version as a zip, built on the fly
  *   GET /scenario?slug=<slug>&set=<variant> switch a module's scenario (state kept in the system temp folder)

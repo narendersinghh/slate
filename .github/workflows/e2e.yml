@@ -55,7 +55,7 @@ jobs:
           SLATE_MOCK_AI: '1'
           MOCK_REGISTRY: http://127.0.0.1:8199
       - name: Module update pipeline (backup, migrate, verify, roll back files and data)
-        run: php tests/module-updates.php http://127.0.0.1:8199
+        run: php bin/ci-module-updates http://127.0.0.1:8199
         env:
           SLATE_MODULE_UPDATE_TIMEOUT: '10'
       - if: always()

@@ -176,3 +176,11 @@ textarea.se-input { resize: vertical; line-height: 1.4; }
   .se-fab { right: 12px; bottom: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .se-busy::after { animation: none; } }
+
+/* Template parts: notice in panels, chip in the toolbar, undo in toasts */
+.se-notice { margin: 14px 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); font-size: 12px; }
+.se-notice.se-shared { background: #FDF4E1; border-color: #F1D9A6; color: #6B4A0B; }
+.se-notice a { color: var(--o-text); font-weight: 600; }
+.se-chip-label.se-shared { color: #F5B544; }
+.se-toast-act { margin-left: 12px; padding: 3px 10px; border-radius: 7px; border: 1px solid rgba(255, 255, 255, .5); background: none; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.se-toast-act:hover { background: rgba(255, 255, 255, .15); }

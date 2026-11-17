@@ -31,6 +31,12 @@
   // 'html': designed page (fields._html). 'content': stored content + the item's title/fields shown by a template or the theme. 'term': a term page.
   const MODE = C.mode || 'html';
   const BINDS = C.binds || {};
+  // The page's template, when its static parts can be edited here: {id, name, shared, count, edit, save, undo, versions, updated}.
+  const TPL = C.template || null;
+  const isTpl = (el) => !!el && /^t/.test(el.getAttribute('data-se') || el.getAttribute('data-se-loop') || '');
+  const tplNotice = () => (!TPL ? '' : TPL.shared
+    ? 'This is part of the template “' + TPL.name + '”. Changes appear on all ' + TPL.count + ' pages that use it.'
+    : 'This is this page\'s design. Changes appear on this page.');
   const originals = new Map(); // id -> {html, tag, style}
 
   // ------------------------------------------------------------------ helpers
@@ -74,6 +80,7 @@
     + '<aside class="se-panel" role="dialog" aria-modal="false" aria-labelledby="se-panel-title" hidden></aside>'
     + '<div class="se-bar" role="region" aria-label="Page editor">'
     + '<span class="se-count" aria-live="polite">No changes</span>'
+    + '<button type="button" class="se-btn se-ghost" data-act="undo-tpl" hidden title="Undo the last change saved to this page\'s template">Undo template change</button>'
     + '<button type="button" class="se-btn se-ghost" data-act="discard">Discard</button>'
     + '<button type="button" class="se-btn se-primary" data-act="save">Save</button>'
     + '<button type="button" class="se-btn se-ghost se-icon" data-act="done" aria-label="Stop editing" title="Stop editing">' + ico.close + '</button>'
@@ -121,11 +128,19 @@
     }
   }
 
-  function toast(msg, kind, ms) {
+  function toast(msg, kind, ms, action) {
     const t = d.createElement('div');
     t.className = 'se-toast' + (kind ? ' se-' + kind : '');
     t.setAttribute('role', kind === 'error' ? 'alert' : 'status');
     t.textContent = msg;
+    if (action) {
+      const b = d.createElement('button');
+      b.type = 'button';
+      b.className = 'se-toast-act';
+      b.textContent = action.label;
+      b.addEventListener('click', () => { t.remove(); action.fn(); });
+      t.appendChild(b);
+    }
     $('.se-toasts').appendChild(t);
     setTimeout(() => t.remove(), ms || (kind === 'error' ? 6000 : 2600));
   }
@@ -170,7 +185,7 @@
     marks = new Map();
     const w = d.createTreeWalker(d.body, NodeFilter.SHOW_COMMENT);
     const starts = [];
-    for (let n = w.nextNode(); n; n = w.nextNode()) { const m = /^se:(\w+)$/.exec(n.data.trim()); if (m) starts.push([n, m[1]]); }
+    for (let n = w.nextNode(); n; n = w.nextNode()) { const m = /^se:([a-z]+)$/.exec(n.data.trim()); if (m) starts.push([n, m[1]]); }
     starts.forEach(([c, kind]) => {
       for (let n = c.nextSibling; n; n = n.nextSibling) {
         if (n.nodeType === 8 && n.data.trim() === '/se:' + kind) break;
@@ -178,17 +193,39 @@
       }
     });
   }
+  // The list item (another post or term) an element belongs to: <!--se:item:p12--> before the item's markup.
+  function itemOf(t) {
+    for (let n = t; n && n !== d.body; n = n.parentNode) {
+      for (let p = n.previousSibling; p; p = p.previousSibling) {
+        if (p.nodeType === 8) { const m = /^se:item:([pt]\d+)$/.exec(p.data.trim()); if (m) return (C.items || {})[m[1]] || null; }
+        if (p.nodeType === 8 && /^\/?se:list$/.test(p.data.trim())) break;
+      }
+      if (marks && marks.get(n) === 'list') break;
+    }
+    return null;
+  }
+  const where = () => (TPL ? (TPL.shared ? 'the template “' + TPL.name + '”' : 'this page\'s design') : (C.where || 'the site theme'));
+  /** Why a part cannot be edited here, and where it can: {text, links: [[label, url]]} or null. */
   function hintFor(t) {
-    if (!(t instanceof Element) || t === d.body || t === d.documentElement) return '';
+    if (!(t instanceof Element) || t === d.body || t === d.documentElement) return null;
     if (!marks) buildMarks();
     for (let n = t; n && n !== d.body; n = n.parentElement) {
       const k = marks.get(n);
-      if (k === 'list') return 'Part of a list: it repeats for each item';
-      if (k === 'mod') return 'Added by a module';
-      if (k === 'content') return 'Layout of the page content: edit it in the dashboard';
+      if (k === 'list') {
+        const it = itemOf(t);
+        if (it) return { text: 'Comes from “' + it.title + '”: edit it there', links: [['Open “' + it.title + '”', it.url]].concat(it.edit ? [['Edit in dashboard', it.edit]] : []) };
+        return { text: 'Part of a list: it repeats for each item', links: TPL ? [['Open the template', TPL.edit]] : [] };
+      }
+      if (k === 'mod') return { text: 'Added by a module', links: [] };
+      if (k === 'content') return { text: 'Layout of the page content: edit it in the dashboard', links: C.dashboard ? [['Edit in dashboard', C.dashboard]] : [] };
+      if (k === 'tpl') return { text: 'Part of ' + where() + ' with values or logic in it: edit it in Templates', links: TPL ? [['Open the template', TPL.edit]] : [] };
     }
-    if (MODE === 'html') return '';
-    return 'Comes from ' + (C.where || 'the site theme');
+    if (MODE === 'html') return null;
+    return { text: 'Part of the site theme (header, menu or footer): menus are changed in Appearance › Menus', links: C.menus ? [['Open Appearance › Menus', C.menus]] : [] };
+  }
+  function showHint(h) {
+    deselect();
+    openPanel('Not editable here', '<p>' + esc(h.text) + '.</p>' + (h.links.length ? '<div class="se-row">' + h.links.map(([l, u], i) => '<a class="se-btn ' + (i ? 'se-ghost' : 'se-primary') + '" href="' + esc(u) + '">' + esc(l) + '</a>').join('') + '</div>' : ''));
   }
 
   function kindOf(el) {
@@ -204,6 +241,7 @@
   function nameOf(el) {
     const k = kindOf(el);
     if (k === 'bind') { const b = BINDS[el.getAttribute('data-se-bind')]; return b ? b.label : 'Field'; }
+    if (TPL && TPL.shared && isTpl(el)) return (k === 'loop' ? 'Repeating group' : (NAMES[tagOf(el)] || 'Element')) + ' · template';
     if (k === 'loop') return el.hasAttribute('data-se-source') ? 'Dynamic list' : 'Repeating group';
     if (k === 'icon') return 'Icon';
     if (tagOf(el) === 'a' && /\b(btn|button)\b/i.test(cls(el))) return 'Button';
@@ -274,7 +312,7 @@
     if (t !== hoverEl) {
       hoverEl = t;
       hoverBox.classList.toggle('se-hint', !!t);
-      if (t) hoverBox.querySelector('.se-tagname').textContent = hint;
+      if (t) hoverBox.querySelector('.se-tagname').textContent = hint.text;
     }
   }, true);
 
@@ -299,7 +337,7 @@
     if (!el) {
       deselect();
       const hint = hintFor(e.target);
-      if (hint) toast(hint + '.');
+      if (hint) showHint(hint);
       return;
     }
     select(el, e);
@@ -604,7 +642,7 @@
     const inLoop = loopOf(el);
     const cs = getComputedStyle(el);
     const toHex = (c) => { const m = c.match(/\d+(\.\d+)?/g); return m ? '#' + m.slice(0, 3).map((x) => (+x).toString(16).padStart(2, '0')).join('') : '#000000'; };
-    let h = '';
+    let h = isTpl(el) && TPL ? '<span class="se-chip-label' + (TPL.shared ? ' se-shared' : '') + '" title="' + esc(tplNotice()) + '">' + (TPL.shared ? 'Template: ' + esc(TPL.name) : 'Page design') + '</span><span class="se-sep"></span>' : '';
     if (canTag) {
       h += '<label class="se-sr" for="se-tag">Element type</label><select id="se-tag" class="se-select" title="Element type">'
         + ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'].map((t) => '<option value="' + t + '"' + (t === tag ? ' selected' : '') + '>' + (t === 'p' ? 'Paragraph' : t.toUpperCase()) + '</option>').join('')
@@ -799,6 +837,9 @@
 
   // ------------------------------------------------------------------ side panel
   function openPanel(title, html) {
+    if (sel && isTpl(sel) && TPL) {
+      html = '<div class="se-notice' + (TPL.shared ? ' se-shared' : '') + '">' + esc(tplNotice()) + (TPL.shared ? ' <a href="' + esc(TPL.edit) + '">Open the template</a>' : '') + '</div>' + html;
+    }
     panel.innerHTML = '<header class="se-ph"><h2 id="se-panel-title">' + esc(title) + '</h2><button type="button" class="se-btn se-ghost se-icon" data-act="close" aria-label="Close panel">' + ico.close + '</button></header><div class="se-pb">' + html + '</div>';
     panel.hidden = false;
     ui.classList.add('se-panel-open');
@@ -1260,13 +1301,22 @@
     if (sel && selKind === 'text') markText(sel);
     if (sel && selKind === 'bind' && sel.isContentEditable) markBind(sel);
     const hasBinds = P.bind.size > 0;
-    const ops = buildOps().concat(extra || []);
-    if (!ops.length) { toast('No changes to save.'); return false; }
+    const all = buildOps().concat(extra || []);
+    if (!all.length) { toast('No changes to save.'); return false; }
+    // Parts of the page's template are saved into the template; the rest into this item.
+    const tplOps = all.filter((o) => /^t/.test(o.id || ''));
+    const ops = all.filter((o) => !/^t/.test(o.id || ''));
+    if (tplOps.length && TPL && TPL.shared && !confirm(tplNotice() + '\n\nSave this change to the template?')) return false;
     saving = true;
     const btn = sbar.querySelector('[data-act="save"]');
     btn.textContent = 'Saving…';
     update();
-    const r = await json(C.save, { ops, base: C.updated });
+    let r = { ok: true };
+    if (tplOps.length) {
+      r = await json(TPL.save, { ops: tplOps, base: TPL.updated });
+      if (r.ok) { TPL.updated = r.updated; TPL.versions = r.versions; }
+    }
+    if (r.ok && ops.length) r = await json(C.save, { ops, base: C.updated });
     saving = false;
     btn.textContent = 'Save';
     if (!r.ok) {
@@ -1278,8 +1328,8 @@
       }
       return false;
     }
-    C.updated = r.updated;
-    if (r.loops) C.loops = r.loops;
+    if (ops.length) C.updated = r.updated;
+    if (r.loops && !tplOps.length) C.loops = r.loops;
     Object.values(P).forEach((m) => m.clear());
     originals.clear();
     if (sel) originals.set(idOf(sel), { html: sel.innerHTML, tag: tagOf(sel), style: sel.getAttribute('style') || '' });
@@ -1292,14 +1342,32 @@
       location.replace(u.toString());
       return true;
     }
-    toast('Saved.', 'ok');
+    if (tplOps.length) {
+      toast(TPL.shared ? 'Saved to the template “' + TPL.name + '” (' + TPL.count + ' pages).' : 'Saved.', 'ok', 8000, { label: 'Undo', fn: undoTemplate });
+      showUndo();
+    } else toast('Saved.', 'ok');
     return true;
+  }
+
+  async function undoTemplate() {
+    if (!TPL || !confirm('Undo the last change to ' + (TPL.shared ? 'the template “' + TPL.name + '” (all ' + TPL.count + ' pages)' : 'this page\'s design') + '?')) return;
+    const r = await json(TPL.undo, {});
+    if (!r.ok) { toast(r.error || 'Could not undo.', 'error'); return; }
+    leaving = true;
+    const u = new URL(location.href);
+    u.searchParams.set('se-edit', '1');
+    location.replace(u.toString());
+  }
+  function showUndo() {
+    const b = sbar.querySelector('[data-act="undo-tpl"]');
+    if (b) b.hidden = !(TPL && TPL.versions > 0);
   }
 
   sbar.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'save') save();
+    else if (b.dataset.act === 'undo-tpl') undoTemplate();
     else if (b.dataset.act === 'discard') {
       if (count() && !confirm('Discard all unsaved changes?')) return;
       leaving = true;
@@ -1307,7 +1375,7 @@
     } else if (b.dataset.act === 'done') setOn(false);
   });
 
-  function refresh() { update(); }
+  function refresh() { update(); showUndo(); }
 
   if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', mount); else mount();
 })();

@@ -49,6 +49,8 @@ final class Templates
     public static ?array $bind = null;
     /** Bound values found while rendering: key => kind (text|textarea|html|image). */
     public static array $bound = [];
+    /** Items shown by lists while editing (for "Comes from …" hints): ['post' => [id => true], 'term' => [id => true]]. */
+    public static array $items = ['post' => [], 'term' => []];
     private static bool $binding = false;
     private const BUILTIN_TAGS = ['form', 'title', 'content', 'excerpt', 'url', 'id', 'slug', 'type', 'date', 'modified', 'author', 'image',
         'image_url', 'index', 'year', 'menu', 'breadcrumbs', 'pagination', 'edit', 'terms', 'field', 'item', 'else'];
@@ -120,6 +122,11 @@ final class Templates
                 }
             }
         }
+        // Keep the previous html/css (last 20 versions) so a change can be undone.
+        if (isset($all[$id]) && empty($in['_no_version']) && (($all[$id]['html'] ?? '') !== str_replace("\r\n", "\n", (string)($in['html'] ?? ''))
+            || ($all[$id]['css'] ?? '') !== str_replace("\r\n", "\n", (string)($in['css'] ?? '')))) {
+            self::pushVersion($id, $all[$id]);
+        }
         $all[$id] = [
             'id' => $id,
             'name' => mb_substr(trim(strip_tags((string)($in['name'] ?? ''))) ?: self::label($kind, $target), 0, 120),
@@ -134,6 +141,40 @@ final class Templates
         Options::set('templates', $all);
         PageCache::clear();
         return $id;
+    }
+
+    private const VERSIONS = 20;
+
+    /** Earlier versions of a template (newest last): [['html', 'css', 'wrap', 'saved_at', 'user_id'], …]. Stored per template, not autoloaded. */
+    public static function versions(string $id): array
+    {
+        $name = 'template_versions_' . preg_replace('/[^a-z0-9]/', '', $id);
+        Options::lazy($name);
+        $v = Options::get($name, []);
+        return is_array($v) ? array_values($v) : [];
+    }
+
+    private static function pushVersion(string $id, array $old): void
+    {
+        $v = self::versions($id);
+        $v[] = ['html' => (string)($old['html'] ?? ''), 'css' => (string)($old['css'] ?? ''), 'wrap' => !empty($old['wrap']),
+            'saved_at' => (string)($old['updated_at'] ?? now()), 'user_id' => Auth::id() ?: null];
+        Options::set('template_versions_' . preg_replace('/[^a-z0-9]/', '', $id), array_slice($v, -self::VERSIONS), false);
+    }
+
+    /** Put back the newest earlier version (and drop it from the list). Returns false when there is none. */
+    public static function undo(string $id): bool
+    {
+        $t = self::find($id);
+        $v = self::versions($id);
+        if (!$t || !$v) {
+            return false;
+        }
+        $last = array_pop($v);
+        Options::set('template_versions_' . preg_replace('/[^a-z0-9]/', '', $id), $v, false);
+        self::save(['id' => $id, 'name' => $t['name'], 'kind' => $t['kind'], 'target' => $t['target'], 'html' => $last['html'], 'css' => $last['css'],
+            'wrap' => $last['wrap'], 'enabled' => $t['enabled'], '_no_version' => true]);
+        return true;
     }
 
     public static function delete(string $id): void
@@ -168,7 +209,10 @@ final class Templates
         if ($tpl['css'] !== '') {
             $body .= '<style id="tpl-css-' . e($tpl['id']) . '">' . $tpl['css'] . '</style>';
         }
-        $body .= '<div class="site-template site-template-' . e($tpl['kind']) . '-' . e($tpl['target']) . '">' . self::render($tpl['html'], $ctx) . '</div>';
+        // A team member editing this template on the page gets its static parts marked (PageEditor::templateForEditor).
+        $src = PageEditor::templateForEditor($tpl);
+        $inner = $src === null ? self::render($tpl['html'], $ctx) : '<!--se:tpl-->' . self::render($src, $ctx) . '<!--/se:tpl-->';
+        $body .= '<div class="site-template site-template-' . e($tpl['kind']) . '-' . e($tpl['target']) . '">' . $inner . '</div>';
         if (empty($tpl['wrap'])) {
             ob_start();
             echo '<!doctype html><html ' . html_attrs() . '><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
@@ -373,6 +417,15 @@ final class Templates
     private static function renderBound(array $nodes, array $ctx): string
     {
         $parts = [];
+        // Items of lists (other posts, terms) say where they come from.
+        $pid = (int)($ctx['post']['id'] ?? 0);
+        if ($pid && $pid !== (int)(self::$bind['post'] ?? 0)) {
+            self::$items['post'][$pid] = true;
+            $parts[-1] = '<!--se:item:p' . $pid . '-->';
+        } elseif (is_array($ctx['item'] ?? null) && !empty($ctx['item']['taxonomy']) && !empty($ctx['item']['id'])) {
+            self::$items['term'][(int)$ctx['item']['id']] = true;
+            $parts[-1] = '<!--se:item:t' . (int)$ctx['item']['id'] . '-->';
+        }
         $count = count($nodes);
         for ($i = 0; $i < $count; $i++) {
             $n = $nodes[$i];

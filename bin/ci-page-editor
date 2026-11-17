@@ -22,6 +22,12 @@ if (($argv[1] ?? '') === 'content') {
     echo json_encode($p ? ['title' => $p['title'], 'content' => $p['content'], 'fields' => $p['fields'], 'featured' => $p['featured_media_id'] ? (int)$p['featured_media_id'] : null] : null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
     exit;
 }
+// php bin/ci-page-editor template <id>: a template's html and how many earlier versions are kept
+if (($argv[1] ?? '') === 'template') {
+    $t = \Slate\Templates::find((string)($argv[2] ?? ''));
+    echo json_encode($t ? ['html' => $t['html'], 'versions' => count(\Slate\Templates::versions((string)$argv[2]))] : null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+    exit;
+}
 if (($argv[1] ?? '') === 'term') {
     $t = \Slate\Terms::find((int)($argv[2] ?? 0));
     echo json_encode($t ? ['name' => $t['name'], 'fields' => $t['fields']] : null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
@@ -68,7 +74,21 @@ $tplId = Posts::save(['type' => 'page', 'title' => 'Template page', 'slug' => 'p
 \Slate\Templates::save(['id' => 'pepagetpl', 'name' => 'PE page', 'kind' => 'single', 'target' => 'page__pe-tpl-' . $sfx, 'wrap' => true, 'enabled' => true,
     'html' => '<section class="pe-t"><h1 class="t-title">{{title|texturize}}</h1><p class="t-sub">{{field:subtitle}}</p>'
         . '<img class="t-alt" alt="{{title}}" src="/content/uploads/pe-photo.png"><figure class="t-fig">{{image}}</figure><div class="t-body">{{{content}}}</div>'
-        . '<div class="t-list">{{#query type=post limit=2 orderby=title order=asc}}<h3 class="t-item">{{title}}</h3>{{/query}}</div></section>']);
+        . '<div class="t-list">{{#query type=post limit=2 orderby=title order=asc}}<h3 class="t-item">{{title}}</h3>{{/query}}</div>'
+        . '<p class="t-static">Static <em>template</em> text</p><a class="t-btn" href="/somewhere">Button label</a><p class="t-mixed">By {{author}} today</p></section>']);
+// A template shared by every item of a type (the page editor says how many pages use it). Own type, so other specs are not affected.
+\Slate\ContentModel::saveType(['slug' => 'penote', 'singular' => 'PE note', 'plural' => 'PE notes', 'public' => true, 'has_archive' => false,
+    'hierarchical' => false, 'rewrite' => 'pe-notes', 'show_in_menu' => false, 'menu_position' => 90, 'icon' => 'file', 'supports' => ['title', 'editor', 'frontend_edit']]);
+foreach (['One', 'Two', 'Three'] as $n) {
+    if (!Posts::findBySlug('penote', 'pe-note-' . strtolower($n), false)) {
+        Posts::save(['type' => 'penote', 'title' => 'PE note ' . $n, 'slug' => 'pe-note-' . strtolower($n), 'status' => 'publish', 'author_id' => (int)$admin['id'], 'content' => '<p>Note ' . $n . '.</p>']);
+    }
+}
+\Slate\Templates::save(['id' => 'pepostpl', 'name' => 'PE post', 'kind' => 'single', 'target' => 'penote', 'wrap' => true, 'enabled' => true,
+    'html' => '<article class="pe-post"><h1 class="pp-title">{{title}}</h1><p class="pp-shared">Shared template line</p><div class="pp-body">{{{content}}}</div></article>']);
+$postCount = (int)DB::val("SELECT COUNT(*) FROM {{posts}} WHERE type = 'penote' AND status = 'publish'");
+$dyn = Posts::findBySlug('penote', 'pe-note-one', false);
+$dyn2 = Posts::findBySlug('penote', 'pe-note-two', false);
 $themeId = Posts::save(['type' => 'page', 'title' => 'Theme page', 'slug' => 'pe-theme-' . $sfx, 'status' => 'publish', 'author_id' => (int)$admin['id'], 'content' => $stored]);
 $cat = \Slate\Terms::findBySlug('category', 'pe-topic');
 $catId = $cat ? (int)$cat['id'] : \Slate\Terms::save('category', ['name' => 'PE Topic', 'slug' => 'pe-topic', 'fields' => ['lead' => "Topic lead's text"]]);
@@ -78,4 +98,5 @@ $catId = $cat ? (int)$cat['id'] : \Slate\Terms::save('category', ['name' => 'PE 
 
 echo json_encode(['id' => $id, 'url' => Posts::permalink(Posts::find($id)), 'body' => Posts::find($id)['fields']['_html']['body'],
     'tpl' => ['id' => $tplId, 'url' => Posts::permalink(Posts::find($tplId))], 'theme' => ['id' => $themeId, 'url' => Posts::permalink(Posts::find($themeId))],
-    'term' => ['id' => $catId, 'url' => \Slate\Terms::link(\Slate\Terms::find($catId))], 'stored' => $stored], JSON_UNESCAPED_SLASHES), "\n";
+    'term' => ['id' => $catId, 'url' => \Slate\Terms::link(\Slate\Terms::find($catId))], 'stored' => $stored,
+    'shared' => ['template' => 'pepostpl', 'count' => $postCount, 'url' => Posts::permalink($dyn), 'url2' => Posts::permalink($dyn2)]], JSON_UNESCAPED_SLASHES), "\n";

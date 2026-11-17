@@ -308,10 +308,10 @@ final class PageEditor
      * Apply element operations to stored content and splice only the changed elements back into the original string.
      * Returns the new content, or ['error' => message].
      */
-    public static function editContent(string $html, array $ops): string|array
+    public static function editContent(string $html, array $ops, ?array $m = null): string|array
     {
         $fail = static fn(string $msg) => ['error' => $msg];
-        $m = self::contentIds($html);
+        $m ??= self::contentIds($html);
         if (!$m) {
             return $fail('The HTML of this content cannot be edited safely on the page. Edit it in the dashboard.');
         }
@@ -377,6 +377,11 @@ final class PageEditor
             $rg = $range($r);
             if ($rg === null) {
                 return $fail('This element has no closing tag in the stored HTML. Edit it in the dashboard.');
+            }
+            // Template logic ({{…}}) is never rewritten: only parts without it may change.
+            if (str_contains(substr($html, $rg[0], $rg[1] - $rg[0]), '{{')) {
+                return $fail($r['mode'] === 'inner' ? 'This part shows values from the template; edit them where they come from.'
+                    : 'This element\'s tag holds template logic, so only its text can change here.');
             }
             $list[] = $r + ['from' => $rg[0], 'to' => $rg[1]];
         }
@@ -614,6 +619,12 @@ final class PageEditor
     public static function begin(?array $tpl): void
     {
         $c = self::context();
+        if ($tpl && ($tpl['id'] ?? '') !== 'draft' && self::canEditTemplates()) {
+            self::$tplEdit = $tpl;
+            PageCache::skip();
+            Templates::$bind ??= []; // marks lists and module output even when no item is edited (archives)
+            self::$where = 'the “' . (string)$tpl['name'] . '” template (Templates)';
+        }
         if (!$c) {
             return;
         }
@@ -626,6 +637,186 @@ final class PageEditor
         self::$where = $tpl ? 'the “' . (string)$tpl['name'] . '” template (Templates)' : 'the site theme';
         self::$byTheme = $tpl === null;
         Templates::$bind = $c['kind'] === 'post' ? ['post' => (int)$c['post']['id']] : ['term' => (int)$c['term']['id']];
+    }
+
+    /** Is the page editor on for this request (an item, or the page's template)? */
+    public static function active(): bool
+    {
+        return self::context() !== null || self::$tplEdit !== null;
+    }
+
+    public static function canEditTemplates(): bool
+    {
+        return Auth::id() && Options::get('admin_bar_frontend', true) && Auth::can('frontend_edit') && Auth::can('manage_content_model');
+    }
+
+    // ------------------------------------------------------------------ the page's template (its static parts)
+
+    private static ?array $tplEdit = null;
+    private static ?array $tplAnn = null;
+
+    /**
+     * Editable ids for a template's HTML source: the same annotate() as stored content, kept only for static parts.
+     * Read-only: anything inside a list block ({{#posts}}, {{#query}}, {{#each}}, module blocks…), elements whose
+     * inside shows template values ({{…}}), and elements without an explicit closing tag. Null when the HTML cannot
+     * be mapped safely.
+     */
+    public static function templateIds(string $html): ?array
+    {
+        if (trim($html) === '' || strlen($html) > 1_000_000) {
+            return null;
+        }
+        $src = ContentMap::elements($html);
+        $ann = HtmlPages::annotate(['body' => $html, 'next' => 1]);
+        [$doc, $root] = HtmlPages::fragment((string)$ann['body']);
+        $els = ContentMap::domElements($root);
+        if (!ContentMap::matches($src, $els)) {
+            return null;
+        }
+        // Byte ranges of list blocks (everything but if/unless).
+        preg_match_all('/\{\{\{\s*(.+?)\s*\}\}\}|\{\{\s*([#\/]?)([^{}]*?)\s*\}\}/s', $html, $tm, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
+        $stack = [];
+        $lists = [];
+        foreach ($tm as $t) {
+            $sig = $t[2][0] ?? '';
+            if ($sig === '#') {
+                $stack[] = [strtolower((string)preg_split('/\s+/', trim($t[3][0]))[0]), $t[0][1] + strlen($t[0][0])];
+            } elseif ($sig === '/' && $stack) {
+                [$name, $from] = array_pop($stack);
+                if (!in_array($name, ['if', 'unless'], true)) {
+                    $lists[] = [$from, $t[0][1]];
+                }
+            }
+        }
+        $inList = static function (int $at) use ($lists): bool {
+            foreach ($lists as [$a, $b]) {
+                if ($at >= $a && $at < $b) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        foreach ($els as $k => $el) {
+            $s = $src[$k];
+            $isLoop = $el->hasAttribute('data-se-loop');
+            if (!$el->hasAttribute('data-se') && !$isLoop) {
+                continue;
+            }
+            $void = $s['end'] === $s['open_end'];
+            $inner = $void ? '' : ($s['close'] !== null ? substr($html, $s['open_end'], $s['close'] - $s['open_end']) : null);
+            $ok = !$inList($s['start']) && $inner !== null && !str_contains($inner, '{{')
+                && !($void && str_contains(substr($html, $s['start'], $s['open_end'] - $s['start']), '{{'));
+            if (!$ok) {
+                $el->removeAttribute('data-se');
+                if ($isLoop) {
+                    $el->removeAttribute('data-se-loop');
+                    foreach ($el->childNodes as $c) {
+                        if ($c instanceof \DOMElement) {
+                            $c->removeAttribute('data-se-item');
+                        }
+                    }
+                }
+            }
+        }
+        return ['doc' => $doc, 'root' => $root, 'els' => $els, 'src' => $src, 'next' => (int)$ann['next']];
+    }
+
+    /** Template source with "t"-prefixed ids on its editable static parts (every other byte unchanged). */
+    public static function annotateTemplate(string $html): ?array
+    {
+        $m = self::templateIds($html);
+        if (!$m) {
+            return null;
+        }
+        $add = [];
+        $n = 0;
+        foreach ($m['els'] as $i => $el) {
+            $a = '';
+            foreach (['data-se', 'data-se-loop', 'data-se-item'] as $at) {
+                if ($el->hasAttribute($at)) {
+                    $v = $el->getAttribute($at);
+                    $a .= ' ' . $at . '="' . e($at === 'data-se-item' ? $v : 't' . $v) . '"';
+                }
+            }
+            if ($el->hasAttribute('data-se')) {
+                $n++;
+            }
+            if ($a !== '') {
+                $add[$i] = $a;
+            }
+        }
+        $loops = self::loops(HtmlPages::inner($m['doc'], $m['root']));
+        foreach ($loops as &$l) {
+            $l['id'] = 't' . $l['id'];
+            foreach ($l['items'] as &$it) {
+                $it['ids'] = array_map(static fn($x) => 't' . $x, $it['ids']);
+            }
+            unset($it);
+        }
+        unset($l);
+        return ['html' => ContentMap::insertAttrs($html, $m['src'], $add), 'loops' => $loops, 'count' => $n];
+    }
+
+    /** Templates::renderPage(): the annotated source while a team member edits this page's template. */
+    public static function templateForEditor(array $tpl): ?string
+    {
+        if (!self::$tplEdit || (self::$tplEdit['id'] ?? '') !== ($tpl['id'] ?? null)) {
+            return null;
+        }
+        self::$tplAnn ??= self::annotateTemplate((string)$tpl['html']) ?? ['html' => null, 'loops' => [], 'count' => 0];
+        return self::$tplAnn['html'];
+    }
+
+    /** How a template is presented in the editor: this page's own design, or shared by many pages. */
+    public static function templateInfo(array $tpl): array
+    {
+        $count = 1;
+        if ($tpl['kind'] === 'single' && !str_contains((string)$tpl['target'], '__')) {
+            $count = (int)DB::val("SELECT COUNT(*) FROM {{posts}} WHERE type = :t AND status = 'publish'", ['t' => (string)$tpl['target']]);
+            // Items with their own page template do not use this one.
+            foreach (Templates::all() as $o) {
+                if (!empty($o['enabled']) && $o['kind'] === 'single' && str_starts_with((string)$o['target'], $tpl['target'] . '__')) {
+                    $count--;
+                }
+            }
+        } elseif ($tpl['kind'] === 'term') {
+            $count = (int)DB::val('SELECT COUNT(*) FROM {{terms}} WHERE taxonomy = :t', ['t' => (string)$tpl['target']]);
+        }
+        $count = max(1, $count);
+        return ['id' => (string)$tpl['id'], 'name' => (string)$tpl['name'], 'shared' => $count > 1, 'count' => $count,
+            'updated' => (string)($tpl['updated_at'] ?? ''), 'edit' => admin_url('templates/' . $tpl['id']),
+            'save' => admin_url('page-editor/template/' . $tpl['id'] . '/save'), 'undo' => admin_url('page-editor/template/' . $tpl['id'] . '/undo'),
+            'versions' => count(Templates::versions((string)$tpl['id']))];
+    }
+
+    /** Apply operations (ids "t…") to a template's HTML and save it (the previous version is kept for undo). */
+    public static function applyTemplate(array $tpl, array $ops): ?string
+    {
+        if (!$ops || !array_is_list($ops) || count($ops) > self::MAX_OPS) {
+            return 'Nothing to save.';
+        }
+        $html = (string)$tpl['html'];
+        foreach ($ops as $i => $op) {
+            $id = is_array($op) ? (string)($op['id'] ?? '') : '';
+            if (!preg_match('/^t(e|l)\d{1,7}$/', $id) || in_array($op['op'] ?? '', ['field', 'loop_dynamic', 'loop_static'], true)) {
+                return 'Change #' . ($i + 1) . ': this is not a part of the template that can be changed here.';
+            }
+            $ops[$i]['id'] = substr($id, 1);
+        }
+        $m = self::templateIds($html);
+        if (!$m) {
+            return 'The HTML of this template cannot be edited safely on the page. Edit it in Templates.';
+        }
+        $out = self::editContent($html, $ops, $m);
+        if (is_array($out)) {
+            return str_replace('stored HTML', 'template', $out['error']);
+        }
+        if (!Auth::can('unfiltered_html') && preg_match('#<script\b|\son[a-z]+\s*=#i', $out) > preg_match('#<script\b|\son[a-z]+\s*=#i', $html)) {
+            return 'Scripts cannot be added here.';
+        }
+        Templates::save(['id' => $tpl['id'], 'name' => $tpl['name'], 'kind' => $tpl['kind'], 'target' => $tpl['target'], 'html' => $out,
+            'css' => (string)$tpl['css'], 'wrap' => !empty($tpl['wrap']), 'enabled' => !empty($tpl['enabled'])]);
+        return null;
     }
 
     /** the_content() for the item being edited: stored content with editable ids (unchanged bytes otherwise). */
@@ -650,33 +841,51 @@ final class PageEditor
     public static function footerAssets(): string
     {
         $c = self::context();
-        if (!$c) {
+        if (!$c && !self::$tplEdit) {
             return '';
         }
         $binds = [];
-        foreach (Templates::$bound as $key => $kind) {
+        foreach ($c ? Templates::$bound : [] as $key => $kind) {
             $info = self::bindInfo($key, $kind, $c);
             if ($info) {
                 $binds[$key] = $info;
             }
         }
-        $isPost = $c['kind'] === 'post';
-        $id = (int)($isPost ? $c['post']['id'] : $c['term']['id']);
+        $isPost = $c && $c['kind'] === 'post';
+        $id = $c ? (int)($isPost ? $c['post']['id'] : $c['term']['id']) : 0;
+        // Where list items come from (posts and terms shown by the template's lists).
+        $items = [];
+        foreach (array_slice(array_keys(Templates::$items['post']), 0, 300) as $pid) {
+            if ($p = Posts::find((int)$pid)) {
+                $items['p' . $pid] = ['title' => (string)$p['title'], 'url' => Posts::permalink($p),
+                    'edit' => self::canEdit($p) ? admin_url('content/' . $p['type'] . '/' . $pid) : null];
+            }
+        }
+        foreach (array_slice(array_keys(Templates::$items['term']), 0, 300) as $tid) {
+            if ($t = Terms::find((int)$tid)) {
+                $items['t' . $tid] = ['title' => (string)$t['name'], 'url' => Terms::link($t),
+                    'edit' => Auth::can('manage_terms') ? admin_url('terms/' . $t['taxonomy'] . '/' . $tid) : null];
+            }
+        }
+        $tplLoops = self::$tplEdit && self::$tplAnn ? self::$tplAnn['loops'] : [];
         $cfg = [
-            'mode' => $isPost ? 'content' : 'term',
+            'mode' => $c ? ($isPost ? 'content' : 'term') : 'template',
+            'template' => self::$tplEdit ? self::templateInfo(self::$tplEdit) + ['parts' => (int)(self::$tplAnn['count'] ?? 0)] : null,
+            'items' => (object)$items,
+            'menus' => Auth::can('manage_menus') ? Settings::url('appearance', 'menus') : null,
             'postId' => $isPost ? $id : 0,
             'termId' => $isPost ? 0 : $id,
-            'title' => (string)($isPost ? $c['post']['title'] : $c['term']['name']),
+            'title' => $c ? (string)($isPost ? $c['post']['title'] : $c['term']['name']) : '',
             'updated' => $isPost ? (string)($c['post']['updated_at'] ?? '') : '',
-            'save' => admin_url($isPost ? 'page-editor/' . $id . '/save' : 'page-editor/term/' . $id . '/save'),
+            'save' => $c ? admin_url($isPost ? 'page-editor/' . $id . '/save' : 'page-editor/term/' . $id . '/save') : null,
             'ai' => self::aiAvailable() ? admin_url('page-editor/ai') : null,
             'csrf' => Csrf::token(),
             'media' => Auth::can('upload_media') ? admin_url('api/media') : null,
             'terms' => admin_url('page-editor/terms'),
-            'dashboard' => $isPost ? admin_url('content/' . $c['post']['type'] . '/' . $id) : admin_url('terms/' . $c['term']['taxonomy'] . '/' . $id),
+            'dashboard' => !$c ? null : ($isPost ? admin_url('content/' . $c['post']['type'] . '/' . $id) : admin_url('terms/' . $c['term']['taxonomy'] . '/' . $id)),
             'css' => asset_url('admin/assets/page-editor.css'),
             'sources' => ['types' => [], 'taxonomies' => []],
-            'loops' => self::$content ? self::loops((string)self::$content['body']) : [],
+            'loops' => array_merge(self::$content ? self::loops((string)self::$content['body']) : [], $tplLoops),
             'binds' => (object)$binds,
             'where' => self::$where,
             'contentLocked' => self::$contentLocked,

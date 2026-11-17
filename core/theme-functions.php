@@ -101,7 +101,7 @@ function slate_body_open(): void
 function slate_footer(): void
 {
     echo Seo::footer(), "\n";
-    if (!\Slate\HtmlPages::$rendering && \Slate\PageEditor::context()) {
+    if (!\Slate\HtmlPages::$rendering && \Slate\PageEditor::active()) {
         echo \Slate\PageEditor::footerAssets(); // the page editor replaces the older "Edit on page" regions here
     } elseif (!\Slate\HtmlPages::$rendering && can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
         echo '<script>window.SLATE={api:' . json_encode(admin_url('api')) . ',csrf:' . json_encode(Csrf::token())

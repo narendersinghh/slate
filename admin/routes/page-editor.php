@@ -63,6 +63,44 @@ return static function (Router $r): void {
         json_response(['ok' => true, 'updated' => '']);
     });
 
+    // A page's template (its static parts): {ops: [...], base: "<template updated_at>"}. Previous version kept for undo.
+    $tpl = static function (string $id): array {
+        Auth::require('manage_content_model');
+        if (!Auth::can('frontend_edit')) {
+            json_response(['ok' => false, 'error' => 'You are not allowed to edit on the page.'], 403);
+        }
+        $t = \Slate\Templates::find($id);
+        if (!$t) {
+            json_response(['ok' => false, 'error' => 'Template not found.'], 404);
+        }
+        return $t;
+    };
+    $r->post('/page-editor/template/{id:[a-z0-9]+}/save', static function (string $id) use ($tpl) {
+        $t = $tpl($id);
+        $in = json_input();
+        $base = (string)($in['base'] ?? '');
+        if ($base !== '' && $base !== (string)($t['updated_at'] ?? '')) {
+            json_response(['ok' => false, 'conflict' => true, 'error' => 'This template was changed since you opened the page. Reload to get the latest version.'], 409);
+        }
+        if (!is_array($in['ops'] ?? null)) {
+            json_response(['ok' => false, 'error' => 'Nothing to save.'], 422);
+        }
+        if ($err = PageEditor::applyTemplate($t, $in['ops'])) {
+            json_response(['ok' => false, 'error' => $err], 422);
+        }
+        $now = \Slate\Templates::find($id);
+        log_activity('template_edited_on_page', (string)$now['name']);
+        json_response(['ok' => true, 'updated' => (string)$now['updated_at'], 'versions' => count(\Slate\Templates::versions($id))]);
+    });
+    $r->post('/page-editor/template/{id:[a-z0-9]+}/undo', static function (string $id) use ($tpl) {
+        $t = $tpl($id);
+        if (!\Slate\Templates::undo($id)) {
+            json_response(['ok' => false, 'error' => 'There is no earlier version of this template.'], 422);
+        }
+        log_activity('template_undo', (string)$t['name']);
+        json_response(['ok' => true, 'versions' => count(\Slate\Templates::versions($id))]);
+    });
+
     // AI for pages and terms that are not tied to one designed page.
     $r->post('/page-editor/ai', static function () {
         Auth::require('edit_posts');

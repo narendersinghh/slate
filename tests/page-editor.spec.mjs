@@ -344,7 +344,7 @@ async function visitorAt(url) {
   return html;
 }
 // What the editor's marks add; without them a team member gets the same markup as visitors.
-const unmark = (h) => h.replace(/ data-se(-bind|-loop|-item)?="[^"]*"/g, '').replace(/<!--\/?se:[a-z]+-->/g, '');
+const unmark = (h) => h.replace(/ data-se(-bind|-loop|-item)?="[^"]*"/g, '').replace(/<!--\/?se:[a-z]+(:[a-z0-9]+)?-->/g, '');
 const noMarks = (h) => !/data-se(-bind|-loop|-item)?="/.test(h) && !h.includes('<!--se:') && !h.includes('se-config');
 const caretAtEnd = (page, sel) => page.evaluate((s) => {
   const el = document.querySelector(s); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
@@ -401,7 +401,7 @@ test('page shown by a Template: title, field and stored content edited in place;
   expect(await page.locator('.t-body p:has-text("[gallery")').getAttribute('data-se')).toBeNull();
   // Lists from the template explain where they come from.
   await page.hover('.t-item >> nth=0');
-  await expect(page.locator('.se-hover .se-tagname')).toHaveText(/Part of a list/);
+  await expect(page.locator('.se-hover .se-tagname')).toHaveText(/^Comes from “Dyn post/);
   await page.screenshot({ path: `${SHOTS}/pe-template-page.png` });
   const resp = page.waitForResponse((r) => r.url().endsWith(`/page-editor/${T.id}/save`));
   await Promise.all([page.waitForEvent('load'), page.keyboard.press('Control+s')]);
@@ -481,5 +481,95 @@ test('term page: name and a term field edited in place', async ({ page }) => {
     data: { ops: [{ op: 'field', bind: `term:${T.id}:name`, value: 'Hacked' }] },
   });
   expect(r.status()).toBe(403);
+  await ctx.close();
+});
+
+// ---------------------------------------------------------------- the page's template: its static parts edited in place
+
+test('template text edited in place: this page\'s own design, byte-minimal change, mixed parts read-only, undo', async ({ page }) => {
+  const T = PAGE.tpl;
+  const before = run('template pepagetpl');
+  await login(page);
+  await page.goto(`${BASE}${T.url}`);
+  await page.click('#se-toggle');
+  // Static template parts carry template ids; parts with values ({{author}}) and list items do not.
+  await expect(page.locator('p.t-static')).toHaveAttribute('data-se', /^te\d+$/);
+  await expect(page.locator('a.t-btn')).toHaveAttribute('data-se', /^te\d+$/);
+  expect(await page.locator('p.t-mixed').getAttribute('data-se')).toBeNull();
+  expect(await page.locator('.t-item >> nth=0').getAttribute('data-se')).toBeNull();
+  await page.hover('.t-item >> nth=0');
+  await expect(page.locator('.se-hover .se-tagname')).toHaveText(/^Comes from “Dyn post/);
+  await page.click('p.t-static');
+  await expect(page.locator('.se-toolbar .se-chip-label')).toHaveText('Page design');
+  await caretAtEnd(page, 'p.t-static');
+  await page.keyboard.type(' edited');
+  await page.click('a.t-btn');
+  await selectAll(page, 'a.t-btn');
+  await page.keyboard.type('New label');
+  await page.screenshot({ path: `${SHOTS}/pe-template-parts.png` });
+  const resp = page.waitForResponse((r) => r.url().endsWith('/page-editor/template/pepagetpl/save'));
+  await page.keyboard.press('Control+s');
+  expect((await resp).status()).toBe(200);
+  await expect(page.locator('[data-act="undo-tpl"]')).toBeVisible();
+  const after = run('template pepagetpl');
+  expect(after.html).toBe(before.html.replace('<p class="t-static">Static <em>template</em> text</p>', '<p class="t-static">Static <em>template</em> text edited</p>')
+    .replace('<a class="t-btn" href="/somewhere">Button label</a>', '<a class="t-btn" href="/somewhere">New label</a>'));
+  expect(after.versions).toBe(before.versions + 1);
+  const html = await visitorAt(T.url);
+  expect(noMarks(html)).toBe(true);
+  expect(html).toContain('<p class="t-static">Static <em>template</em> text edited</p>');
+  expect(html).toContain('<a class="t-btn" href="/somewhere">New label</a>');
+  // Survives a reload; then undo puts the template back exactly.
+  await page.reload();
+  await expect(page.locator('a.t-btn')).toHaveText('New label');
+  await page.click('#se-toggle');
+  page.once('dialog', (d) => d.accept());
+  await Promise.all([page.waitForEvent('load'), page.click('[data-act="undo-tpl"]')]);
+  const undone = run('template pepagetpl');
+  expect(undone.html).toBe(before.html);
+  expect(undone.versions).toBe(before.versions);
+  expect(await visitorAt(T.url)).toContain('<a class="t-btn" href="/somewhere">Button label</a>');
+  // Template ids that are not static parts are refused by the server.
+  const bad = await page.evaluate(async () => {
+    const C = JSON.parse(document.getElementById('se-config').textContent);
+    const r = await fetch(C.template.save, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-Token': C.csrf },
+      body: JSON.stringify({ ops: [{ op: 'text', id: 'te9999', html: 'x' }] }) });
+    return { status: r.status, json: await r.json() };
+  });
+  expect(bad.status).toBe(422);
+});
+
+test('shared template: notice with the number of pages, change shows on every page, undo', async ({ page }) => {
+  const S = PAGE.shared;
+  const before = run('template ' + S.template);
+  await login(page);
+  await page.goto(`${BASE}${S.url}`);
+  await page.click('#se-toggle');
+  await page.click('p.pp-shared');
+  await expect(page.locator('.se-toolbar .se-chip-label')).toHaveText('Template: PE post');
+  await expect(page.locator('.se-toolbar .se-chip-label')).toHaveAttribute('title', `This is part of the template “PE post”. Changes appear on all ${S.count} pages that use it.`);
+  await caretAtEnd(page, 'p.pp-shared');
+  await page.keyboard.type(' for everyone');
+  let notice = '';
+  page.once('dialog', async (d) => { notice = d.message(); await d.accept(); });
+  const resp = page.waitForResponse((r) => r.url().endsWith(`/page-editor/template/${S.template}/save`));
+  await page.keyboard.press('Control+s');
+  expect((await resp).status()).toBe(200);
+  expect(notice).toContain(`This is part of the template “PE post”. Changes appear on all ${S.count} pages that use it.`);
+  await expect(page.locator('.se-toast', { hasText: `Saved to the template “PE post” (${S.count} pages)` })).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/pe-template-shared.png` });
+  expect(await visitorAt(S.url2)).toContain('<p class="pp-shared">Shared template line for everyone</p>');
+  expect(run('template ' + S.template).html).toBe(before.html.replace('Shared template line</p>', 'Shared template line for everyone</p>'));
+  // Undo from the toast.
+  page.once('dialog', (d) => d.accept());
+  await Promise.all([page.waitForEvent('load'), page.locator('.se-toast-act').first().click()]);
+  expect(run('template ' + S.template).html).toBe(before.html);
+  expect(await visitorAt(S.url2)).toContain('<p class="pp-shared">Shared template line</p>');
+  // People who may not change templates get no template parts.
+  const ctx = await page.context().browser().newContext();
+  const p2 = await ctx.newPage();
+  await login(p2, 'peauthor', 'author-password-123');
+  const raw = await (await p2.request.get(`${BASE}${S.url}`)).text();
+  expect(raw).not.toMatch(/data-se="te\d+"/);
   await ctx.close();
 });

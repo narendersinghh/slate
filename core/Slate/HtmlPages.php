@@ -22,6 +22,8 @@ final class HtmlPages
 {
     /** True while a page that keeps its own design is being rendered (theme/design-system styles stay out). */
     public static bool $rendering = false;
+    /** True once this response is a page with its own design: output filters (e.g. a theme's rebranding) must leave it alone. */
+    public static bool $served = false;
 
     /** Elements whose text people edit in place. */
     public const TEXT_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'a', 'button', 'blockquote', 'figcaption', 'td', 'th', 'label', 'dt', 'dd', 'span', 'small', 'strong', 'em', 'cite', 'summary'];
@@ -265,6 +267,7 @@ final class HtmlPages
         $d = (array)self::data($post);
         $body = self::designBody($d, Templates::render((string)($d['body'] ?? ''), $ctx));
         self::$rendering = true;
+        self::$served = true;
         ob_start();
         echo '<!doctype html><html ' . ((string)($d['html_attrs'] ?? '') !== '' ? $d['html_attrs'] : html_attrs()) . '><head><meta charset="utf-8">'
             . '<meta name="viewport" content="width=device-width, initial-scale=1">';

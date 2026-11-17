@@ -122,8 +122,9 @@ function smx_original_path(string $path): ?string
     return null;
 }
 
-// Every rendered page.
-Hooks::add('html_output', 'smx_rebrand');
+// Every rendered page, except pages that keep their own design (imported or AI-written): their HTML must match
+// their own stylesheets, so renaming their classes would break them.
+Hooks::add('html_output', static fn(string $html): string => \Slate\HtmlPages::$served ? $html : smx_rebrand($html));
 
 // Old asset URLs → new location; missing new assets → fetched once from the original site and rebranded.
 Hooks::add('init', static function (): void {

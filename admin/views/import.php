@@ -91,7 +91,7 @@ echo AdminUi::steps(['upload' => 'Upload or link', 'review' => 'Choose pages and
           <td><strong><?= e($p['title']) ?></strong></td>
           <td><?php if ($p['url'] !== ''): ?><a class="cell-code import-src" href="<?= e($p['url']) ?>" target="_blank" rel="noopener noreferrer"><?= e($p['url']) ?></a><?php else: ?><code class="cell-code"><?= e($p['path']) ?></code><?php endif; ?></td>
           <td class="muted">/<?= e($p['slug'] === 'home' ? 'home' : $p['slug']) ?>/</td>
-          <td class="center"><input type="radio" name="home" value="<?= e($p['path']) ?>"<?= $i === 0 && $p['slug'] === 'home' ? ' checked' : '' ?>></td>
+          <td class="center"><input type="radio" name="home" value="<?= e($p['path']) ?>" aria-label="Make <?= e($p['title']) ?> the homepage"></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
@@ -150,7 +150,7 @@ echo AdminUi::steps(['upload' => 'Upload or link', 'review' => 'Choose pages and
         <option value="draft">Drafts (review first)</option>
         <?php if (\Slate\Auth::can('publish_posts')): ?><option value="publish">Published right away</option><?php endif; ?>
       </select></label>
-      <label class="small"><input type="radio" name="home" value=""> Keep my current homepage</label>
+      <label class="small"><input type="radio" name="home" value="" checked> Keep my current homepage <span class="muted">(pick a page in the Homepage column above to replace it)</span></label>
     </div>
     <div class="card-foot"><a class="btn btn-ghost" href="<?= e(admin_url('import')) ?>">Start again</a><button class="btn btn-primary" type="submit"><?= icon('check', 16) ?> Import pages</button></div>
   </section>

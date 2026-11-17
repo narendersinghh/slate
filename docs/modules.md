@@ -30,7 +30,9 @@ modules/my-shop/
   "autoload": { "SlateModules\\MyShop\\": "src/" },
   "source": "https://github.com/you/slate-my-shop",
   "settings": "my-shop",
-  "tags": ["ecommerce"]
+  "tags": ["ecommerce"],
+  "data": { "tables": ["shop_orders"], "options": ["my_shop_*"] },
+  "health": ["/cart"]
 }
 ```
 
@@ -43,6 +45,8 @@ modules/my-shop/
 | `source` | Where updates come from: a zip URL, a GitHub repository or a folder in one (`…/tree/main/my-shop`). Filled in automatically when installed from a URL. |
 | `settings` | Slug of a custom settings page (only if you do not use `Modules::settings()`). |
 | `icon` | Icon shown in the sidebar and on the Modules screen (a name from `core/Slate/Icons.php`, e.g. `cart`). |
+| `data` | What the module stores: `tables` (names without the prefix, as in `{{shop_orders}}`) and `options` (names, or a prefix ending in `*`, at least 3 characters before it). Snapshotted before every update and restored if the update fails. Without it, updates take a full database backup instead. |
+| `health` | Public paths (`/cart`) that must still answer 200 after an update. |
 
 ## module.php
 
@@ -163,6 +167,49 @@ return function (): void {
 
 Write SQL that works on MySQL/MariaDB; when you need SQLite support too, check `DB::$driver` (`mysql` or `sqlite`).
 
+## Updates
+
+Modules installed from a registry or a URL (they have a `source`) update **automatically**: the scheduled task checks the
+registries twice a day (every 12 hours) and installs new compatible versions one at a time (at most three per run).
+Local modules (no `source`, made on the site or uploaded as a zip, or a git checkout) are never touched. Site owners can
+switch automatic updates off, for the whole site or per module, under Modules › Sources or with the switch on a module's card.
+
+Every update, automatic or manual (the **Update** / **Try again** buttons, `php bin/slate module:update <slug>`), runs the
+same pipeline and records each step in an update log (Modules › Sources › Update log, files in
+`content/backups/modules/logs/`):
+
+1. **Preflight**: download; check the `sha256` when the registry publishes one; unpack to a staging folder; read the
+   manifest; check `requires`, `requires_php`, `depends` and the constraints of modules that depend on this one; syntax
+   check every PHP file (`php -l` when a PHP command line is available, otherwise PHP's parser); code scan. A version that
+   adds a **high-risk capability** (shell commands, evaluated or obfuscated code) is held until someone approves it.
+2. **Backup**: the module folder as a zip, and its data: the `data` tables and options, or the whole database when
+   nothing is declared.
+3. **Swap and migrate**: the folders are swapped by renaming; then, in a separate PHP process with a time limit (120 s,
+   `'module_update_timeout'` in `config.php`), every active module is loaded and the module's new `migrations/*.php` and
+   its `module_updated_<slug>` hook (`$from`, `$to`) run, then its `module_health_<slug>` filter.
+4. **Verify**: the module loaded, the migration succeeded, no module was switched off, no new fatal error in the PHP
+   error log, and the homepage, the dashboard, the module's admin pages and its `health` paths answer 200 (each compared
+   with the same check before the update).
+5. **On failure** the files, the data snapshot and the module's records (active state, migrations, version) are put back,
+   and the report (step, message, file and line, log excerpt) appears on the module's card and on the dashboard with
+   **Try again** and **Skip this version**. Administrators get an email. A failed version is not retried automatically;
+   a newer one is. An update that stops responding (killed process, hang) is rolled back by the first request after
+   10 minutes.
+6. **On success** the new files are trusted by the security check and the page cache is cleared.
+
+Make updates safe:
+
+- Declare `data`, so a failed update restores exactly your tables and options (fast) instead of the whole database.
+  Modules that also change core tables (posts, terms, users…) should leave `data` out, so the full backup covers those.
+- Make migrations additive: add columns and options, do not drop or rename what the previous version reads, so a rollback
+  of the code alone always works.
+- Optional health check, run after the migration:
+
+```php
+// Return a message to fail the update (it is then undone), or pass $result on.
+Hooks::add('module_health_my-shop', fn($result) => \Slate\Options::get('my_shop_schema') >= 3 ? $result : 'The orders table was not upgraded.');
+```
+
 ## Safety rules Slate applies
 
 - Every PHP file is syntax-checked before it is installed or activated; broken modules are refused.
@@ -170,7 +217,8 @@ Write SQL that works on MySQL/MariaDB; when you need SQLite support too, check `
   the site stays up. Create an empty file `content/safe-mode` to start without any module (e.g. over FTP).
 - Before installing or activating, the Modules page lists what the code can do (shell commands, evaluated code,
   file writes, network calls, database tables…), so whoever installs it can decide.
-- Updates back up the installed version to `content/backups/modules/` and restore it if anything fails.
+- Updates back up the installed version and its data to `content/backups/modules/`, are verified, and are undone
+  automatically if anything fails (see Updates above).
 - PHP files inside `modules/` can never be opened directly from the web.
 - Site owners can switch installing off entirely with `'modules_locked' => true` in `config.php`.
 
@@ -205,4 +253,4 @@ Write SQL that works on MySQL/MariaDB; when you need SQLite support too, check `
   packages it as a zip you can install on any other Slate site.
 
 Command line: `php bin/slate module:list | module:make <slug> | module:install <url|zip> | module:activate <slug> |
-module:deactivate <slug> | module:update <slug> | module:check <slug> | module:export <slug> | module:delete <slug>`.
+module:deactivate <slug> | module:update <slug> [--approve] | module:check <slug> | module:export <slug> | module:delete <slug>`.

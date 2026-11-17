@@ -21,7 +21,7 @@ final class ModuleInstaller
     private const MAX_ZIP = 60 * 1024 * 1024;
     private const MAX_UNPACKED = 200 * 1024 * 1024;
     private const MAX_ENTRIES = 10000;
-    private const REGISTRY_TTL = 6 * 3600;
+    public const REGISTRY_TTL = 12 * 3600; // registries are checked twice a day
     private const BACKUPS = SLATE_CONTENT . '/backups/modules';
 
     // ------------------------------------------------------------------ policy
@@ -85,60 +85,17 @@ final class ModuleInstaller
         }
         $work ??= self::workDir();
         try {
-            if (!class_exists('ZipArchive')) {
-                return ['ok' => false, 'error' => 'The PHP zip extension is required to install modules.'];
+            $u = self::unpack($zipFile, $subdir, $work, $source, $nameHint);
+            if (isset($u['error'])) {
+                return ['ok' => false, 'error' => $u['error']];
             }
-            if (!is_file($zipFile) || filesize($zipFile) > self::MAX_ZIP) {
-                return ['ok' => false, 'error' => 'The file is missing or larger than ' . format_bytes(self::MAX_ZIP) . '.'];
-            }
-            $zip = new \ZipArchive();
-            if ($zip->open($zipFile) !== true) {
-                return ['ok' => false, 'error' => 'That is not a valid zip file.'];
-            }
-            if ($zip->numFiles > self::MAX_ENTRIES) {
-                $zip->close();
-                return ['ok' => false, 'error' => 'The archive has too many files.'];
-            }
-            $total = 0;
-            for ($i = 0; $i < $zip->numFiles; $i++) {
-                $st = $zip->statIndex($i);
-                $name = str_replace('\\', '/', (string)($st['name'] ?? ''));
-                $total += (int)($st['size'] ?? 0);
-                if ($name === '' || str_starts_with($name, '/') || preg_match('#(^|/)\.\.(/|$)#', $name) || str_contains($name, ':')) {
-                    $zip->close();
-                    return ['ok' => false, 'error' => 'The archive contains an unsafe path (' . $name . ').'];
-                }
-            }
-            if ($total > self::MAX_UNPACKED) {
-                $zip->close();
-                return ['ok' => false, 'error' => 'The archive unpacks to more than ' . format_bytes(self::MAX_UNPACKED) . '.'];
-            }
-            $zip->extractTo("$work/src");
-            $zip->close();
-
-            $root = self::findRoot("$work/src", $subdir);
-            if (isset($root['error'])) {
-                return ['ok' => false, 'error' => $root['error']];
-            }
-            $dir = $root['dir'];
-            $meta = json_decode((string)file_get_contents("$dir/module.json"), true);
-            if (!is_array($meta)) {
-                return ['ok' => false, 'error' => 'module.json is not valid JSON.'];
-            }
-            if (!is_file("$dir/module.php")) {
-                return ['ok' => false, 'error' => 'The module has no module.php file.'];
-            }
-            $slug = self::slugFor($meta, $dir, $work, $nameHint ?? ($source !== '' ? basename(parse_url($source, PHP_URL_PATH) ?: '') : null));
-            if (!Modules::validSlug($slug)) {
-                return ['ok' => false, 'error' => 'Could not work out a valid module name; add "slug" to module.json (lowercase letters, numbers, dashes).'];
-            }
+            ['dir' => $dir, 'meta' => $meta, 'slug' => $slug, 'manifest' => $m] = $u;
             if ($expect !== null && $slug !== $expect) {
                 return ['ok' => false, 'error' => "The download contains module “{$slug}”, not “{$expect}”."];
             }
             if ($errors = ModuleScanner::lint($dir)) {
                 return ['ok' => false, 'error' => 'The module has syntax errors and was not installed: ' . implode('; ', array_slice($errors, 0, 3))];
             }
-            $m = Modules::manifest($dir);
             if (version_compare(SLATE_VERSION, $m['requires'], '<')) {
                 return ['ok' => false, 'error' => "{$m['name']} needs Slate {$m['requires']} or newer (this site runs " . SLATE_VERSION . ').'];
             }
@@ -173,6 +130,100 @@ final class ModuleInstaller
         } finally {
             Updater::rrmdir($work);
         }
+    }
+
+    /**
+     * Unpack a module zip into $work/src and read its manifest. Nothing is installed.
+     * @return array{dir:string, meta:array, slug:string, manifest:array}|array{error:string}
+     */
+    private static function unpack(string $zipFile, ?string $subdir, string $work, string $source = '', ?string $nameHint = null): array
+    {
+        if (!class_exists('ZipArchive')) {
+            return ['error' => 'The PHP zip extension is required to install modules.'];
+        }
+        if (!is_file($zipFile) || filesize($zipFile) > self::MAX_ZIP) {
+            return ['error' => 'The file is missing or larger than ' . format_bytes(self::MAX_ZIP) . '.'];
+        }
+        $zip = new \ZipArchive();
+        if ($zip->open($zipFile) !== true) {
+            return ['error' => 'That is not a valid zip file.'];
+        }
+        if ($zip->numFiles > self::MAX_ENTRIES) {
+            $zip->close();
+            return ['error' => 'The archive has too many files.'];
+        }
+        $total = 0;
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $st = $zip->statIndex($i);
+            $name = str_replace('\\', '/', (string)($st['name'] ?? ''));
+            $total += (int)($st['size'] ?? 0);
+            if ($name === '' || str_starts_with($name, '/') || preg_match('#(^|/)\.\.(/|$)#', $name) || str_contains($name, ':')) {
+                $zip->close();
+                return ['error' => 'The archive contains an unsafe path (' . $name . ').'];
+            }
+        }
+        if ($total > self::MAX_UNPACKED) {
+            $zip->close();
+            return ['error' => 'The archive unpacks to more than ' . format_bytes(self::MAX_UNPACKED) . '.'];
+        }
+        $zip->extractTo("$work/src");
+        $zip->close();
+
+        $root = self::findRoot("$work/src", $subdir);
+        if (isset($root['error'])) {
+            return ['error' => $root['error']];
+        }
+        $dir = $root['dir'];
+        $meta = json_decode((string)file_get_contents("$dir/module.json"), true);
+        if (!is_array($meta)) {
+            return ['error' => 'module.json is not valid JSON.'];
+        }
+        if (!is_file("$dir/module.php")) {
+            return ['error' => 'The module has no module.php file.'];
+        }
+        $slug = self::slugFor($meta, $dir, $work, $nameHint ?? ($source !== '' ? basename(parse_url($source, PHP_URL_PATH) ?: '') : null));
+        if (!Modules::validSlug($slug)) {
+            return ['error' => 'Could not work out a valid module name; add "slug" to module.json (lowercase letters, numbers, dashes).'];
+        }
+        return ['dir' => $dir, 'meta' => $meta, 'slug' => $slug, 'manifest' => Modules::manifest($dir)];
+    }
+
+    /**
+     * Download and unpack a new version of an installed module into a staging folder, for the safe update pipeline
+     * (ModuleUpdater). Verifies the checksum when one is published and that the archive holds module $expect.
+     * The caller removes $work afterwards.
+     * @return array{dir:string, meta:array, manifest:array}|array{error:string}
+     */
+    public static function stage(string $url, ?string $sha256, string $expect, string $work, string $source = ''): array
+    {
+        $src = self::resolveUrl($url);
+        if (isset($src['error'])) {
+            return ['error' => $src['error']];
+        }
+        $zipFile = "$work/module.zip";
+        $r = Http::request('GET', $src['zip'], self::authHeaders($src['zip']), null, 180, $zipFile);
+        if ($r['error'] || $r['status'] !== 200) {
+            return ['error' => 'Download failed: ' . ($r['error'] ?: 'HTTP ' . $r['status']) . '.'];
+        }
+        if ($sha256 && !hash_equals(strtolower(trim($sha256)), (string)hash_file('sha256', $zipFile))) {
+            return ['error' => 'The download does not match its published checksum (sha256): expected ' . strtolower(trim($sha256))
+                . ', got ' . hash_file('sha256', $zipFile) . '.'];
+        }
+        $u = self::unpack($zipFile, $src['subdir'], $work, $url, $expect);
+        if (isset($u['error'])) {
+            return $u;
+        }
+        if ($u['slug'] !== $expect) {
+            return ['error' => "The download contains module “{$u['slug']}”, not “{$expect}”."];
+        }
+        $source = $source !== '' ? $source : $url;
+        if (($u['meta']['source'] ?? '') === '') {
+            // Keep the "source" the installed copy had, so later updates still find it.
+            $u['meta']['source'] = $source;
+            @file_put_contents($u['dir'] . '/module.json', json_encode($u['meta'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+            $u['manifest'] = Modules::manifest($u['dir']);
+        }
+        return ['dir' => $u['dir'], 'meta' => $u['meta'], 'manifest' => $u['manifest'], 'sha256' => hash_file('sha256', $zipFile)];
     }
 
     /** Write a module from generated files (AI or blank scaffold). @param array<string,string> $files */
@@ -226,11 +277,12 @@ final class ModuleInstaller
         }
         foreach (self::available() as $entry) {
             if ($entry['slug'] === $slug && !empty($entry['download'])) {
-                return ['version' => $entry['version'], 'url' => $entry['download'], 'sha256' => $entry['sha256'] ?? null, 'from' => $entry['registry']];
+                return ['version' => $entry['version'], 'url' => $entry['download'], 'sha256' => $entry['sha256'] ?? null, 'from' => $entry['registry'],
+                    'requires' => $entry['requires'], 'requires_php' => $entry['requires_php'] ?? ''];
             }
         }
         if ($m['source'] !== '' && ($v = self::remoteVersion($m['source']))) {
-            return ['version' => $v, 'url' => $m['source'], 'sha256' => null, 'from' => $m['source']];
+            return ['version' => $v, 'url' => $m['source'], 'sha256' => null, 'from' => $m['source'], 'requires' => '', 'requires_php' => ''];
         }
         return null;
     }
@@ -255,15 +307,10 @@ final class ModuleInstaller
         return array_filter($out, static fn($u, $s) => ($m = Modules::get($s)) && version_compare($u['version'], $m['version'], '>'), ARRAY_FILTER_USE_BOTH);
     }
 
-    public static function update(string $slug): array
+    /** Update now, through the safe pipeline (backup, swap, migrate, verify, roll back on failure). See ModuleUpdater. */
+    public static function update(string $slug, bool $approved = false): array
     {
-        $src = self::updateSource($slug);
-        if (!$src) {
-            return ['ok' => false, 'error' => 'No update source is known for this module.'];
-        }
-        $res = self::fromUrl($src['url'], $src['sha256'], true, $slug);
-        Options::delete('module_updates');
-        return $res;
+        return ModuleUpdater::run($slug, false, $approved);
     }
 
     /** Delete an inactive module (backed up first). With $purge its uninstall.php runs to remove its data. */
@@ -305,6 +352,7 @@ final class ModuleInstaller
             unset($v[$slug]);
             Options::set('module_migrations', $v, false);
         }
+        ModuleUpdater::forget($slug);
         log_activity('module_deleted', $slug);
         Integrity::trust("modules/$slug");
         return ['ok' => true, 'backup' => basename($backup)];
@@ -348,6 +396,7 @@ final class ModuleInstaller
                     'description' => mb_substr((string)($e['description'] ?? ''), 0, 400),
                     'version' => (string)($e['version'] ?? '1.0.0'),
                     'requires' => (string)($e['requires'] ?? '0.1.0'),
+                    'requires_php' => (string)($e['requires_php'] ?? ''),
                     'author' => mb_substr((string)($e['author'] ?? ''), 0, 80),
                     'homepage' => preg_match('#^https?://#', (string)($e['homepage'] ?? '')) ? (string)$e['homepage'] : '',
                     'download' => preg_match('#^https?://#', (string)($e['download'] ?? '')) ? (string)$e['download'] : '',
@@ -508,7 +557,7 @@ final class ModuleInstaller
         return slugify((string)$name);
     }
 
-    private static function workDir(): string
+    public static function workDir(): string
     {
         $dir = SLATE_CACHE . '/module-' . bin2hex(random_bytes(6));
         @mkdir($dir, 0755, true);
@@ -516,7 +565,7 @@ final class ModuleInstaller
     }
 
     /** Move a prepared folder into modules/<slug>, replacing what is there. */
-    private static function place(string $src, string $target): bool
+    public static function place(string $src, string $target): bool
     {
         $old = null;
         if (is_dir($target)) {

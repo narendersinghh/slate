@@ -15,7 +15,9 @@ namespace Slate;
  *     "depends": {"payments": ">=1.0"},  other modules (or a plain list of slugs)
  *     "autoload": {"SlateModules\\Shop\\": "src/"},   PSR-4 class loading
  *     "source": "https://github.com/me/slate-shop",    where updates come from (zip URL, GitHub repo or folder)
- *     "settings": "shop"                 admin page slug opened by the "Settings" button
+ *     "settings": "shop",                admin page slug opened by the "Settings" button
+ *     "data": {"tables": ["shop_orders"], "options": ["shop_*"]},   what the module stores (snapshotted before updates)
+ *     "health": ["/shop"]                public paths that must keep working after an update
  *   }
  *
  * Optional files: migrations/NNN-name.php (run once, in order, on activation and after updates; each returns a
@@ -94,7 +96,28 @@ final class Modules
             'icon' => preg_match('/^[a-z0-9-]{1,40}$/', (string)($meta['icon'] ?? '')) ? (string)$meta['icon'] : '',
             'tags' => array_values(array_filter((array)($meta['tags'] ?? []), 'is_string')),
             'valid' => is_file($dir . '/module.php'),
+            'data' => self::dataSpec($meta['data'] ?? null),
+            'health' => array_values(array_slice(array_filter((array)($meta['health'] ?? []),
+                static fn($p) => is_string($p) && preg_match('#^/[\w./%-]*$#', $p) && !str_contains($p, '..')), 0, 10)),
         ];
+    }
+
+    /**
+     * The tables (without prefix) and options a module declares as its own data: {"tables": [...], "options": ["shop_*"]}.
+     * null when nothing is declared (updates then take a full database backup instead).
+     * @return array{tables:string[], options:string[]}|null
+     */
+    private static function dataSpec(mixed $data): ?array
+    {
+        if (!is_array($data)) {
+            return null;
+        }
+        $tables = array_values(array_unique(array_filter((array)($data['tables'] ?? []),
+            static fn($t) => is_string($t) && preg_match('/^[a-z0-9_]{1,60}$/', $t))));
+        // Option names, optionally ending in "*". At least 3 characters before a "*" so a module cannot claim every option.
+        $options = array_values(array_unique(array_filter((array)($data['options'] ?? []),
+            static fn($o) => is_string($o) && preg_match('/^[a-z0-9_.-]{3,120}\*?$/', $o))));
+        return ['tables' => $tables, 'options' => $options];
     }
 
     public static function active(): array
@@ -117,13 +140,20 @@ final class Modules
     /** Rarely-read module bookkeeping is stored with autoload off; tell Options to fetch it on demand. */
     public static function lazyOptions(): void
     {
-        Options::lazy('module_errors', 'module_migrations', 'module_versions', 'module_updates', 'module_registries', 'modules_github_token');
+        Options::lazy('module_errors', 'module_migrations', 'module_versions', 'module_updates', 'module_registries', 'modules_github_token',
+            'module_update_status', 'module_autoupdate_off', 'module_autoupdate', 'module_php_cli');
     }
 
     public static function boot(): void
     {
         self::lazyOptions();
         self::guard();
+        try {
+            // Recovers an interrupted module update and answers the update pipeline's own checks (cheap: one is_file()).
+            ModuleUpdater::onBoot();
+        } catch (\Throwable $e) {
+            error_log('Slate module updater: ' . $e->getMessage());
+        }
         if (self::safeMode()) {
             Hooks::action('modules_loaded');
             return;
@@ -491,6 +521,39 @@ final class Modules
         return null;
     }
 
+    /**
+     * Run what a new version of an active module needs: its pending migrations/*.php and the "module_updated_<slug>"
+     * hook ($from, $to). Returns an error message or null. Does not deactivate anything; the caller decides.
+     */
+    public static function upgrade(string $slug, string $from, string $to): ?string
+    {
+        self::$loading = $slug;
+        try {
+            if ($err = self::migrate($slug)) {
+                return $err;
+            }
+            Hooks::action("module_updated_$slug", $from, $to);
+        } catch (\Throwable $e) {
+            return 'module_updated_' . $slug . ' failed: ' . $e->getMessage() . ' in ' . str_replace(SLATE_ROOT . '/', '', $e->getFile()) . ':' . $e->getLine();
+        } finally {
+            self::$loading = null;
+        }
+        return null;
+    }
+
+    /** Record the installed version of $slug as handled (no migrations pending). */
+    public static function markVersion(string $slug): void
+    {
+        self::rememberVersion($slug);
+    }
+
+    /** Re-read the PSR-4 maps of the active modules (after their files changed). */
+    public static function refreshAutoload(): void
+    {
+        self::$all = null;
+        self::syncAutoload();
+    }
+
     private static function rememberVersion(string $slug): void
     {
         $versions = (array)Options::get('module_versions', []);
@@ -520,15 +583,14 @@ final class Modules
             if (($versions[$slug] ?? null) === $v) {
                 continue;
             }
+            if ($slug === ModuleUpdater::busy()) {
+                continue; // the update pipeline runs this module's migrations itself
+            }
             if (isset($versions[$slug])) {
-                self::$loading = $slug;
-                if ($err = self::migrate($slug)) {
-                    self::$loading = null;
+                if ($err = self::upgrade($slug, (string)$versions[$slug], $v)) {
                     self::fail($slug, $err);
                     continue;
                 }
-                Hooks::action("module_updated_$slug", $versions[$slug], $v);
-                self::$loading = null;
             }
             $versions[$slug] = $v;
             $changed = true;

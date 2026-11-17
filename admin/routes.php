@@ -840,6 +840,23 @@ function admin_dispatch(string $path): void
     $r->get('/modules/sources', static fn() => $moduleView('sources', ['registries' => ModuleInstaller::registries(),
         'hasToken' => (string)Options::get('modules_github_token') !== '']));
 
+    $r->post('/modules/auto-updates', static function () {
+        Auth::require('manage_modules');
+        \Slate\ModuleUpdater::setEnabled((bool)input('enabled'));
+        $on = array_map('strval', (array)input('auto', []));
+        foreach (Modules::all() as $s => $m) {
+            if (\Slate\ModuleUpdater::managed($s)) {
+                \Slate\ModuleUpdater::setAuto($s, in_array($s, $on, true));
+            }
+        }
+        log_activity('module_autoupdate_settings', input('enabled') ? 'on' : 'off');
+        Session::flash('success', 'Automatic update settings saved.');
+        redirect(admin_url('modules/sources'));
+    });
+    $r->get('/modules/log', static fn() => $moduleView('log', ['logs' => \Slate\ModuleUpdater::logs(null, 60)]));
+    $r->get('/modules/log/{id}', static function (string $id) use ($moduleView) {
+        $moduleView('log', ['entry' => \Slate\ModuleUpdater::log($id) ?? admin_404()]);
+    });
     $r->post('/modules/sources', static function () {
         Auth::require('manage_modules');
         $urls = array_filter(array_map('trim', preg_split('/\s+/', (string)input('registries', ''))), static fn($u) => preg_match('#^https?://\S+$#i', $u));
@@ -890,9 +907,39 @@ function admin_dispatch(string $path): void
         Session::flash('error', 'That module is not listed by your registries.');
         redirect(admin_url('modules/available'));
     });
-    $r->post('/modules/{slug}/update', static function (string $slug) use ($installed, $slugOr404) {
+    // Updates go through the safe pipeline (ModuleUpdater): backup, swap, migrate in a separate process, verify, undo on failure.
+    $r->post('/modules/{slug}/update', static function (string $slug) use ($slugOr404) {
         Auth::require('manage_modules');
-        $installed(ModuleInstaller::update($slugOr404($slug)));
+        $slugOr404($slug);
+        $res = ModuleInstaller::update($slug, (bool)input('approve'));
+        $name = Modules::get($slug)['name'] ?? $slug;
+        if ($res['ok'] && !empty($res['updated'])) {
+            Session::flash('success', "$name was updated to {$res['version']}. It was checked before and after, the previous version is backed up.");
+        } elseif ($res['ok']) {
+            Session::flash('success', "$name is up to date.");
+        } else {
+            Session::flash('error', $res['error']);
+        }
+        redirect((string)input('back', '') === 'dashboard' ? admin_url() : admin_url('modules') . '#module-' . $slug);
+    });
+    $r->post('/modules/{slug}/skip', static function (string $slug) use ($slugOr404) {
+        Auth::require('manage_modules');
+        $slugOr404($slug);
+        $v = trim((string)input('version', ''));
+        if (preg_match('/^[\w.+-]{1,40}$/', $v)) {
+            \Slate\ModuleUpdater::skip($slug, $v);
+            Session::flash('success', "Version $v will not be installed. Newer versions still update automatically.");
+        }
+        redirect((string)input('back', '') === 'dashboard' ? admin_url() : admin_url('modules') . '#module-' . $slug);
+    });
+    $r->post('/modules/{slug}/auto', static function (string $slug) use ($slugOr404) {
+        Auth::require('manage_modules');
+        $slugOr404($slug);
+        $on = (bool)input('on');
+        \Slate\ModuleUpdater::setAuto($slug, $on);
+        log_activity('module_autoupdate_' . ($on ? 'on' : 'off'), $slug);
+        Session::flash('success', (Modules::get($slug)['name'] ?? $slug) . ($on ? ' updates automatically again.' : ' will no longer update automatically.'));
+        redirect(admin_url('modules') . '#module-' . $slug);
     });
     $r->post('/modules/{slug}/delete', static function (string $slug) use ($moduleDone, $slugOr404) {
         Auth::require('manage_modules');

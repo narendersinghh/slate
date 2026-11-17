@@ -5,7 +5,7 @@
  *
  *   php bin/slate cache:clear
  *   php bin/slate module:list | module:make <slug> [--name="My module"] | module:install <url|file.zip> [--replace]
- *        module:activate <slug> | module:deactivate <slug> | module:update <slug> | module:check <slug> | module:delete <slug>
+ *        module:activate <slug> | module:deactivate <slug> | module:update <slug> [--approve] | module:check <slug> | module:delete <slug>
  *        module:export <slug> [--to=file.zip]
  *   php bin/slate safe-mode:on | safe-mode:off       start without modules (rescue a broken site)
  *   php bin/slate cron [--force] [--job=name] [--verbose]   run scheduled tasks (add to the server's crontab)
@@ -114,10 +114,18 @@ switch ($cmd) {
         break;
 
     case 'module:update':
-        $r = \Slate\ModuleInstaller::update($arg);
-        $r['ok'] ? $out("✓ Updated $arg to {$r['version']}") : $fail($r['error']);
-        Modules::maintain();
+        // Same safe pipeline as automatic updates: backup, swap, migrate in a separate process, verify, roll back on failure.
+        $r = \Slate\ModuleInstaller::update($arg, !empty($opts['approve']));
+        if ($r['ok'] && empty($r['updated'])) {
+            $out("$arg is up to date.");
+            break;
+        }
+        $r['ok'] ? $out("✓ Updated $arg to {$r['version']} (log: {$r['log']})") : $fail($r['error'] . (!empty($r['log']) ? " (log: {$r['log']})" : ''));
         break;
+
+    case 'module:task':
+        // Internal: run by the module update pipeline in a separate process, see ModuleUpdater::task().
+        \Slate\ModuleUpdater::emit(\Slate\ModuleUpdater::task($arg));
 
     case 'module:delete':
         $r = \Slate\ModuleInstaller::delete($arg, !empty($opts['purge']));

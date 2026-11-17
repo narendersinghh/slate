@@ -1,0 +1,224 @@
+<?php
+/**
+ * Pipeline tests for automatic module updates, against a throwaway site and the fake registry (bin/mock-registry).
+ *
+ *   php -S 127.0.0.1:8199 bin/mock-registry &
+ *   php tests/module-updates.php [http://127.0.0.1:8199]
+ *
+ * Runs every case through ModuleUpdater::run() exactly like the scheduled task does, and checks that a success
+ * migrates the data and every failure puts files AND data back, records the report and leaves the site working.
+ * The site must be running with several workers (the pipeline checks its pages over HTTP). Set
+ * SLATE_MODULE_UPDATE_TIMEOUT=10 (or 'module_update_timeout' => 10 in config.php) so the "hang" case is quick.
+ */
+declare(strict_types=1);
+
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+require dirname(__DIR__) . '/core/bootstrap.php';
+
+use Slate\DB;
+use Slate\ModuleInstaller;
+use Slate\Modules;
+use Slate\ModuleUpdater;
+use Slate\Options;
+
+$registry = rtrim($argv[1] ?? getenv('MOCK_REGISTRY') ?: 'http://127.0.0.1:8199', '/');
+DB::connect(SLATE_CONFIG['db']);
+Options::load();
+\Slate\Schema::migrate();
+Modules::boot();
+
+$failures = 0;
+$ok = static function (bool $cond, string $what) use (&$failures): void {
+    echo ($cond ? '  ok   ' : '  FAIL ') . $what . PHP_EOL;
+    if (!$cond) {
+        $failures++;
+    }
+};
+$fresh = static function (string $name): mixed {
+    $v = DB::val('SELECT value FROM {{options}} WHERE name = :n', ['n' => $name]);
+    return $v === null ? null : json_decode((string)$v, true);
+};
+$scenario = static function (string $s) use ($registry): void {
+    file_get_contents("$registry/scenario?set=$s");
+    ModuleInstaller::available(true);
+    Options::delete('module_updates');
+};
+$columns = static fn(): array => DB::$driver === 'sqlite'
+    ? array_column(DB::all('PRAGMA table_info("' . DB::$prefix . 'upd_demo")'), 'name')
+    : array_column(DB::all('SHOW COLUMNS FROM `' . DB::$prefix . 'upd_demo`'), 'Field');
+$state = static function () use ($fresh, $columns): array {
+    clearstatcache();
+    return ['version' => Modules::manifest('upd-demo')['version'], 'columns' => $columns(),
+        'rows' => DB::all('SELECT * FROM {{upd_demo}} ORDER BY id'), 'db' => $fresh('upd_demo_db'), 'extra' => $fresh('upd_demo_extra'),
+        'active' => in_array('upd-demo', (array)$fresh('active_modules'), true), 'errors' => array_keys((array)$fresh('module_errors')),
+        'migrations' => ((array)$fresh('module_migrations'))['upd-demo'] ?? null, 'versions' => ((array)$fresh('module_versions'))['upd-demo'] ?? null];
+};
+$home = static function (): int {
+    $r = \Slate\Http::request('GET', site_url('/') . '?t=' . mt_rand());
+    return (int)$r['status'];
+};
+
+Options::set('module_registries', "$registry/registry.json", false);
+Options::set('module_update_status', [], false);
+@unlink(SLATE_CONTENT . '/backups/modules/.update-lock');
+
+echo "Setup: install upd-demo 1.0.0 from the registry\n";
+$scenario('v1');
+if (Modules::get('upd-demo')) {
+    Modules::deactivate('upd-demo', true);
+    ModuleInstaller::delete('upd-demo', false);
+    DB::exec('DROP TABLE IF EXISTS ' . (DB::$driver === 'sqlite' ? '"' . DB::$prefix . 'upd_demo"' : '`' . DB::$prefix . 'upd_demo`'));
+    foreach (['upd_demo_db', 'upd_demo_extra', 'upd_demo_note'] as $o) {
+        Options::delete($o);
+    }
+    $mig = (array)$fresh('module_migrations');
+    unset($mig['upd-demo']);
+    Options::set('module_migrations', $mig, false);
+}
+$r = ModuleInstaller::fromUrl("$registry/zip/upd-demo-v1.zip", null, false, 'upd-demo');
+$ok($r['ok'], 'v1 installed');
+Modules::all(true);
+$ok(Modules::activate('upd-demo') === null, 'v1 activated');
+$ok($state()['db'] === 1 && count($state()['rows']) === 1, 'v1 data: table with one row, upd_demo_db = 1');
+
+echo "\nCase: local modules are never updated automatically\n";
+@mkdir(SLATE_MODULES . '/local-only', 0755, true);
+file_put_contents(SLATE_MODULES . '/local-only/module.json', '{"name": "Local only", "version": "1.0.0"}');
+file_put_contents(SLATE_MODULES . '/local-only/module.php', "<?php\n");
+Modules::all(true);
+$ok(!ModuleUpdater::managed('local-only') && !ModuleUpdater::autoFor('local-only'), 'a module without "source" is not managed');
+$r = ModuleUpdater::run('local-only', true);
+$ok(!$r['ok'] && str_contains($r['error'], 'never'), 'run(auto) refuses it: ' . $r['error']);
+\Slate\Updater::rrmdir(SLATE_MODULES . '/local-only');
+Modules::all(true);
+
+echo "\nCase: v1 to 2.0.0 migrates data (scheduled task)\n";
+$scenario('good');
+$ok(ModuleUpdater::wantsAuto('upd-demo', ModuleInstaller::updates(true)['upd-demo'] ?? []), 'update to 2.0.0 is due automatically');
+ModuleUpdater::cron();
+$s = $state();
+$ok($s['version'] === '2.0.0', 'files are 2.0.0');
+$ok(in_array('color', $s['columns'], true), 'migration 002 added column "color"');
+$ok($s['db'] === 2, 'upd_demo_db = 2');
+$ok($fresh('upd_demo_note') === '1.0.0 to 2.0.0', 'module_updated_upd-demo hook ran with (from, to)');
+$ok($s['versions'] === '2.0.0' && $s['active'], 'still active, version recorded');
+$last = ModuleUpdater::status('upd-demo')['last'] ?? [];
+$ok(($last['to'] ?? '') === '2.0.0' && !empty($last['auto']), 'status: updated automatically to 2.0.0');
+$log = ModuleUpdater::log((string)($last['log'] ?? ''));
+$ok(($log['result'] ?? '') === 'updated' && count($log['steps'] ?? []) >= 8, 'update log recorded ' . count($log['steps'] ?? []) . ' steps');
+$baseline = (array)$fresh('integrity_baseline');
+$ok(($baseline['modules/upd-demo/migrations/002-color.php'] ?? '') === hash_file('sha256', SLATE_MODULES . '/upd-demo/migrations/002-color.php'), 'new files trusted by the integrity check');
+$ok($home() === 200, 'homepage 200');
+
+$cases = [
+    'fatal' => ['load', 'fails while loading'],
+    'throw' => ['migrate', 'migration changes data, then throws'],
+    'hang' => ['migrate', 'migration hangs beyond the time limit'],
+    'syntax' => ['syntax', 'has a syntax error'],
+    'checksum' => ['checksum', 'does not match its sha256'],
+    'pagefail' => ['verify', 'its admin page breaks'],
+];
+foreach ($cases as $variant => [$step, $what]) {
+    echo "\nCase: the new version $what ($variant)\n";
+    $before = $state();
+    $scenario($variant);
+    $t = microtime(true);
+    $r = ModuleUpdater::run('upd-demo', true);
+    $after = $state();
+    $ok(!$r['ok'], 'update refused or failed: ' . mb_substr((string)($r['error'] ?? ''), 0, 160));
+    $ok($after['version'] === $before['version'], "files back at {$before['version']}");
+    $ok($after['columns'] === $before['columns'], 'table columns unchanged (' . implode(', ', $after['columns']) . ')');
+    $ok($after['rows'] === $before['rows'], 'rows unchanged');
+    $ok($after['db'] === $before['db'] && $after['extra'] === $before['extra'], 'options unchanged (upd_demo_db = ' . json_encode($after['db']) . ', upd_demo_extra = ' . json_encode($after['extra']) . ')');
+    $ok($after['active'] && $after['errors'] === $before['errors'], 'still active, no crash record left behind');
+    $ok($after['migrations'] === $before['migrations'] && $after['versions'] === $before['versions'], 'migration bookkeeping unchanged');
+    $failed = ModuleUpdater::status('upd-demo')['failed'] ?? [];
+    $ok(($failed['step'] ?? '') === $step && ($failed['version'] ?? '') !== '', "failure report: step “{$failed['step']}”, " . mb_substr((string)($failed['message'] ?? ''), 0, 120));
+    $ok(isset(ModuleUpdater::notices()['upd-demo']), 'notice shown on the Modules screen and dashboard');
+    $ok(!ModuleUpdater::wantsAuto('upd-demo', ModuleInstaller::updates(true)['upd-demo'] ?? []), 'not retried automatically');
+    $ok($home() === 200, 'homepage 200');
+    $ok(!is_file(SLATE_CONTENT . '/backups/modules/.update-lock'), 'lock released (' . round(microtime(true) - $t, 1) . ' s)');
+}
+
+echo "\nCase: skip this version\n";
+$logs = count(ModuleUpdater::logs('upd-demo', 100));
+ModuleUpdater::skip('upd-demo', '3.0.7');
+$ok(!isset(ModuleUpdater::notices()['upd-demo']), 'notice gone after skipping 3.0.7');
+ModuleUpdater::cron();
+$ok(count(ModuleUpdater::logs('upd-demo', 100)) === $logs && $state()['version'] === '2.0.0', 'the scheduled task does not install the skipped version');
+
+echo "\nCase: a stuck update (process killed during the migration) is rolled back by the next request\n";
+$scenario('hang');
+$before = $state();
+$php = ModuleUpdater::phpCli() ?? PHP_BINARY;
+$p = proc_open([$php, SLATE_ROOT . '/bin/slate', 'module:update', 'upd-demo'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, SLATE_ROOT);
+$lockFile = SLATE_CONTENT . '/backups/modules/.update-lock';
+$deadline = time() + 60;
+$lock = [];
+while (time() < $deadline) {
+    $lock = json_decode((string)@file_get_contents($lockFile), true) ?: [];
+    if (($lock['step'] ?? '') === 'migrate') {
+        break;
+    }
+    usleep(200000);
+}
+usleep(1500000); // let migration 003 change the data
+$ok(($lock['step'] ?? '') === 'migrate', 'update reached the migration');
+$pid = proc_get_status($p)['pid'];
+// Kill the update and its separate process, as a host killing a long request would.
+foreach (glob('/proc/[0-9]*/cmdline') ?: [] as $c) {
+    if (str_contains((string)@file_get_contents($c), 'module:task')) {
+        posix_kill((int)basename(dirname($c)), 9);
+    }
+}
+posix_kill((int)$pid, 9);
+proc_close($p);
+$mid = $state();
+$ok($mid['version'] === '3.0.3', 'killed half way: new files in place');
+touch($lockFile, time() - ModuleUpdater::STUCK_AFTER - 60);
+$code = $home();
+$after = $state();
+$ok($code === 200, "next request answered $code");
+$ok(!is_file($lockFile), 'lock cleared');
+$ok($after['version'] === $before['version'] && $after['columns'] === $before['columns'] && $after['rows'] === $before['rows'] && $after['db'] === $before['db'],
+    "files and data back at {$before['version']}");
+$failed = ((array)$fresh('module_update_status'))['upd-demo']['failed'] ?? [];
+$ok(str_contains((string)($failed['message'] ?? ''), 'stopped responding'), 'report: ' . mb_substr((string)($failed['message'] ?? ''), 0, 120));
+
+echo "\nCase: a module that declares no data is protected by a full database backup (plainthrow)\n";
+$mj = SLATE_MODULES . '/upd-demo/module.json';
+$meta = json_decode((string)file_get_contents($mj), true);
+unset($meta['data']);
+file_put_contents($mj, json_encode($meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+Modules::all(true);
+$before = $state();
+$scenario('plainthrow');
+$r = ModuleUpdater::run('upd-demo', true);
+$after = $state();
+$log = ModuleUpdater::log((string)($r['log'] ?? ''));
+$steps = array_column($log['steps'] ?? [], 'message', 'step');
+$ok(!$r['ok'] && str_contains($steps['backup data'] ?? '', 'whole database'), 'full database backup taken: ' . ($steps['backup data'] ?? '?'));
+$ok($after['columns'] === $before['columns'] && $after['rows'] === $before['rows'] && $after['db'] === $before['db'] && $after['extra'] === null,
+    'columns, rows and options restored from the full backup');
+$ok(str_contains($steps['rollback'] ?? '', 'full database'), 'rollback: ' . ($steps['rollback'] ?? '?'));
+$ok($home() === 200, 'homepage 200');
+
+echo "\nCase: new high-risk capability needs approval\n";
+$scenario('risky');
+$r = ModuleUpdater::run('upd-demo', true);
+$ok(!$r['ok'] && !empty($r['approval']), 'held for approval: ' . mb_substr((string)$r['error'], 0, 120));
+$ok($state()['version'] === '2.0.0', 'nothing changed');
+$ok((ModuleUpdater::notices()['upd-demo']['kind'] ?? '') === 'approval', 'approval notice');
+$r = ModuleUpdater::run('upd-demo', false, true);
+$ok($r['ok'] && $state()['version'] === '3.0.6', 'approved manual update installs it');
+
+echo "\nCase: the next good version installs after failures (\"Try again\" path)\n";
+$scenario('good3');
+$r = ModuleUpdater::run('upd-demo', false);
+$ok($r['ok'] && $state()['version'] === '3.1.0', 'updated to 3.1.0');
+$ok(!isset(ModuleUpdater::notices()['upd-demo']), 'no notice left');
+
+echo PHP_EOL . ($failures ? "$failures check(s) FAILED" : 'All checks passed') . PHP_EOL;
+exit($failures ? 1 : 0);

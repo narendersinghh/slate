@@ -34,6 +34,7 @@ if (Auth::can('use_ai') && Auth::can('edit_posts') && (!$aiReady || $pageCount <
 </section>
 <?php endif; ?>
 
+<?php require SLATE_ADMIN . '/views/partials/module-update-notices.php'; ?>
 <?php if (\Slate\Auth::can('manage_updates') && ($ir = \Slate\Integrity::report()) && ($bad = count(array_filter($ir['issues'], static fn($i) => $i['level'] === 'danger')))): ?>
 <div class="banner banner-danger"><span class="ic"><?= icon('shield', 18) ?></span>
   <div><strong><?= $bad ?> file<?= $bad === 1 ? '' : 's' ?> changed unexpectedly.</strong> The file integrity check found changes nobody made through Slate.</div>

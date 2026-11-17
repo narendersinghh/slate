@@ -58,6 +58,15 @@ final class Backup
 
     private static function database(string $file): string
     {
+        return self::dumpTables($file, self::tables());
+    }
+
+    /**
+     * Write a restorable SQL dump (gzip) of the given tables (full names, prefix included). Used by full backups and by
+     * the module update pipeline for a snapshot of the tables a module owns.
+     */
+    public static function dumpTables(string $file, array $tables): string
+    {
         $gz = gzopen($file, 'wb6');
         if (!$gz) {
             throw new \RuntimeException('Cannot write ' . basename($file));
@@ -73,7 +82,7 @@ final class Backup
         if (!$sqlite) {
             $w("SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS = 0;\n\n");
         }
-        foreach (self::tables() as $table) {
+        foreach ($tables as $table) {
             $q = $sqlite ? '"' . $table . '"' : '`' . $table . '`';
             $create = $sqlite
                 ? (string)DB::val("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = :n", ['n' => $table])
@@ -260,7 +269,25 @@ final class Backup
             return ['ok' => false, 'error' => 'Could not make a safety backup first: ' . $safety['error']];
         }
         @set_time_limit(0);
-        $gz = gzopen($f, 'rb');
+        $n = self::importSql($f);
+        if ($n < 0) {
+            return ['ok' => false, 'error' => 'The backup ended in the middle of a statement; restored up to that point. Safety backup: ' . basename($safety['files'][0])];
+        }
+        PageCache::clear();
+        log_activity('backup_restored', $name);
+        return ['ok' => true, 'statements' => $n, 'safety' => basename($safety['files'][0])];
+    }
+
+    /**
+     * Run every statement of a gzipped SQL dump written by dumpTables(). Returns the number of statements,
+     * or -1 when the file ended in the middle of a statement (everything before it was applied).
+     */
+    public static function importSql(string $file): int
+    {
+        $gz = gzopen($file, 'rb');
+        if (!$gz) {
+            throw new \RuntimeException('Cannot read ' . basename($file));
+        }
         $buf = '';
         $n = 0;
         while (!gzeof($gz)) {
@@ -278,12 +305,7 @@ final class Backup
             }
         }
         gzclose($gz);
-        if (trim($buf) !== '') {
-            return ['ok' => false, 'error' => 'The backup ended in the middle of a statement; restored up to that point. Safety backup: ' . basename($safety['files'][0])];
-        }
-        PageCache::clear();
-        log_activity('backup_restored', $name);
-        return ['ok' => true, 'statements' => $n, 'safety' => basename($safety['files'][0])];
+        return trim($buf) !== '' ? -1 : $n;
     }
 
     /** True when $sql has no open quote (single-quoted strings with backslash escapes, as PDO::quote writes them). */

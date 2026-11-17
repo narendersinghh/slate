@@ -16,6 +16,7 @@ final class Cron
 {
     private const LOCK = SLATE_CACHE . '/cron.lock';
     private const MAX_RUNTIME = 120;
+    // Note: a module update started by the "module_updates" job can take a few minutes (download, backups, checks).
 
     /** @return array<string, array{every:int, label:string, run:callable}> */
     public static function jobs(): array
@@ -24,7 +25,8 @@ final class Cron
             'publish_scheduled' => ['every' => 60, 'label' => 'Publish scheduled content', 'run' => [Posts::class, 'publishScheduled']],
             'cleanup' => ['every' => 86400, 'label' => 'Clean up old login attempts, activity and temporary files', 'run' => [self::class, 'cleanup']],
             'backup' => ['every' => 3600, 'label' => 'Automatic backups (Settings › System › Backups)', 'run' => [Backup::class, 'scheduled']],
-            'module_updates' => ['every' => 43200, 'label' => 'Check for module updates', 'run' => static fn() => ModuleInstaller::updates(true)],
+            // Twice a day: refresh the module registries, then install updates safely (backup, verify, roll back on failure).
+            'module_updates' => ['every' => 43200, 'label' => 'Check for module updates twice a day and install them safely (Modules › Sources)', 'run' => [ModuleUpdater::class, 'cron']],
             'cache_warm' => ['every' => 300, 'label' => 'Re-warm the page cache after changes', 'run' => static fn() => PageCache::warm()],
             'cache_sweep' => ['every' => 3600, 'label' => 'Remove outdated cached pages', 'run' => static fn() => PageCache::sweep()],
             'webhooks' => ['every' => 60, 'label' => 'Send queued webhook deliveries and retries', 'run' => [Webhooks::class, 'run']],

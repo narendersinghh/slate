@@ -44,6 +44,8 @@ jobs:
         run: |
           php -S 127.0.0.1:8191 -t tests/fixtures > fixtures.log 2>&1 &
           php bin/ci-import
+      - name: Fake module registry (automatic module updates)
+        run: php -S 127.0.0.1:8199 bin/mock-registry > mock-registry.log 2>&1 &
       - name: Start PHP
         run: PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000 dev-server.php > php.log 2>&1 &
       - run: npx playwright test
@@ -51,6 +53,11 @@ jobs:
           SLATE_URL: http://127.0.0.1:8000
           SLATE_PASS: ci-password-123
           SLATE_MOCK_AI: '1'
+          MOCK_REGISTRY: http://127.0.0.1:8199
+      - name: Module update pipeline (backup, migrate, verify, roll back files and data)
+        run: php tests/module-updates.php http://127.0.0.1:8199
+        env:
+          SLATE_MODULE_UPDATE_TIMEOUT: '10'
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -59,6 +66,7 @@ jobs:
             test-results/
             playwright-report/
             php.log
+            content/backups/modules/logs/
           retention-days: 14
 
   automerge:

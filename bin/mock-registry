@@ -1,0 +1,123 @@
+<?php
+/**
+ * Fake module registry for testing automatic module updates (CI and local). Router for PHP's built-in server:
+ *
+ *   php -S 127.0.0.1:8199 bin/mock-registry
+ *
+ *   GET /registry.json                      lists modules "upd-demo" (tests/module-updates.php) and "upd-ui"
+ *                                           (tests/module-updates.spec.mjs), each in the version of its scenario
+ *   GET /zip/<slug>-<variant>.zip           that version as a zip, built on the fly
+ *   GET /scenario?slug=<slug>&set=<variant> switch a module's scenario (state kept in the system temp folder)
+ *
+ * Variants: v1 (1.0.0, creates table <p> with one row and option <p>_db = 1), good (2.0.0, adds column "color", sets
+ * <p>_db = 2), fatal (load error), throw (a migration changes data, then throws), hang (a migration sleeps 60 s), syntax
+ * (syntax error), checksum (wrong sha256 in the registry), risky (new shell command capability), pagefail (its admin
+ * page throws), plainthrow (like throw but declares no data: full database backup), good3 (3.1.0, fine).
+ * <p> is upd_demo or upd_ui.
+ */
+declare(strict_types=1);
+
+const VERSIONS = ['v1' => '1.0.0', 'good' => '2.0.0', 'fatal' => '3.0.1', 'throw' => '3.0.2', 'hang' => '3.0.3', 'syntax' => '3.0.4',
+    'checksum' => '3.0.5', 'risky' => '3.0.6', 'pagefail' => '3.0.7', 'plainthrow' => '3.0.8', 'good3' => '3.1.0'];
+const MODULES = ['upd-demo' => 'Update demo', 'upd-ui' => 'Update UI demo'];
+
+function mock_files(string $slug, string $variant): array
+{
+    $v = VERSIONS[$variant];
+    $p = str_replace('-', '_', $slug);
+    $name = MODULES[$slug];
+    $manifest = ['name' => $name, 'slug' => $slug, 'version' => $v, 'description' => "Test module for automatic updates ($variant).",
+        'requires' => '0.13.0', 'icon' => 'box', 'data' => ['tables' => [$p], 'options' => ["{$p}_*"]], 'health' => ['/']];
+    if ($variant === 'plainthrow') {
+        unset($manifest['data']); // declares nothing: the pipeline falls back to a full database backup
+    }
+    $render = $variant === 'pagefail' ? 'throw new \RuntimeException("' . $slug . ' admin page is broken");' : 'echo "<p>' . $name . ' version ' . $v . '</p>";';
+    $php = "<?php\ndeclare(strict_types=1);\n\nuse Slate\\Hooks;\nuse Slate\\Modules;\nuse Slate\\Options;\n\n"
+        . "Modules::adminPage('$name', '$slug', static function (): void { $render }, 'manage_settings', 'box');\n"
+        . "Hooks::add('module_updated_$slug', static function (string \$from, string \$to): void { Options::set('{$p}_note', \"\$from to \$to\"); });\n";
+    $php .= match ($variant) {
+        'fatal' => "{$p}_function_that_does_not_exist();\n",
+        'syntax' => "function {$p}_broken( {\n",
+        'risky' => "function {$p}_uptime(): string { return (string)shell_exec('uptime'); }\n",
+        default => '',
+    };
+    $files = ['module.json' => json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), 'module.php' => $php,
+        'migrations/001-table.php' => "<?php\nuse Slate\\DB;\nuse Slate\\Options;\nreturn function (): void {\n"
+            . "    DB::exec(DB::\$driver === 'sqlite' ? 'CREATE TABLE IF NOT EXISTS {{{$p}}} (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(80) NOT NULL)'"
+            . " : 'CREATE TABLE IF NOT EXISTS {{{$p}}} (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(80) NOT NULL)');\n"
+            . "    DB::insert('$p', ['name' => 'first row']);\n    Options::set('{$p}_db', 1);\n};\n"];
+    if ($variant !== 'v1') {
+        $files['migrations/002-color.php'] = "<?php\nuse Slate\\DB;\nuse Slate\\Options;\nreturn function (): void {\n"
+            . "    try { DB::exec(\"ALTER TABLE {{{$p}}} ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT 'blue'\"); } catch (\\PDOException) {}\n"
+            . "    Options::set('{$p}_db', 2);\n};\n";
+    }
+    if (in_array($variant, ['throw', 'hang', 'plainthrow'], true)) {
+        $files['migrations/003-break.php'] = "<?php\nuse Slate\\DB;\nuse Slate\\Options;\nreturn function (): void {\n"
+            . "    DB::exec(\"ALTER TABLE {{{$p}}} ADD COLUMN size VARCHAR(20) NOT NULL DEFAULT 'xl'\");\n"
+            . "    DB::exec(\"UPDATE {{{$p}}} SET name = 'changed by 003'\");\n    Options::set('{$p}_db', 3);\n    Options::set('{$p}_extra', 'left behind');\n"
+            . ($variant === 'hang' ? "    sleep(60);\n" : "    throw new \\RuntimeException('Migration 003 could not convert the data');\n")
+            . "};\n";
+    }
+    return $files;
+}
+
+function mock_zip(string $slug, string $variant): string
+{
+    $file = sys_get_temp_dir() . "/slate-mock-$slug-$variant-" . getmypid() . '.zip';
+    @unlink($file);
+    $zip = new ZipArchive();
+    $zip->open($file, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+    foreach (mock_files($slug, $variant) as $name => $content) {
+        $zip->addFromString("$slug/$name", $content);
+        $zip->setMtimeName("$slug/$name", 1700000000); // stable checksum
+    }
+    $zip->close();
+    $data = (string)file_get_contents($file);
+    @unlink($file);
+    return $data;
+}
+
+function mock_state(string $slug): string
+{
+    return sys_get_temp_dir() . '/slate-mock-registry-' . ($_SERVER['SERVER_PORT'] ?? '0') . "-$slug";
+}
+
+function mock_scenario(string $slug): string
+{
+    $s = @file_get_contents(mock_state($slug));
+    return $s !== false && isset(VERSIONS[$s]) ? $s : 'v1';
+}
+
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$base = 'http://' . ($_SERVER['HTTP_HOST'] ?? '127.0.0.1');
+
+if ($path === '/scenario') {
+    $slug = isset(MODULES[$_GET['slug'] ?? '']) ? (string)$_GET['slug'] : 'upd-demo';
+    $set = (string)($_GET['set'] ?? '');
+    if (isset(VERSIONS[$set])) {
+        file_put_contents(mock_state($slug), $set);
+    }
+    header('Content-Type: application/json');
+    echo json_encode(['slug' => $slug, 'scenario' => mock_scenario($slug)]);
+    return true;
+}
+if ($path === '/registry.json') {
+    $list = [];
+    foreach (MODULES as $slug => $name) {
+        $variant = mock_scenario($slug);
+        $list[] = ['slug' => $slug, 'name' => $name, 'description' => 'Test module for automatic updates.', 'version' => VERSIONS[$variant],
+            'requires' => '0.13.0', 'download' => "$base/zip/$slug-$variant.zip",
+            'sha256' => $variant === 'checksum' ? str_repeat('0', 64) : hash('sha256', mock_zip($slug, $variant)), 'tags' => ['test'], 'icon' => 'box'];
+    }
+    header('Content-Type: application/json');
+    echo json_encode(['name' => 'Test registry', 'modules' => $list], JSON_UNESCAPED_SLASHES);
+    return true;
+}
+if (preg_match('#^/zip/(upd-demo|upd-ui)-([a-z0-9]+)\.zip$#', $path, $m) && isset(VERSIONS[$m[2]])) {
+    header('Content-Type: application/zip');
+    echo mock_zip($m[1], $m[2]);
+    return true;
+}
+http_response_code(404);
+echo 'not found';
+return true;

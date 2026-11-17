@@ -347,17 +347,78 @@
   $$('[data-tags]').forEach(initTags);
 
   // ---------- Quick-add hierarchical term ----------
-  $$('[data-add-term]').forEach((box) => {
-    const input = $('[data-new-term]', box);
-    input.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const name = input.value.trim();
-      if (!name) return;
-      const list = box.previousElementSibling;
-      list.insertAdjacentHTML('beforeend', '<label class="choice"><input type="checkbox" name="terms[' + esc(box.dataset.addTerm) + '][]" value="' + esc(name) + '" checked> ' + esc(name) + ' <small class="muted">(new)</small></label>');
-      input.value = '';
+  // Find terms in a long checklist (matches show with their parents, for context).
+  $$('[data-term-find]').forEach((find) => {
+    const card = find.closest('.card-pad');
+    const list = $('[data-term-list]', card);
+    find.addEventListener('input', () => {
+      const q = find.value.trim().toLowerCase();
+      const rows = $$('[data-term-id]', list);
+      const show = new Set();
+      rows.forEach((r, i) => {
+        if (q && !r.textContent.toLowerCase().includes(q)) return;
+        show.add(r);
+        // keep its parents visible
+        let d = +r.dataset.depth;
+        for (let j = i - 1; j >= 0 && d > 0; j--) { if (+rows[j].dataset.depth < d) { show.add(rows[j]); d = +rows[j].dataset.depth; } }
+      });
+      rows.forEach((r) => { r.hidden = q !== '' && !show.has(r) && !r.querySelector('input:checked'); });
+      const none = $('[data-term-none]', list);
+      if (none) none.hidden = !q || rows.some((r) => !r.hidden);
     });
+    find.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+  });
+
+  // ---------- Quick-add hierarchical term (created right away, with its parent) ----------
+  $$('[data-add-term]').forEach((box) => {
+    const tax = box.dataset.addTerm;
+    const input = $('[data-new-term]', box);
+    const parent = $('[data-new-term-parent]', box);
+    const list = $('[data-term-list]', box.closest('.card-pad'));
+    const add = async () => {
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      const btn = $('[data-new-term-add]', box);
+      btn?.classList.add('is-loading');
+      const r = await api('/terms', { body: { taxonomy: tax, name, parent_id: +(parent?.value || 0) } });
+      btn?.classList.remove('is-loading');
+      if (!r.ok) { toast(r.error || 'Could not add it.', 'error'); return; }
+      let row = $('[data-term-id="' + r.id + '"]', list);
+      if (!row) {
+        const pRow = r.parent_id ? $('[data-term-id="' + r.parent_id + '"]', list) : null;
+        const depth = pRow ? +pRow.dataset.depth + 1 : 0;
+        row = document.createElement('label');
+        row.className = 'choice';
+        row.dataset.termId = r.id;
+        row.dataset.depth = depth;
+        row.style.paddingLeft = depth * 18 + 'px';
+        row.innerHTML = '<input type="checkbox" name="terms[' + esc(tax) + '][]" value="' + r.id + '"> ' + esc(r.name);
+        if (pRow) {
+          // after the parent's last descendant
+          let after = pRow;
+          for (let n = pRow.nextElementSibling; n && n.dataset.termId && +n.dataset.depth > +pRow.dataset.depth; n = n.nextElementSibling) after = n;
+          after.after(row);
+        } else {
+          const none = $('[data-term-none]', list);
+          none ? list.insertBefore(row, none) : list.appendChild(row);
+        }
+        if (parent) {
+          const opt = document.createElement('option');
+          opt.value = r.id;
+          opt.textContent = '- '.repeat(depth) + r.name;
+          const pOpt = r.parent_id ? parent.querySelector('option[value="' + r.parent_id + '"]') : null;
+          pOpt ? pOpt.after(opt) : parent.appendChild(opt);
+        }
+      }
+      row.hidden = false;
+      $('input', row).checked = true;
+      row.scrollIntoView({ block: 'nearest' });
+      input.value = '';
+      toast(r.existing ? '“' + r.name + '” already existed, it is now ticked.' : '“' + r.name + '” added and ticked.');
+      document.dispatchEvent(new Event('editor-change'));
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    $('[data-new-term-add]', box)?.addEventListener('click', add);
   });
 
   // ---------- Repeater fields ----------

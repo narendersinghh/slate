@@ -152,6 +152,29 @@ function admin_api_routes(Router $r): void
             array_slice($items, 0, 30))]);
     });
 
+    // Quick-add a term from the editor's taxonomy card (with a parent for hierarchical taxonomies).
+    $r->post('/api/terms', static function () {
+        Auth::require('edit_posts');
+        $in = json_input();
+        $tax = (string)($in['taxonomy'] ?? '');
+        $def = ContentModel::taxonomy($tax) ?? admin_404();
+        $name = trim(strip_tags((string)($in['name'] ?? '')));
+        if ($name === '' || mb_strlen($name) > 200) {
+            json_response(['ok' => false, 'error' => 'Give the ' . strtolower($def['singular']) . ' a name.'], 422);
+        }
+        $parent = !empty($def['hierarchical']) ? (int)($in['parent_id'] ?? 0) : 0;
+        if ($parent && (($p = \Slate\Terms::find($parent)) === null || $p['taxonomy'] !== $tax)) {
+            $parent = 0;
+        }
+        foreach (\Slate\Terms::all($tax) as $t) {
+            if (mb_strtolower($t['name']) === mb_strtolower($name) && (int)$t['parent_id'] === $parent) {
+                json_response(['ok' => true, 'id' => (int)$t['id'], 'name' => $t['name'], 'parent_id' => $parent, 'existing' => true]);
+            }
+        }
+        $id = \Slate\Terms::save($tax, ['name' => $name, 'slug' => '', 'description' => '', 'parent_id' => $parent, 'fields' => [], 'seo' => []]);
+        json_response(['ok' => true, 'id' => (int)$id, 'name' => $name, 'parent_id' => $parent]);
+    });
+
     $r->post('/api/slug', static function () {
         Auth::require('edit_posts');
         $in = json_input();

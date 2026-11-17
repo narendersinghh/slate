@@ -72,8 +72,32 @@ window.SLATE = <?= json_encode([
       <?php if (Auth::can('upload_media')): ?>
         <?= $navItem(admin_url('media'), 'image', 'Media', $is('/media')) ?>
       <?php endif; ?>
-      <?php if (Auth::can('edit_posts') && Auth::can('unfiltered_html')): ?>
-        <?= $navItem(admin_url('import'), 'upload', 'Import pages', $is('/import')) ?>
+
+      <?php if (Auth::can('manage_content_model') || admin_can_settings('appearance')): ?>
+      <div class="nav-label">Design</div>
+      <?php if (admin_can_settings('appearance')): $ot = \Slate\Settings::tabs()['appearance']; $ob = '/' . \Slate\Settings::STANDALONE['appearance']; ?>
+        <div class="nav-group<?= $is($ob) ? ' open' : '' ?>" data-nav-group="appearance">
+          <?= $navItem(\Slate\Settings::url('appearance'), $ot['icon'], $ot['label'], $is($ob), '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show ' . e(strtolower($ot['label'])) . ' menu">' . icon('chevron-down', 14) . '</button>') ?>
+          <div class="nav-sub">
+            <?php foreach ($ot['sections'] as $osk => $os): ?><a href="<?= e(\Slate\Settings::url('appearance', $osk)) ?>" class="<?= $is($ob . '/' . $osk) ? 'active' : '' ?>"><?= e($os['label']) ?></a><?php endforeach; ?>
+          </div>
+        </div>
+      <?php endif; ?>
+      <?php if (Auth::can('manage_content_model')): ?>
+        <?= $navItem(admin_url('templates'), 'code', 'Templates', $is('/templates')) ?>
+      <?php endif; ?>
+      <?php endif; ?>
+
+      <?php if (admin_can_settings('seo')): ?>
+      <div class="nav-label">Marketing</div>
+      <?php if (admin_can_settings('seo')): $ot = \Slate\Settings::tabs()['seo']; $ob = '/' . \Slate\Settings::STANDALONE['seo']; ?>
+        <div class="nav-group<?= $is($ob) ? ' open' : '' ?>" data-nav-group="seo">
+          <?= $navItem(\Slate\Settings::url('seo'), $ot['icon'], $ot['label'], $is($ob), '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show ' . e(strtolower($ot['label'])) . ' menu">' . icon('chevron-down', 14) . '</button>') ?>
+          <div class="nav-sub">
+            <?php foreach ($ot['sections'] as $osk => $os): ?><a href="<?= e(\Slate\Settings::url('seo', $osk)) ?>" class="<?= $is($ob . '/' . $osk) ? 'active' : '' ?>"><?= e($os['label']) ?></a><?php endforeach; ?>
+          </div>
+        </div>
+      <?php endif; ?>
       <?php endif; ?>
 
       <?php
@@ -120,19 +144,9 @@ window.SLATE = <?= json_encode([
       <?php endif; ?>
       <?php endif; ?>
 
-      <?php if (Auth::can('manage_content_model') || admin_can_settings('appearance') || admin_can_settings('seo')): ?>
-      <div class="nav-label">Design</div>
-      <?php if (Auth::can('manage_content_model')): ?>
-        <?= $navItem(admin_url('templates'), 'code', 'Templates', $is('/templates')) ?>
-      <?php endif; ?>
-      <?php foreach (['appearance' => 'appearance', 'seo' => 'seo'] as $own): if (!admin_can_settings($own)) continue; $ot = \Slate\Settings::tabs()[$own]; $ob = '/' . \Slate\Settings::STANDALONE[$own]; ?>
-        <div class="nav-group<?= $is($ob) ? ' open' : '' ?>" data-nav-group="<?= e($own) ?>">
-          <?= $navItem(\Slate\Settings::url($own), $ot['icon'], $ot['label'], $is($ob), '<button type="button" class="nav-toggle" data-nav-toggle aria-label="Show ' . e(strtolower($ot['label'])) . ' menu">' . icon('chevron-down', 14) . '</button>') ?>
-          <div class="nav-sub">
-            <?php foreach ($ot['sections'] as $osk => $os): ?><a href="<?= e(\Slate\Settings::url($own, $osk)) ?>" class="<?= $is($ob . '/' . $osk) ? 'active' : '' ?>"><?= e($os['label']) ?></a><?php endforeach; ?>
-          </div>
-        </div>
-      <?php endforeach; ?>
+      <?php if (Auth::can('edit_posts') && Auth::can('unfiltered_html')): ?>
+      <div class="nav-label">Tools</div>
+        <?= $navItem(admin_url('import'), 'upload', 'Import pages', $is('/import')) ?>
       <?php endif; ?>
 
       <div class="nav-label">Administration</div>

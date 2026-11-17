@@ -182,15 +182,28 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
         <div class="card-head"><h2><?= e($tdef['plural']) ?></h2><?php if (Auth::can('manage_terms')): ?><a class="btn btn-ghost btn-sm" href="<?= e(admin_url("terms/$tx")) ?>" target="_blank">Manage</a><?php endif; ?></div>
         <div class="card-pad">
           <?php if ($tdef['hierarchical']): ?>
+            <?php $tree = Terms::tree($tx); ?>
             <input type="hidden" name="terms[<?= e($tx) ?>][]" value="">
-            <div class="term-checklist">
-              <?php foreach (Terms::tree($tx) as $t): ?>
-                <label class="choice" style="padding-left:<?= (int)$t['depth'] * 18 ?>px"><input type="checkbox" name="terms[<?= e($tx) ?>][]" value="<?= (int)$t['id'] ?>"<?= in_array($t['id'], $selected, true) ? ' checked' : '' ?>> <?= e($t['name']) ?></label>
+            <?php if (count($tree) > 8): ?>
+            <label class="term-find"><?= icon('search', 14) ?><input class="input input-sm" type="search" placeholder="Find <?= e(strtolower($tdef['plural'])) ?>" data-term-find aria-label="Find <?= e(strtolower($tdef['plural'])) ?>"></label>
+            <?php endif; ?>
+            <div class="term-checklist" data-term-list>
+              <?php foreach ($tree as $t): ?>
+                <label class="choice" data-term-id="<?= (int)$t['id'] ?>" data-depth="<?= (int)($t['depth'] ?? 0) ?>" style="padding-left:<?= (int)$t['depth'] * 18 ?>px"><input type="checkbox" name="terms[<?= e($tx) ?>][]" value="<?= (int)$t['id'] ?>"<?= in_array($t['id'], $selected, true) ? ' checked' : '' ?>> <?= e($t['name']) ?></label>
               <?php endforeach; ?>
+              <p class="muted small term-none" hidden data-term-none>Nothing matches.</p>
             </div>
-            <div class="add-term" data-add-term="<?= e($tx) ?>">
-              <input class="input input-sm" placeholder="New <?= e(strtolower($tdef['singular'])) ?>…" data-new-term>
-            </div>
+            <details class="add-term" data-add-term="<?= e($tx) ?>">
+              <summary><?= icon('plus', 14) ?> Add new <?= e(strtolower($tdef['singular'])) ?></summary>
+              <div class="add-term-form">
+                <input class="input input-sm" placeholder="Name" data-new-term aria-label="Name of the new <?= e(strtolower($tdef['singular'])) ?>">
+                <select class="input input-sm" data-new-term-parent aria-label="Parent">
+                  <option value="0">No parent (top level)</option>
+                  <?php foreach ($tree as $t): ?><option value="<?= (int)$t['id'] ?>"><?= str_repeat('- ', (int)($t['depth'] ?? 0)) . e($t['name']) ?></option><?php endforeach; ?>
+                </select>
+                <button type="button" class="btn btn-sm" data-new-term-add>Add</button>
+              </div>
+            </details>
           <?php else: ?>
             <div class="tag-input" data-tags>
               <input type="hidden" name="terms[<?= e($tx) ?>]" value="<?= e(implode(',', array_column($postTerms[$tx] ?? [], 'name'))) ?>">

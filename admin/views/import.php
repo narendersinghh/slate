@@ -63,14 +63,32 @@ echo AdminUi::steps(['upload' => 'Upload', 'review' => 'Choose pages', 'done' =>
   <div class="card-foot"><a class="btn btn-ghost" href="<?= e(admin_url('import')) ?>">Start again</a><button class="btn btn-primary" type="submit"><?= icon('check', 16) ?> Import pages</button></div>
 </form>
 
-<?php else: ?>
+<?php else: $ai = \Slate\Ai::enabled() && \Slate\Auth::can('use_ai'); ?>
 <div class="card">
   <div class="card-head"><h2>Imported <?= count($result) ?> page<?= count($result) === 1 ? '' : 's' ?></h2><a class="btn btn-sm" href="<?= e(admin_url('content/page')) ?>">All pages</a></div>
-  <ul class="list">
-    <?php foreach ($result as $p): ?>
-      <li><span class="list-main"><span class="list-icon"><?= icon('file', 15) ?></span><span><strong><?= e($p['title']) ?></strong><small><?= e($p['path']) ?></small></span></span>
-        <span class="page-actions"><a class="btn btn-sm btn-primary" href="<?= e($p['url']) ?>?preview=<?= (int)$p['id'] ?>" target="_blank" rel="noopener"><?= icon('edit', 14) ?> Open and edit</a><a class="btn btn-sm btn-ghost" href="<?= e($p['edit']) ?>">Settings & SEO</a></span></li>
+  <div class="import-report">
+    <?php foreach ($result as $p): $r = $p['report'] ?? ['editable' => 0, 'loops' => 0, 'issues' => []]; $warn = array_filter($r['issues'], static fn($i) => $i[0] === 'warn'); ?>
+    <section class="import-page">
+      <div class="import-page-head">
+        <span class="list-icon"><?= icon('file', 15) ?></span>
+        <div><strong><?= e($p['title']) ?></strong><small class="muted"><?= e($p['path']) ?> · <?= (int)$r['editable'] ?> editable parts<?= $r['loops'] ? ' · ' . (int)$r['loops'] . ' repeating group' . ($r['loops'] === 1 ? '' : 's') : '' ?></small></div>
+        <span class="pill <?= $warn ? 'pill-warn' : 'pill-success' ?>"><?= $warn ? count($warn) . ' to check' : 'Looks good' ?></span>
+        <span class="page-actions">
+          <a class="btn btn-sm btn-primary" href="<?= e($p['url']) ?>?preview=<?= (int)$p['id'] ?>" target="_blank" rel="noopener"><?= icon('edit', 14) ?> Open and edit</a>
+          <?php if ($ai): ?><button class="btn btn-sm" type="button" data-goraiya-ask="<?= e('Review the imported page #' . $p['id'] . ' "' . $p['title'] . '" for migration problems and improve it: ' . implode(' ', array_map(static fn($i) => $i[1], $r['issues'])) . ' Add missing alt texts, make repeating parts that were not detected into lists, fix anything that looks broken, and tell me what you changed. Keep the design.') ?>"><?= icon('sparrow', 14) ?> Improve with Goraiya</button><?php endif; ?>
+          <a class="btn btn-sm btn-ghost" href="<?= e($p['edit']) ?>">Settings & SEO</a>
+        </span>
+      </div>
+      <?php if ($r['issues']): ?>
+      <ul class="import-issues">
+        <?php foreach ($r['issues'] as [$level, $msg, $detail]): ?>
+          <li class="is-<?= e($level) ?>"><?= icon($level === 'warn' ? 'alert' : 'info', 14) ?><div><?= e($msg) ?><?php if ($detail): ?><small class="muted"><?= e(implode(', ', $detail)) ?></small><?php endif; ?></div></li>
+        <?php endforeach; ?>
+      </ul>
+      <?php endif; ?>
+    </section>
     <?php endforeach; ?>
-  </ul>
+  </div>
 </div>
+<p class="muted small">Importing and editing are built in and never need AI. <?= $ai ? 'Goraiya can additionally review a page and improve it; every change is kept as a revision.' : 'Connect an AI in the top bar (Goraiya) if you want a page reviewed and improved automatically.' ?></p>
 <?php endif; ?>

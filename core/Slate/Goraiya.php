@@ -29,7 +29,16 @@ final class Goraiya
             $who = ($h['role'] ?? '') === 'assistant' ? 'Goraiya' : 'User';
             $transcript .= "$who: " . mb_substr((string)($h['text'] ?? ''), 0, 1500) . "\n";
         }
-        $prompt = ($transcript !== '' ? "Conversation so far:\n$transcript\n" : '') . self::contextText($context) . "User: $message";
+        $ctxText = self::contextText($context);
+        // Pages the user names ("#123") are described too, with the outline of designed pages.
+        if (preg_match_all('/#(\d{1,9})\b/', $message, $mm)) {
+            foreach (array_slice(array_unique($mm[1]), 0, 3) as $pid) {
+                if ((int)$pid !== (int)($context['post_id'] ?? 0)) {
+                    $ctxText .= self::contextText(['post_id' => (int)$pid]);
+                }
+            }
+        }
+        $prompt = ($transcript !== '' ? "Conversation so far:\n$transcript\n" : '') . $ctxText . "User: $message";
         $r = Ai::complete($prompt, self::system(), ['max_tokens' => 16000, 'min_tokens' => 12000, 'effort' => 'medium', 'timeout' => 300]);
         if (!$r['ok']) {
             return ['ok' => false, 'error' => $r['error']];

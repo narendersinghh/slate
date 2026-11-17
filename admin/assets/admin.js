@@ -791,5 +791,11 @@
       });
     }
     if (location.hash === '#goraiya') open();
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-goraiya-ask]');
+      if (!b) return;
+      open();
+      if (!form.hidden) { text.value = b.dataset.goraiyaAsk; text.focus(); }
+    });
   })();
 })();

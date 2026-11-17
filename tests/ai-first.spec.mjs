@@ -32,6 +32,15 @@ test('import a site: pages keep their design, links and assets work, parts becom
   await page.selectOption('select[name=status]', 'publish');
   await page.click('button[type=submit]:has-text("Import pages")');
   await expect(page.getByText('Imported 3 pages')).toBeVisible();
+  // Built-in migration report (no AI involved)
+  const report = page.locator('.import-report');
+  await expect(report).toContainText('were not in the upload');
+  await expect(report).toContainText('missing.png');
+  await expect(report).toContainText('old website (acme-old.example)');
+  await expect(report).toContainText('send their data to another address');
+  await expect(report).toContainText('no alt text');
+  await expect(report).toContainText('editable parts');
+  await page.screenshot({ path: `${SHOTS}/import-report.png`, fullPage: true });
 
   // Visitor view of the imported home page (set as homepage)
   const res = await page.request.get(`${BASE}/`, { headers: { Cookie: '' } });

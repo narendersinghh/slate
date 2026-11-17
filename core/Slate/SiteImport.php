@@ -171,7 +171,8 @@ final class SiteImport
             $seo = ['seo' => array_filter(['title' => $parsed['title'], 'description' => $parsed['description']], static fn($v) => $v !== '')];
             HtmlPages::save($id, $parsed['data'] + ['import' => ['folder' => $folder, 'path' => $p['path'], 'at' => now()]], ['status' => $status] + $seo);
             $post = Posts::find($id);
-            $out[] = ['id' => $id, 'title' => $post['title'], 'path' => $p['path'], 'url' => Posts::permalink($post), 'edit' => admin_url("content/$type/$id")];
+            $out[] = ['id' => $id, 'title' => $post['title'], 'path' => $p['path'], 'url' => Posts::permalink($post), 'edit' => admin_url("content/$type/$id"),
+                'report' => self::check($html, $parsed['data'], $folder)];
         }
         if (($opts['home'] ?? '') !== '' && isset($ids[$opts['home']]) && $type === 'page') {
             Options::set('front_page', 'page');
@@ -180,6 +181,93 @@ final class SiteImport
         PageCache::clear();
         log_activity('site_imported', count($out) . " page(s) from $folder");
         return ['ok' => true, 'pages' => $out];
+    }
+
+    /**
+     * Built-in migration check of one imported page (no AI): what was found and what may need attention.
+     * Returns ['editable' => n, 'loops' => n, 'issues' => [[level, message, detail[]]]].
+     */
+    public static function check(string $original, array $data, string $folder): array
+    {
+        $issues = [];
+        $add = static function (string $level, string $msg, array $detail = []) use (&$issues): void {
+            $issues[] = [$level, $msg, array_values(array_unique(array_slice($detail, 0, 12)))];
+        };
+        $html = (string)$data['head'] . (string)$data['body'];
+        $base = url('content/uploads/sites/' . $folder) . '/';
+        $dir = self::root() . '/' . $folder . '/';
+
+        // Files the page refers to that were not in the upload.
+        $missing = [];
+        if (preg_match_all('#(?:src|href|poster|srcset|data-src)=["\']([^"\']+)["\']|url\(\s*[\'"]?([^\'")]+)#i', $html, $m, PREG_SET_ORDER)) {
+            foreach ($m as $x) {
+                foreach (preg_split('/\s*,\s*/', $x[1] !== '' ? $x[1] : ($x[2] ?? '')) as $u) {
+                    $u = preg_split('/\s+/', trim($u))[0] ?? '';
+                    if ($u !== '' && str_starts_with($u, $base)) {
+                        $rel = rawurldecode(preg_replace('/[?#].*$/', '', substr($u, strlen($base))));
+                        if ($rel !== '' && !is_file($dir . $rel)) {
+                            $missing[] = $rel;
+                        }
+                    }
+                }
+            }
+        }
+        if ($missing) {
+            $add('warn', count(array_unique($missing)) . ' file(s) the page uses were not in the upload. Upload them again with the site, or replace them on the page.', $missing);
+        }
+
+        // Links that still point at the old website.
+        $hosts = [];
+        if (preg_match_all('#<(?:link[^>]+rel=["\']canonical["\'][^>]*href|meta[^>]+property=["\']og:url["\'][^>]*content)=["\']https?://([^/"\']+)#i', $original, $hm)) {
+            $hosts = array_unique(array_map('strtolower', $hm[1]));
+        }
+        foreach ($hosts as $h) {
+            if (preg_match_all('#(?:href|src|action)=["\'](https?://' . preg_quote($h, '#') . '[^"\']*)#i', $html, $lm)) {
+                $add('warn', 'Links still point at the old website (' . $h . '). They keep working only while that site is online.', $lm[1]);
+            }
+        }
+
+        // Forms that send their data somewhere else.
+        if (preg_match_all('#<form\b[^>]*>#i', $html, $fm)) {
+            $ext = [];
+            foreach ($fm[0] as $tag) {
+                $action = preg_match('#action=["\']([^"\']*)#i', $tag, $am) ? trim($am[1]) : '';
+                if ($action !== '' && $action !== '#') {
+                    $ext[] = $action;
+                }
+            }
+            $add($ext ? 'warn' : 'info', count($fm[0]) . ' form(s) on this page.' . ($ext ? ' Some send their data to another address; check that it still works, or rebuild them with Slate Forms.' : ' They do not send anywhere yet; connect them with Slate Forms if they should.'), $ext);
+        }
+
+        // Images without a description.
+        $noAlt = [];
+        if (preg_match_all('#<img\b[^>]*>#i', (string)$data['body'], $im)) {
+            foreach ($im[0] as $tag) {
+                if (!preg_match('#\balt=["\'][^"\']+["\']#i', $tag)) {
+                    $noAlt[] = preg_match('#src=["\']([^"\']+)#i', $tag, $sm) ? basename($sm[1]) : 'image';
+                }
+            }
+        }
+        if ($noAlt) {
+            $add('info', count($noAlt) . ' image(s) have no alt text (needed for accessibility and search). Click an image on the page to add it.', $noAlt);
+        }
+
+        // Things loaded from other servers.
+        $ext = (string)$data['head'] . (string)$data['body'];
+        $xm = [[], []];
+        foreach ([preg_match_all('#<script\b[^>]*\bsrc=["\'](https?://[^"\']+)#i', $ext, $a) ? $a[1] : [],
+            preg_match_all('#<link\b(?=[^>]*\brel=["\'](?:stylesheet|preload|modulepreload|icon|preconnect)["\'])[^>]*\bhref=["\'](https?://[^"\']+)#i', $ext, $b) ? $b[1] : []] as $list) {
+            $xm[1] = array_merge($xm[1], $list);
+        }
+        if ($xm[1]) {
+            $add('info', 'Loads ' . count(array_unique($xm[1])) . ' file(s) from other servers (fonts, libraries, analytics).', array_map(static fn($u) => (string)parse_url($u, PHP_URL_HOST), $xm[1]));
+        }
+        if (!preg_match('#<title\b#i', $original)) {
+            $add('info', 'The page had no <title>; Slate uses the page name. Set an SEO title in the page settings.');
+        }
+        $editable = substr_count((string)$data['body'], 'data-se="');
+        $loops = substr_count((string)$data['body'], 'data-se-loop="');
+        return ['editable' => $editable, 'loops' => $loops, 'issues' => $issues];
     }
 
     /** URL rewriting for one page: assets → the import folder, other imported pages → their permalinks. */

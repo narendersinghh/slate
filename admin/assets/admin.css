@@ -1272,3 +1272,14 @@ html.goraiya-open .main-wrap { margin-right: 440px; }
 @media (max-width: 760px) { .ai-start { grid-template-columns: 1fr; } }
 html.goraiya-open .main-wrap { margin-right: 0; }
 @media (min-width: 1600px) { html.goraiya-open .main-wrap { margin-right: 440px; } }
+
+/* Import report */
+.import-page { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.import-page:last-child { border-bottom: 0; }
+.import-page-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.import-page-head > div { flex: 1; min-width: 200px; display: flex; flex-direction: column; }
+.import-issues { list-style: none; margin: 10px 0 0 44px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.import-issues li { display: flex; gap: 8px; align-items: flex-start; }
+.import-issues li > div { display: flex; flex-direction: column; }
+.import-issues li.is-warn .ic { color: var(--warn); margin-top: 2px; }
+.import-issues li.is-info .ic { color: var(--info); margin-top: 2px; }

@@ -28,6 +28,10 @@ if (str_contains($prompt, 'Reply with the single word: ready')) {
         . '<section class="cards"><div class="card"><h3>Strategy</h3><p>We map your next steps.</p></div><div class="card"><h3>Design</h3><p>Pages people trust.</p></div>'
         . '<div class="card"><h3>Growth</h3><p>More of the right visitors.</p></div></section></body></html>';
     $html = json_encode(['reply' => 'I made a Services page as a draft. Open it to check the copy.', 'actions' => [['type' => 'create_page', 'title' => 'Services', 'html' => $page]]]);
+} elseif (str_contains($prompt, 'This is a single element of a web page')) {
+    $html = "Short \u{2014} and <strong>sweet</strong><script>alert(1)</script>";
+} elseif (str_contains($prompt, 'Write alt text for an image')) {
+    $html = 'A small orange test picture';
 } elseif (str_contains($prompt, 'Rewrite this part')) {
     $html = '<div class="edited-by-ai" style="display:flex;gap:16px;flex-wrap:wrap"><p style="flex:1 1 200px">Edited by AI: shorter and clearer.</p></div>';
 } elseif (str_contains($prompt, 'Design ONE new section')) {

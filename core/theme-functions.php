@@ -66,7 +66,8 @@ function slate_head(): void
     if (!$ownDesign) {
         echo \Slate\DesignSystem::head(), "\n"; // imported/AI pages keep exactly their own styles
     }
-    if (!$ownDesign && can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
+    if (can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
+        // Admin bar styles (scoped to #slate-bar), also on pages that keep their own design.
         echo '<link rel="stylesheet" href="' . e(asset_url('admin/assets/frontend-edit.css')) . '">' . "\n";
     }
     \Slate\Hooks::action('head');

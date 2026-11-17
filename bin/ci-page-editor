@@ -1,0 +1,46 @@
+<?php
+// Test site for tests/page-editor.spec.mjs: php bin/ci-page-editor  (prints JSON with ids/urls)
+declare(strict_types=1);
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+$root = dirname(__DIR__);
+require $root . '/core/bootstrap.php';
+
+use Slate\Auth;
+use Slate\DB;
+use Slate\HtmlPages;
+use Slate\Options;
+use Slate\Posts;
+
+DB::connect(SLATE_CONFIG['db']);
+Options::load();
+
+// A 1x1-ish PNG the page refers to (the editor test uploads its own).
+$png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAIAAACDRijCAAAAJklEQVR4nGP8z0AdwEQlc0YNGjVo1KBRg0YNGjVo1KBRg0YNAgB0VgEf9q3JIQAAAABJRU5ErkJggg==');
+@mkdir(SLATE_ROOT . '/content/uploads', 0775, true);
+file_put_contents(SLATE_ROOT . '/content/uploads/pe-photo.png', $png);
+
+$admin = DB::row('SELECT * FROM {{users}} WHERE username = :u', ['u' => 'citest']);
+Auth::actAs($admin);
+Options::set('revisions_keep', 25);
+
+// Blog posts for "Make dynamic".
+foreach (['Dyn post one', 'Dyn post two', 'Dyn post three', 'Dyn post four'] as $i => $t) {
+    if (!Posts::findBySlug('post', \slugify($t), false)) {
+        Posts::save(['type' => 'post', 'title' => $t, 'content' => '<p>Body of ' . $t . '.</p>', 'excerpt' => 'Excerpt of ' . $t, 'status' => 'publish',
+            'published_at' => date('Y-m-d H:i:s', time() - 3600 * (10 - $i))]);
+    }
+}
+
+$res = HtmlPages::fromDocument((string)file_get_contents($root . '/tests/fixtures/page-editor/sample.html'));
+$slug = 'editor-test-' . substr(bin2hex(random_bytes(3)), 0, 6);
+$id = Posts::save(['type' => 'page', 'title' => $res['title'] ?: 'Editor test', 'slug' => $slug, 'status' => 'publish', 'author_id' => (int)$admin['id'],
+    'content' => HtmlPages::text($res['data']['body']), 'fields' => ['_html' => $res['data']]]);
+
+// A team member who may not edit this page (author role, not the page's author).
+if (!DB::val('SELECT id FROM {{users}} WHERE username = :u', ['u' => 'peauthor'])) {
+    DB::insert('users', ['username' => 'peauthor', 'email' => 'peauthor@example.test', 'password' => Auth::hash('author-password-123'),
+        'display_name' => 'PE Author', 'role' => 'author', 'status' => 'active', 'created_at' => date('Y-m-d H:i:s')]);
+}
+echo json_encode(['id' => $id, 'url' => Posts::permalink(Posts::find($id)), 'body' => Posts::find($id)['fields']['_html']['body']], JSON_UNESCAPED_SLASHES), "\n";

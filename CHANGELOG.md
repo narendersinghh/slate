@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.16.0: AI first, import, edit on the page
+- **The visual builder (GrapesJS) is removed.** Slate is AI first instead.
+- **Goraiya** (the sparrow, top bar, Ctrl/⌘ J): a chat drawer that builds the site with you. It writes complete pages
+  in the site's style, designs templates for content types, changes designed pages and connects their lists to live
+  content. Everything is a draft until a person publishes. Quick provider setup right in the drawer; works with Claude,
+  OpenAI, Gemini, local models and more.
+- **Import pages**: upload a .zip, a folder or files (HTML, CSS, JS, images, fonts). Each page becomes a Slate page with
+  exactly the same design: assets stored in uploads, links between pages pointed at their new addresses, original titles
+  and descriptions kept, optional homepage. Slate's own styles stay out of these pages.
+- **Edit on the page**: on imported and AI-made pages, team members click any element:
+  texts (inline editing, heading level, bold/italic/underline/strike, links, colour, size, alignment, reset to the
+  site's styles, AI rewrite), images (replace from upload or library, alt text with AI suggestion, size, aspect ratio,
+  fit, focus point), icons (class or SVG), and repeating groups such as card lists and sliders (reorder, duplicate,
+  delete, or make them dynamic: posts of any type or terms of a taxonomy, with field mapping, and back to static).
+  One revision per save, conflict check, phone-friendly panels.
+- Templates: new `{{#terms taxonomy=… limit=… orderby=…}}` block.
+- MCP: `write_page` (complete HTML document, click-to-edit) replaces `design_page`.
+- Dashboard: "Build your site with Goraiya" start card until AI is connected and the first pages exist.
+- Fix: curly quotes after a closing word (e.g. “Greatest Canadian”) came out as opening quotes since 0.14.0.
+
 ## 0.15.0: AI-first building
 - **Design with AI** in the visual builder: describe a whole page, add a section, or select an element and say what
   to change. The result is ordinary, editable builder content in your design system (colours, fonts, classes),

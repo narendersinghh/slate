@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Editor test page</title>
+  <meta name="description" content="A page used to test the on-page editor.">
+  <style>
+    body{margin:0;font-family:Georgia,serif;color:#222}
+    div{box-sizing:content-box}
+    .hero{padding:60px 24px;text-align:center;background:#f3efe8}
+    .hero h1{font-size:44px;margin:0 0 12px}
+    .button{display:inline-block;padding:12px 22px;background:#222;color:#fff;border-radius:6px;text-decoration:none}
+    .photo{display:block;margin:30px auto;width:480px;max-width:90%}
+    .icons{text-align:center;font-size:30px}
+    .icons i{display:inline-block;width:30px;height:30px;background:#c55;border-radius:50%}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:24px}
+    .card{border:1px solid #ddd;border-radius:8px;padding:16px}
+    .card img{width:100%;height:120px;object-fit:cover}
+    .swiper{overflow:hidden;padding:24px}
+    .swiper-wrapper{display:flex;gap:12px;transition:transform .3s}
+    .swiper-slide{flex:0 0 240px;background:#eee;padding:12px;border-radius:8px}
+  </style>
+</head>
+<body class="pe-test">
+  <section class="hero">
+    <h1>Welcome to <em>Acme</em></h1>
+    <p class="lead">We build friendly websites for small teams.</p>
+    <a class="button" href="/contact">Get in touch</a>
+  </section>
+  <img class="photo" src="/content/uploads/pe-photo.png" srcset="/content/uploads/pe-photo.png 480w, /content/uploads/pe-photo.png 960w" sizes="480px" alt="Old photo">
+  <p class="icons"><i class="fa fa-star"></i></p>
+  <section class="cards">
+    <article class="card"><a href="/one"><img src="/content/uploads/pe-photo.png" alt="Card one"></a><h3>Card one</h3><p>First card text.</p><a href="/one">Read more</a></article>
+    <article class="card"><a href="/two"><img src="/content/uploads/pe-photo.png" alt="Card two"></a><h3>Card two</h3><p>Second card text.</p><a href="/two">Read more</a></article>
+    <article class="card"><a href="/three"><img src="/content/uploads/pe-photo.png" alt="Card three"></a><h3>Card three</h3><p>Third card text.</p><a href="/three">Read more</a></article>
+  </section>
+  <div class="swiper"><div class="swiper-wrapper">
+    <div class="swiper-slide"><h4>Slide A</h4><p>Alpha</p></div>
+    <div class="swiper-slide"><h4>Slide B</h4><p>Bravo</p></div>
+    <div class="swiper-slide"><h4>Slide C</h4><p>Charlie</p></div>
+  </div></div>
+  <script>window.sliderInit = (window.sliderInit || 0) + 1; document.querySelectorAll('.swiper-wrapper').forEach(function (w) { w.dataset.slides = w.children.length; });</script>
+</body>
+</html>

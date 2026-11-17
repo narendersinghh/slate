@@ -319,6 +319,7 @@ function admin_dispatch(string $path): void
 
     // ---------- Terms ----------
     $r->get('/terms/{tax}', static fn(string $tax) => admin_terms_screen($tax, null));
+    $r->get('/terms/{tax}/new', static fn(string $tax) => admin_terms_screen($tax, 0));
     $r->get('/terms/{tax}/{id:\d+}', static fn(string $tax, string $id) => admin_terms_screen($tax, (int)$id));
     $r->post('/terms/{tax}/bulk', static function (string $tax) {
         Auth::require('manage_terms');
@@ -350,11 +351,15 @@ function admin_dispatch(string $path): void
         $seo = admin_clean_seo((array)input('seo', []));
         $tid = Terms::save($tax, ['name' => $name, 'slug' => (string)input('slug', ''), 'description' => (string)input('description', ''),
             'parent_id' => (int)input('parent_id', 0), 'fields' => $fields, 'seo' => $seo], $id);
-        Session::flash('success', $id ? 'Updated.' : 'Added.');
+        Session::flash('success', $id ? 'Updated.' : 'Added “' . $name . '”.');
         redirect(admin_url("terms/$tax" . ($id ? "/$tid" : '')));
     });
     $r->post('/terms/{tax}/{id:\d+}/delete', static function (string $tax, string $id) {
         Auth::require('manage_terms');
+        $t = Terms::find((int)$id);
+        if (!$t || $t['taxonomy'] !== $tax) {
+            admin_404(); // only ever delete a term of the list this address belongs to
+        }
         Terms::delete((int)$id);
         Session::flash('success', 'Deleted.');
         redirect(admin_url("terms/$tax"));
@@ -1410,11 +1415,24 @@ function admin_content_table(array $def): \Slate\ListTable
 }
 
 /** Taxonomy screen: add/edit form + searchable, sortable list of terms. */
+/**
+ * Print one custom field input (admin/views/partials/field.php) in its own scope, so the partial's working
+ * variables ($term, $rows, $id…) can never overwrite the caller's.
+ */
+function admin_field(array $f, mixed $value, string $name): void
+{
+    (static function (array $f, mixed $value, string $name): void {
+        require __DIR__ . '/views/partials/field.php';
+    })($f, $value, $name);
+}
+
 function admin_terms_screen(string $tax, ?int $id): void
 {
     Auth::require('manage_terms');
     $def = ContentModel::taxonomy($tax) ?? admin_404();
+    // null = the list, 0 = a new term, otherwise the term being edited (each on its own page).
     $term = $id ? (Terms::find($id) ?? admin_404()) : null;
+    $mode = $id === null ? 'list' : ($id === 0 ? 'new' : 'edit');
     $all = $def['hierarchical'] ? Terms::tree($tax) : Terms::all($tax);
     $fields = ContentModel::fieldsFor('term', $tax);
     $postType = $def['post_types'][0] ?? null;
@@ -1442,7 +1460,7 @@ function admin_terms_screen(string $tax, ?int $id): void
         'bulk' => ['delete' => ['label' => 'Delete', 'danger' => true, 'confirm' => 'Delete the selected ' . strtolower($def['plural']) . '? Content using them is kept.']],
         'bulk_action' => admin_url("terms/$tax/bulk"), 'per_page' => 50,
         'row_actions' => static fn($o) => '<a href="' . e(admin_url("terms/$tax/{$o['id']}")) . '">Edit</a><a href="' . e(Terms::link($o)) . '" target="_blank" rel="noopener">View</a>',
-        'empty' => ['icon' => 'tag', 'title' => 'No ' . strtolower($def['plural']) . ' yet', 'text' => 'Add the first one with the form.'],
+        'empty' => ['icon' => 'tag', 'title' => 'No ' . strtolower($def['plural']) . ' yet', 'text' => 'Add the first one with the button above.'],
     ]);
     $s = $table->state();
     $rows = $all;
@@ -1457,8 +1475,9 @@ function admin_terms_screen(string $tax, ?int $id): void
     if ($table->exporting()) {
         $table->exportCsv($rows, $tax . '-' . gmdate('Y-m-d') . '.csv');
     }
-    admin_view('terms', ['tax' => $def, 'terms' => $all, 'term' => $term, 'fields' => $fields, 'table' => $table,
-        'rows' => array_slice($rows, $s['offset'], $s['per']), 'total' => count($rows), 'title' => $term ? 'Edit ' . $def['singular'] : $def['plural']]);
+    admin_view('terms', ['tax' => $def, 'terms' => $all, 'term' => $term, 'mode' => $mode, 'fields' => $fields, 'table' => $table,
+        'rows' => array_slice($rows, $s['offset'], $s['per']), 'total' => count($rows),
+        'title' => $mode === 'edit' ? 'Edit ' . $def['singular'] : ($mode === 'new' ? 'New ' . $def['singular'] : $def['plural'])]);
 }
 
 /** Users list table. */

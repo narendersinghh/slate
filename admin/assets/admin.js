@@ -516,6 +516,22 @@
   });
 
   // ---------- List tables ----------
+  // List search: results update while typing (short pause), and the cursor stays in the box after the reload.
+  $$('[data-lt-filters]').forEach((f) => {
+    const q = $('input[name="q"]', f);
+    if (!q) return;
+    const key = 'lt-search:' + location.pathname;
+    try { if (sessionStorage.getItem(key)) { sessionStorage.removeItem(key); q.focus(); q.setSelectionRange(q.value.length, q.value.length); } } catch (e) { /* private mode */ }
+    let last = q.value;
+    q.addEventListener('input', debounce(() => {
+      const v = q.value.trim();
+      if (v === last.trim() || (v.length === 1)) return; // wait for 2+ characters
+      last = q.value;
+      try { sessionStorage.setItem(key, '1'); } catch (e) { /* ignore */ }
+      f.requestSubmit ? f.requestSubmit() : f.submit();
+    }, 450));
+  });
+
   $$('[data-lt]').forEach((lt) => {
     const id = lt.dataset.lt;
     const save = (data) => fetch(lt.dataset.prefs, { method: 'POST', credentials: 'same-origin',

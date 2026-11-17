@@ -66,7 +66,7 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
       <section class="card">
         <div class="card-head"><h2><?= e($g['title']) ?></h2></div>
         <div class="card-pad field-grid">
-          <?php foreach ($g['fields'] as $f): $value = $p['fields'][$f['name']] ?? null; $name = 'fields[' . $f['name'] . ']'; require __DIR__ . '/partials/field.php'; endforeach; ?>
+          <?php foreach ($g['fields'] as $f): admin_field($f, $p['fields'][$f['name']] ?? null, 'fields[' . $f['name'] . ']'); endforeach; ?>
         </div>
       </section>
       <?php endforeach; ?>
@@ -223,7 +223,7 @@ $pubLocal = $p['published_at'] ? local_date($p['published_at'], 'Y-m-d\TH:i') : 
       <section class="card">
         <div class="card-head"><h2><?= e($g['title']) ?></h2></div>
         <div class="card-pad field-grid">
-          <?php foreach ($g['fields'] as $f): $value = $p['fields'][$f['name']] ?? null; $name = 'fields[' . $f['name'] . ']'; require __DIR__ . '/partials/field.php'; endforeach; ?>
+          <?php foreach ($g['fields'] as $f): admin_field($f, $p['fields'][$f['name']] ?? null, 'fields[' . $f['name'] . ']'); endforeach; ?>
         </div>
       </section>
       <?php endforeach; ?>

@@ -28,12 +28,45 @@ $urls = array_column($hooks, 'url', 'id');
   <div class="stack-sm">
     <strong class="small-label">Add a webhook</strong>
     <input class="input" type="url" name="wh_url" placeholder="https://hooks.example.com/slate" aria-label="Webhook URL">
-    <div class="wh-events">
-      <label class="check"><input type="checkbox" name="wh_events[]" value="*"> <strong>All events</strong></label>
-      <?php foreach ($events as $k => $label): ?>
-        <label class="check"><input type="checkbox" name="wh_events[]" value="<?= e($k) ?>"> <?= e($label) ?> <code><?= e($k) ?></code></label>
-      <?php endforeach; ?>
-    </div>
+    <?php
+      $groupNames = ['content' => 'Content', 'media' => 'Media', 'form' => 'Forms', 'comment' => 'Comments'];
+      $evGroups = [];
+      foreach ($events as $k => $label) {
+          $g = $groupNames[strtok($k, '.')] ?? 'System';
+          $evGroups[$g][$k] = trim((string)preg_replace('/\s*\([^)]*\)\s*$/', '', $label));
+      }
+    ?>
+    <fieldset class="wh-events" data-wh-events>
+      <legend class="small-label">Send these events</legend>
+      <div class="wh-mode">
+        <label class="wh-mode-opt"><input type="radio" name="wh_mode" value="all" checked data-wh-mode> <span><strong>All events</strong><small class="muted">Everything below, and events added later</small></span></label>
+        <label class="wh-mode-opt"><input type="radio" name="wh_mode" value="some" data-wh-mode> <span><strong>Only these events</strong><small class="muted">Pick from the list</small></span></label>
+      </div>
+      <input type="hidden" name="wh_events[]" value="*" data-wh-all>
+      <div class="wh-groups" data-wh-list hidden>
+        <?php foreach ($evGroups as $g => $list): ?>
+          <div class="wh-group"><span class="wh-group-title"><?= e($g) ?></span>
+            <?php foreach ($list as $k => $label): ?>
+              <label class="wh-ev"><input type="checkbox" name="wh_events[]" value="<?= e($k) ?>" disabled> <span><?= e($label) ?><code><?= e($k) ?></code></span></label>
+            <?php endforeach; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </fieldset>
+    <script>
+      (function () {
+        const box = document.querySelector('[data-wh-events]');
+        if (!box) return;
+        const sync = () => {
+          const some = box.querySelector('[data-wh-mode][value="some"]').checked;
+          box.querySelector('[data-wh-list]').hidden = !some;
+          box.querySelector('[data-wh-all]').disabled = some;
+          box.querySelectorAll('.wh-ev input').forEach((c) => { c.disabled = !some; });
+        };
+        box.addEventListener('change', (e) => { if (e.target.matches('[data-wh-mode]')) sync(); });
+        sync();
+      })();
+    </script>
     <div><button class="btn btn-primary" type="submit" formaction="<?= e(admin_url('system/webhooks/add')) ?>" formnovalidate><?= icon('plus', 15) ?> Add webhook</button></div>
   </div>
   <?php if ($recent): ?>

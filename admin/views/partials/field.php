@@ -38,7 +38,11 @@ if ($f['type'] === 'tab'): ?>
     case 'number': ?>
       <input class="input" type="number" step="any" id="<?= e($id) ?>" name="<?= e($name) ?>" value="<?= e(is_scalar($value) ? $value : '') ?>"<?= $ph . $req ?>>
       <?php break;
-    case 'email': case 'url': case 'tel': case 'date': case 'color': ?>
+    case 'color': $hex = is_scalar($value) && preg_match('/^#[0-9a-f]{6}$/i', (string)$value) ? (string)$value : ''; ?>
+      <span class="color-field"><input type="color" class="color-input" value="<?= e($hex ?: '#000000') ?>" aria-label="Pick a colour" oninput="this.nextElementSibling.value=this.value">
+        <input class="input" type="text" id="<?= e($id) ?>" name="<?= e($name) ?>" value="<?= e(is_scalar($value) ? $value : '') ?>" placeholder="#000000" maxlength="9" spellcheck="false" oninput="if(/^#[0-9a-f]{6}$/i.test(this.value))this.previousElementSibling.value=this.value"<?= $req ?>></span>
+      <?php break;
+    case 'email': case 'url': case 'tel': case 'date': ?>
       <input class="input" type="<?= e($f['type']) ?>" id="<?= e($id) ?>" name="<?= e($name) ?>" value="<?= e(is_scalar($value) ? $value : '') ?>"<?= $ph . $req ?>>
       <?php break;
     case 'datetime': ?>

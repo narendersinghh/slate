@@ -21,6 +21,7 @@ server {
     location ~ ^/(scripts|tests|node_modules)/ { return 404; }
     location ~ ^/(package(-lock)?\.json|playwright\.config\.\w+)$ { return 404; }
     location ^~ /content/backups/ { return 404; }
+    location ^~ /content/form-uploads/ { return 404; }
 
     # Long cache for static assets
     location ~* \.(css|js|webp|avif|jpg|jpeg|png|gif|svg|woff2?|ico|mp4|webm)$ {

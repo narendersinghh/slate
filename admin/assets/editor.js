@@ -4,6 +4,33 @@
   const { api, toast, modal, esc, $, $$, debounce, slugify } = window.Slate;
   const S = window.SLATE;
 
+  // ---------- Toolbar icons (24px stroke set, same style as core/Slate/Icons.php) ----------
+  const ICONS = {
+    bold: '<path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/>',
+    italic: '<path d="M19 4h-9M14 20H5M15 4 9 20"/>',
+    underline: '<path d="M6 4v6a6 6 0 0 0 12 0V4M4 20h16"/>',
+    strike: '<path d="M16 6.5A4 4 0 0 0 12.5 5H11a3.5 3.5 0 0 0 0 7h2a3.5 3.5 0 0 1 0 7h-1.5A4 4 0 0 1 8 17.5M4 12h16"/>',
+    list: '<path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
+    'list-ordered': '<path d="M10 6h11M10 12h11M10 18h11M4 4h1v4M4 8h2M4.5 14H6l-2 3h2"/>',
+    quote: '<path d="M3 21c3 0 7-1 7-8V5H3v7h4M14 21c3 0 7-1 7-8V5h-7v7h4"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+    unlink: '<path d="m18.8 13.4 1.7-1.7a5 5 0 0 0-7.1-7.1l-1.7 1.7M5.2 10.6l-1.7 1.7a5 5 0 0 0 7.1 7.1l1.7-1.7M8 2v3M2 8h3M16 22v-3M22 16h-3"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+    video: '<rect x="2" y="5" width="20" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/>',
+    table: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+    divider: '<path d="M3 12h18M8 6h8M8 18h8"/>',
+    form: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h5"/>',
+    eraser: '<path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L12 20.6a1 1 0 0 1-.7.3zM22 21H7M5 11l9 9"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+    code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    external: '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+  };
+  const svg = (name, size = 17) => '<svg class="ic" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
+
   // ---------- HTML paste cleaner ----------
   const ALLOWED = { P: [], BR: [], STRONG: [], B: [], EM: [], I: [], U: [], S: [], A: ['href', 'target'], UL: [], OL: [], LI: [], H2: [], H3: [], H4: [],
     BLOCKQUOTE: [], PRE: [], CODE: [], IMG: ['src', 'alt', 'width', 'height'], TABLE: [], THEAD: [], TBODY: [], TR: [], TD: [], TH: [], HR: [], FIGURE: [], FIGCAPTION: [] };
@@ -26,6 +53,131 @@
     return doc.body.innerHTML.replace(/<p>\s*<\/p>/g, '');
   }
 
+  // ---------- Form picker (Forms module) ----------
+  function formWidget(f) {
+    return '<div class="slate-form-widget ed-form-widget" data-slate-form-widget="' + (+f.id) + '" contenteditable="false" title="Form: click to change or edit it">' + esc(f.title) + ' [form id="' + (+f.id) + '"]</div>';
+  }
+  function pickerStyles() {
+    if (document.getElementById('ed-fp-css')) return;
+    const st = document.createElement('style');
+    st.id = 'ed-fp-css';
+    st.textContent = [
+      '.ed-form-widget{cursor:pointer;display:flex!important;align-items:center;gap:10px}',
+      '.ed-form-widget::before{content:""!important;flex:0 0 20px;height:20px;background:var(--accent);-webkit-mask:var(--ed-fp-icon) center/20px no-repeat;mask:var(--ed-fp-icon) center/20px no-repeat}',
+      '.ed-form-widget:hover{background:var(--accent-soft-2,var(--accent-soft))}',
+      ':root{--ed-fp-icon:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27black%27 stroke-width=%272%27 stroke-linecap=%27round%27%3E%3Crect x=%273%27 y=%273%27 width=%2718%27 height=%2718%27 rx=%272%27/%3E%3Cpath d=%27M7 8h10M7 12h10M7 16h5%27/%3E%3C/svg%3E")}',
+      '.ed-fp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;min-height:440px}',
+      '.ed-fp-side{display:flex;flex-direction:column;gap:10px;min-width:0}',
+      '.ed-fp-search{position:relative}.ed-fp-search .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}.ed-fp-search .input{padding-left:36px;width:100%}',
+      '.ed-fp-list{display:flex;flex-direction:column;gap:4px;overflow:auto;max-height:360px;padding:2px}',
+      '.ed-fp-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer;font:inherit}',
+      '.ed-fp-item:hover{border-color:var(--border-strong);background:var(--surface-2)}',
+      '.ed-fp-item.is-on{border-color:var(--accent);background:var(--accent-soft)}',
+      '.ed-fp-item strong{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.ed-fp-item small{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}',
+      '.ed-fp-item .ed-fp-main{min-width:0;flex:1}',
+      '.ed-fp-check{flex:0 0 18px;height:18px;border-radius:50%;border:1.5px solid var(--border-strong);display:grid;place-items:center;color:var(--on-accent,#fff)}',
+      '.ed-fp-item.is-on .ed-fp-check{background:var(--accent);border-color:var(--accent)}',
+      '.ed-fp-preview{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);min-width:0}',
+      '.ed-fp-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--muted)}',
+      '.ed-fp-preview iframe{flex:1;width:100%;min-height:380px;border:0;background:#fff}',
+      '.ed-fp-empty{padding:30px 16px;text-align:center;color:var(--muted)}',
+      '.ed-fp-new{display:flex;flex-direction:column;gap:12px;padding:14px;border:1px dashed var(--border-strong);border-radius:12px}',
+      '.ed-fp-tpls{display:flex;flex-wrap:wrap;gap:6px}',
+      '.ed-fp-tpls label{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:99px;cursor:pointer;font-size:13px;background:var(--surface)}',
+      '.ed-fp-tpls label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent-text)}',
+      '.ed-fp-tpls input{position:absolute;opacity:0;pointer-events:none}',
+      '.ed-fp-row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}',
+      '.modal-lg .modal-box{width:min(980px,100%)}',
+      '@media (max-width:760px){.ed-fp{grid-template-columns:1fr;min-height:0}.ed-fp-preview iframe{min-height:300px}.ed-fp-list{max-height:240px}}',
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+  /** Search, preview and pick a form, or create one from a template. Resolves to {id, title} or null. */
+  async function pickForm(current) {
+    pickerStyles();
+    let data;
+    const res = await fetch(S.admin + '/m/forms/picker', { headers: { Accept: 'application/json' }, credentials: 'same-origin' }).then((r) => r.ok ? r.json() : null).catch(() => null);
+    let items, templates = [], canCreate = false;
+    if (res && res.ok) { items = res.items; templates = res.templates || []; canCreate = !!res.can_create; }
+    else {
+      // Older Forms module: published forms from the content API, no preview.
+      data = await api('/posts?type=form');
+      items = (data.items || []).filter((f) => f.status === 'publish').map((f) => ({ id: f.id, title: f.title, status: f.status, fields: null, entries: null }));
+    }
+    let sel = items.find((f) => String(f.id) === String(current) || f.slug === current) || items.find((f) => f.status === 'publish') || items[0] || null;
+    let creating = !items.length && canCreate;
+    const body = document.createElement('div');
+    const m = modal({ title: current ? 'Change form' : 'Insert a form', body, size: 'lg',
+      foot: '<button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-primary" data-fp-insert>' + (current ? 'Use this form' : 'Insert form') + '</button>' });
+    const insertBtn = $('[data-fp-insert]', m);
+    let q = '';
+    const meta = (f) => [f.fields != null ? f.fields + ' field' + (f.fields === 1 ? '' : 's') : '', f.entries != null ? f.entries + ' entr' + (f.entries === 1 ? 'y' : 'ies') : '', f.status !== 'publish' ? 'Draft' : ''].filter(Boolean).join(' · ');
+    const draw = () => {
+      const list = items.filter((f) => !q || (f.title + ' ' + (f.slug || '') + ' ' + (f.labels || []).join(' ')).toLowerCase().includes(q));
+      const side = creating
+        ? '<div class="ed-fp-new"><strong>New form</strong><label class="field"><span>Name</span><input class="input" data-fp-name placeholder="e.g. Contact us" maxlength="190"></label>' +
+          '<div><span class="small-label">Start from</span><div class="ed-fp-tpls">' + templates.map((t, i) => '<label title="' + esc(t.description) + '"><input type="radio" name="ed-fp-tpl" value="' + esc(t.key) + '"' + (i === 1 ? ' checked' : '') + '>' + esc(t.title) + '</label>').join('') + '</div></div>' +
+          '<div class="ed-fp-row">' + (items.length ? '<button type="button" class="btn btn-ghost btn-sm" data-fp-cancel-new>Back to the list</button>' : '<span></span>') + '<button type="button" class="btn btn-primary btn-sm" data-fp-create>' + svg('plus', 15) + ' Create form</button></div>' +
+          '<p class="muted small">You can change its fields in the form builder at any time.</p></div>'
+        : '<div class="ed-fp-row"><div class="ed-fp-search" style="flex:1">' + svg('search', 15) + '<input class="input" type="search" data-fp-q placeholder="Search forms" value="' + esc(q) + '" aria-label="Search forms"></div>' +
+          (canCreate ? '<button type="button" class="btn btn-sm" data-fp-new>' + svg('plus', 15) + ' New form</button>' : '') + '</div>' +
+          '<div class="ed-fp-list" role="listbox" aria-label="Forms">' + (list.length ? list.map((f) => '<button type="button" role="option" class="ed-fp-item' + (sel && f.id === sel.id ? ' is-on' : '') + '" aria-selected="' + (sel && f.id === sel.id) + '" data-fp-id="' + f.id + '">' +
+            '<span class="ed-fp-check">' + (sel && f.id === sel.id ? svg('check', 12) : '') + '</span><span class="ed-fp-main"><strong>' + esc(f.title) + '</strong><small>' + esc(meta(f)) + '</small></span></button>').join('')
+            : '<div class="ed-fp-empty">No forms match "' + esc(q) + '".</div>') + '</div>';
+      const prev = sel && sel.preview_url
+        ? '<div class="ed-fp-preview"><div class="ed-fp-preview-head"><span>Preview' + (sel.status !== 'publish' ? ' (draft: publish it to show it on the site)' : '') + '</span><a href="' + esc(sel.edit_url) + '" target="_blank" rel="noopener" class="link">' + svg('external', 14) + ' Edit form</a></div><iframe title="Form preview" src="' + esc(sel.preview_url) + '" loading="lazy"></iframe></div>'
+        : '<div class="ed-fp-preview"><div class="ed-fp-empty">' + (creating ? 'Pick a starting point. The new form opens here.' : 'Select a form to preview it.') + '</div></div>';
+      body.innerHTML = '<div class="ed-fp"><div class="ed-fp-side">' + side + '</div>' + prev + '</div>';
+      insertBtn.disabled = !sel || creating;
+    };
+    draw();
+    (creating ? $('[data-fp-name]', body) : $('[data-fp-q]', body))?.focus();
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; m.close(); resolve(v); };
+      body.addEventListener('input', (e) => {
+        if (!e.target.matches('[data-fp-q]')) return;
+        q = e.target.value.trim().toLowerCase();
+        const pos = e.target.selectionStart;
+        draw();
+        const inp = $('[data-fp-q]', body);
+        inp.focus(); inp.setSelectionRange(pos, pos);
+      });
+      body.addEventListener('click', async (e) => {
+        const it = e.target.closest('[data-fp-id]');
+        if (it) { sel = items.find((f) => String(f.id) === it.dataset.fpId); draw(); $('[data-fp-id="' + sel.id + '"]', body)?.focus(); return; }
+        if (e.target.closest('[data-fp-new]')) { creating = true; draw(); $('[data-fp-name]', body)?.focus(); return; }
+        if (e.target.closest('[data-fp-cancel-new]')) { creating = false; draw(); return; }
+        const cb = e.target.closest('[data-fp-create]');
+        if (cb) {
+          const fd = new FormData();
+          fd.append('_csrf', S.csrf);
+          fd.append('title', $('[data-fp-name]', body).value);
+          fd.append('template', ($('input[name="ed-fp-tpl"]:checked', body) || {}).value || 'blank');
+          cb.classList.add('is-loading');
+          const r = await fetch(S.admin + '/m/forms/create', { method: 'POST', body: fd, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } }).then((x) => x.json()).catch(() => ({ ok: false }));
+          cb.classList.remove('is-loading');
+          if (!r.ok || !r.form) { toast(r.error || 'The form could not be created.', 'error'); return; }
+          items.unshift(r.form);
+          sel = r.form;
+          creating = false;
+          q = '';
+          draw();
+          toast('Form created. Change its fields any time with "Edit form".');
+        }
+      });
+      body.addEventListener('dblclick', (e) => { if (e.target.closest('[data-fp-id]') && sel) finish(sel); });
+      body.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.target.matches('[data-fp-name]')) { e.preventDefault(); $('[data-fp-create]', body)?.click(); }
+        if (e.key === 'Enter' && e.target.matches('[data-fp-q]')) { e.preventDefault(); const first = $('[data-fp-id]', body); if (first) { sel = items.find((f) => String(f.id) === first.dataset.fpId); draw(); } }
+      });
+      insertBtn.addEventListener('click', () => { if (sel) finish(sel); });
+      // Closed with the X, Cancel, Escape or a click outside.
+      new MutationObserver((_, obs) => { if (!m.isConnected) { obs.disconnect(); if (!done) { done = true; resolve(null); } } }).observe(document.body, { childList: true });
+    });
+  }
+
   // ---------- Rich text editor ----------
   class Editor {
     constructor(root) {
@@ -36,15 +188,15 @@
         '<div class="ed-toolbar" role="toolbar">' +
         '<select data-block title="Text style"><option value="p">Paragraph</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="h4">Heading 4</option><option value="pre">Code block</option></select>' +
         '<span class="ed-sep"></span>' +
-        this.btn('bold', '<b>B</b>', 'Bold (⌘B)') + this.btn('italic', '<i>I</i>', 'Italic (⌘I)') + this.btn('underline', '<u>U</u>', 'Underline') + this.btn('strikeThrough', '<s>S</s>', 'Strikethrough') +
+        this.btn('bold', svg('bold'), 'Bold (Ctrl+B or Cmd+B)') + this.btn('italic', svg('italic'), 'Italic (Ctrl+I or Cmd+I)') + this.btn('underline', svg('underline'), 'Underline') + this.btn('strikeThrough', svg('strike'), 'Strikethrough') +
         '<span class="ed-sep"></span>' +
-        this.btn('insertUnorderedList', '•≡', 'Bulleted list') + this.btn('insertOrderedList', '1≡', 'Numbered list') + this.btn('quote', '❝', 'Quote') +
+        this.btn('insertUnorderedList', svg('list'), 'Bulleted list') + this.btn('insertOrderedList', svg('list-ordered'), 'Numbered list') + this.btn('quote', svg('quote'), 'Quote') +
         '<span class="ed-sep"></span>' +
-        this.btn('link', '🔗', 'Link (⌘K)') + this.btn('unlink', '⛓︎', 'Remove link') + this.btn('image', '🖼', 'Insert image') + this.btn('embed', '▶', 'Embed video (YouTube/Vimeo)') +
-        this.btn('table', '▦', 'Insert table') + this.btn('hr', '―', 'Divider') + (S.forms ? this.btn('form', '☑', 'Insert a form') : '') +
+        this.btn('link', svg('link'), 'Link (Ctrl+K or Cmd+K)') + this.btn('unlink', svg('unlink'), 'Remove link') + this.btn('image', svg('image'), 'Insert image') + this.btn('embed', svg('video'), 'Embed video (YouTube/Vimeo)') +
+        this.btn('table', svg('table'), 'Insert table') + this.btn('hr', svg('divider'), 'Divider') + (S.forms ? this.btn('form', svg('form'), 'Insert a form') : '') +
         '<span class="ed-sep"></span>' +
-        this.btn('removeFormat', 'Tx', 'Clear formatting') + this.btn('undo', '↶', 'Undo') + this.btn('redo', '↷', 'Redo') +
-        '<span class="ed-right"></span>' + this.btn('source', '&lt;/&gt;', 'Edit HTML') +
+        this.btn('removeFormat', svg('eraser'), 'Clear formatting') + this.btn('undo', svg('undo'), 'Undo') + this.btn('redo', svg('redo'), 'Redo') +
+        '<span class="ed-right"></span>' + this.btn('source', svg('code'), 'Edit HTML') +
         '</div>');
       this.area = document.createElement('div');
       this.area.className = 'ed-area';
@@ -52,7 +204,7 @@
       this.area.dataset.placeholder = 'Start writing, or paste content…';
       this.area.innerHTML = this.store.value;
       // Form widgets are placeholders: keep them as one locked block while editing.
-      this.area.querySelectorAll('[data-slate-form-widget]').forEach((w) => { w.contentEditable = 'false'; w.classList.add('ed-form-widget'); w.title = 'Form widget: change the form under Content › Forms'; });
+      this.area.querySelectorAll('[data-slate-form-widget]').forEach((w) => { w.contentEditable = 'false'; w.classList.add('ed-form-widget'); w.title = 'Form: click to change or edit it'; });
       this.src = document.createElement('textarea');
       this.src.className = 'ed-source';
       this.src.hidden = true;
@@ -82,6 +234,17 @@
       });
       this.area.addEventListener('keydown', (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopPropagation(); this.exec('link'); }
+      });
+      this.area.addEventListener('click', async (e) => {
+        const w = e.target.closest('[data-slate-form-widget]');
+        if (!w || !this.area.contains(w) || !S.forms) return;
+        e.preventDefault();
+        const picked = await pickForm(w.dataset.slateFormWidget);
+        if (!picked) return;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = formWidget(picked);
+        w.replaceWith(tmp.firstChild);
+        this.sync();
       });
       this.area.addEventListener('dblclick', (e) => {
         if (e.target.tagName === 'IMG') {
@@ -132,22 +295,11 @@
         document.execCommand('insertHTML', false, '<figure class="embed"><iframe src="' + src + '" width="560" height="315" title="Video" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></figure><p></p>');
       } else if (cmd === 'form') {
         const range = this.saveRange();
-        const r = await api('/posts?type=form');
-        const forms = (r.items || []).filter((f) => f.status === 'publish');
-        if (!forms.length) { toast('Create and publish a form first (Content › Forms).', 'error', 6000); return; }
-        const m = modal({ title: 'Insert a form', body: '<label class="field"><span>Form</span><select class="input" data-pick-form>' + forms.map((f) => '<option value="' + f.id + '">' + esc(f.title) + '</option>').join('') + '</select></label><p class="muted small">The form shows here on the live page. Edit its fields under Content › Forms; entries arrive in Submissions.</p>',
-          foot: '<button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-primary" data-insert-form>Insert form</button>' });
-        await new Promise((resolve) => {
-          m.addEventListener('click', (e) => {
-            if (e.target.closest('[data-insert-form]')) {
-              const sel = $('[data-pick-form]', m);
-              const title = sel.options[sel.selectedIndex].textContent;
-              this.restoreRange(range);
-              document.execCommand('insertHTML', false, '<div class="slate-form-widget ed-form-widget" data-slate-form-widget="' + sel.value + '" contenteditable="false">' + esc(title) + ' [form id="' + sel.value + '"]</div><p></p>');
-              m.close(); this.sync(); resolve();
-            } else if (e.target.closest('[data-close]')) { m.close(); resolve(); }
-          });
-        });
+        const picked = await pickForm();
+        if (!picked) return;
+        this.restoreRange(range);
+        document.execCommand('insertHTML', false, formWidget(picked) + '<p></p>');
+        this.sync();
         return;
       } else if (cmd === 'table') {
         const rows = Math.min(20, +prompt('Rows?', '3') || 3), cols = Math.min(10, +prompt('Columns?', '3') || 3);
@@ -349,7 +501,7 @@
     const foot = document.createElement('div');
     foot.style.cssText = 'display:flex;gap:8px';
     foot.innerHTML = '<button class="btn" data-close type="button">Discard</button>' + (isHtml ? '<button class="btn" data-mode="append" type="button">Insert below</button>' : '') + '<button class="btn btn-primary" data-mode="replace" type="button">' + (isHtml ? 'Replace' : 'Use') + '</button>';
-    const m = modal({ title: '✨ AI suggestion', body, foot });
+    const m = modal({ title: 'AI suggestion', body, foot });
     $$('[data-mode]', m).forEach((b) => b.addEventListener('click', () => { onApply(b.dataset.mode); m.close(); }));
   }
   runBtn?.addEventListener('click', async () => {

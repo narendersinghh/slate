@@ -298,10 +298,12 @@ echo \Slate\AdminUi::header('Modules', 'Add features to your site from a registr
         pages must keep working. If anything fails, the update is undone automatically and you see a report here and on the dashboard.
         Local modules (made on this site or uploaded as a zip) are never touched.</p>
       <?php if ($managedList): ?>
-        <fieldset class="mod-auto-list"><legend class="muted small">Include</legend>
+        <fieldset class="mod-auto-group"><legend class="small-label">Modules to update automatically</legend>
+          <div class="mod-auto-list">
           <?php foreach ($managedList as $m): ?>
-            <label class="check"><input type="checkbox" name="auto[]" value="<?= e($m['slug']) ?>"<?= empty($off[$m['slug']]) ? ' checked' : '' ?>> <?= e($m['name']) ?> <small class="muted">v<?= e($m['version']) ?></small></label>
+            <label class="mod-auto-item"><input type="checkbox" name="auto[]" value="<?= e($m['slug']) ?>"<?= empty($off[$m['slug']]) ? ' checked' : '' ?>><span><?= e($m['name']) ?></span><small class="muted">v<?= e($m['version']) ?></small></label>
           <?php endforeach; ?>
+          </div>
         </fieldset>
       <?php endif; ?>
       <?php $cli = ModuleUpdater::phpCli(); ?>

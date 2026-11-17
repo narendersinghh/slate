@@ -73,7 +73,7 @@ final class Ai
     /**
      * @return array{ok:bool, text?:string, error?:string}
      */
-    /** Replace em dashes the model still wrote (Settings → AI assistant → Brand voice). */
+    /** Replace em dashes the model still wrote (Settings › AI assistant › Brand voice). */
     public static function noEmDash(string $text): string
     {
         if (!Options::get('ai_no_em_dash', true)) {
@@ -91,7 +91,7 @@ final class Ai
         $model = (string)(Options::get('ai_model') ?: $preset['model']);
         $key = self::key();
         if ($base === '' || $model === '') {
-            return ['ok' => false, 'error' => 'Set a base URL and model under Settings → AI.'];
+            return ['ok' => false, 'error' => 'Set a base URL and model under Settings › AI.'];
         }
         $system = trim(($system ?? (string)Options::get('ai_system_prompt')) . "\nSite: " . Options::get('site_title') . ', ' . Options::get('tagline')
             . (Options::get('ai_no_em_dash', true) ? "\nStyle: never use em dashes (—); use commas, colons, full stops or parentheses instead." : ''));

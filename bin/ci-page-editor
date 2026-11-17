@@ -16,6 +16,18 @@ use Slate\Posts;
 DB::connect(SLATE_CONFIG['db']);
 Options::load();
 
+// php bin/ci-page-editor content <id>: an item's stored content, title, fields (to check what a save changed)
+if (($argv[1] ?? '') === 'content') {
+    $p = Posts::find((int)($argv[2] ?? 0));
+    echo json_encode($p ? ['title' => $p['title'], 'content' => $p['content'], 'fields' => $p['fields'], 'featured' => $p['featured_media_id'] ? (int)$p['featured_media_id'] : null] : null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+    exit;
+}
+if (($argv[1] ?? '') === 'term') {
+    $t = \Slate\Terms::find((int)($argv[2] ?? 0));
+    echo json_encode($t ? ['name' => $t['name'], 'fields' => $t['fields']] : null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+    exit;
+}
+
 // A 1x1-ish PNG the page refers to (the editor test uploads its own).
 $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAIAAACDRijCAAAAJklEQVR4nGP8z0AdwEQlc0YNGjVo1KBRg0YNGjVo1KBRg0YNAgB0VgEf9q3JIQAAAABJRU5ErkJggg==');
 @mkdir(SLATE_ROOT . '/content/uploads', 0775, true);
@@ -43,4 +55,27 @@ if (!DB::val('SELECT id FROM {{users}} WHERE username = :u', ['u' => 'peauthor']
     DB::insert('users', ['username' => 'peauthor', 'email' => 'peauthor@example.test', 'password' => Auth::hash('author-password-123'),
         'display_name' => 'PE Author', 'role' => 'author', 'status' => 'active', 'created_at' => date('Y-m-d H:i:s')]);
 }
-echo json_encode(['id' => $id, 'url' => Posts::permalink(Posts::find($id)), 'body' => Posts::find($id)['fields']['_html']['body']], JSON_UNESCAPED_SLASHES), "\n";
+// Pages that are not designed pages: stored content (WordPress-like HTML) shown by a Template and by the theme.
+\Slate\ContentModel::saveFieldGroup(['id' => 'pe_page_fields', 'title' => 'Page extras', 'location' => ['post_types' => ['page'], 'taxonomies' => ['category']],
+    'fields' => [['name' => 'subtitle', 'label' => 'Subtitle', 'type' => 'text'], ['name' => 'lead', 'label' => 'Lead', 'type' => 'textarea']]]);
+$stored = (string)file_get_contents($root . '/tests/fixtures/page-editor/stored-content.html');
+$sfx = substr(bin2hex(random_bytes(3)), 0, 6);
+$tmp = tempnam(sys_get_temp_dir(), 'pe');
+file_put_contents($tmp, $png);
+$feature = \Slate\Media::upload(['name' => 'pe-feature.png', 'tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($png)], true);
+$tplId = Posts::save(['type' => 'page', 'title' => 'Template page', 'slug' => 'pe-tpl-' . $sfx, 'status' => 'publish', 'author_id' => (int)$admin['id'],
+    'content' => $stored, 'fields' => ['subtitle' => 'A subtitle'], 'featured_media_id' => $feature['ok'] ? (int)$feature['media']['id'] : null]);
+\Slate\Templates::save(['id' => 'pepagetpl', 'name' => 'PE page', 'kind' => 'single', 'target' => 'page__pe-tpl-' . $sfx, 'wrap' => true, 'enabled' => true,
+    'html' => '<section class="pe-t"><h1 class="t-title">{{title|texturize}}</h1><p class="t-sub">{{field:subtitle}}</p>'
+        . '<img class="t-alt" alt="{{title}}" src="/content/uploads/pe-photo.png"><figure class="t-fig">{{image}}</figure><div class="t-body">{{{content}}}</div>'
+        . '<div class="t-list">{{#query type=post limit=2 orderby=title order=asc}}<h3 class="t-item">{{title}}</h3>{{/query}}</div></section>']);
+$themeId = Posts::save(['type' => 'page', 'title' => 'Theme page', 'slug' => 'pe-theme-' . $sfx, 'status' => 'publish', 'author_id' => (int)$admin['id'], 'content' => $stored]);
+$cat = \Slate\Terms::findBySlug('category', 'pe-topic');
+$catId = $cat ? (int)$cat['id'] : \Slate\Terms::save('category', ['name' => 'PE Topic', 'slug' => 'pe-topic', 'fields' => ['lead' => "Topic lead's text"]]);
+\Slate\Terms::save('category', ['name' => 'PE Topic', 'slug' => 'pe-topic', 'fields' => ['lead' => "Topic lead's text"]], $catId);
+\Slate\Templates::save(['id' => 'petermtpl', 'name' => 'PE topics', 'kind' => 'term', 'target' => 'category', 'wrap' => true, 'enabled' => true,
+    'html' => '<section class="pe-term"><h1 class="tt">{{term.name}}</h1><p class="tl">{{term.field:lead}}</p></section>']);
+
+echo json_encode(['id' => $id, 'url' => Posts::permalink(Posts::find($id)), 'body' => Posts::find($id)['fields']['_html']['body'],
+    'tpl' => ['id' => $tplId, 'url' => Posts::permalink(Posts::find($tplId))], 'theme' => ['id' => $themeId, 'url' => Posts::permalink(Posts::find($themeId))],
+    'term' => ['id' => $catId, 'url' => \Slate\Terms::link(\Slate\Terms::find($catId))], 'stored' => $stored], JSON_UNESCAPED_SLASHES), "\n";

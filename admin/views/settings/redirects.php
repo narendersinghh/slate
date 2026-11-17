@@ -1,6 +1,6 @@
 <?php $rows = \Slate\Options::get('redirects') ?: []; $rows[] = ['from' => '', 'to' => '', 'code' => 301, 'regex' => false]; ?>
 <div class="card-pad">
-  <p class="muted">Send old URLs to new ones. Use <code>410</code> for removed pages. Regex rules can use <code>$1</code> in the target, e.g. <code>^/old-blog/(.*)$</code> → <code>/blog/$1/</code>.</p>
+  <p class="muted">Send old URLs to new ones. Use <code>410</code> for removed pages. Regex rules can use <code>$1</code> in the target, e.g. <code>^/old-blog/(.*)$</code> <?= icon('arrow-right', 14) ?> <code>/blog/$1/</code>.</p>
   <div class="table-wrap"><table class="table table-form" data-repeat-table>
     <thead><tr><th>From (path)</th><th>To (path or URL)</th><th>Type</th><th class="center">Regex</th><th></th></tr></thead>
     <tbody>

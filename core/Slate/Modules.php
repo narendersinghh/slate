@@ -365,12 +365,12 @@ final class Modules
     private static function resolve(string $slug, array &$order, array $stack = []): ?string
     {
         if (in_array($slug, $stack, true)) {
-            return 'Circular module dependency: ' . implode(' → ', [...$stack, $slug]) . '.';
+            return 'Circular module dependency: ' . implode(' › ', [...$stack, $slug]) . '.';
         }
         $m = self::get($slug);
         if (!$m) {
             $by = $stack ? ' (needed by ' . end($stack) . ')' : '';
-            return "Module “{$slug}” is not installed$by. Install it first under Modules → Add new.";
+            return "Module “{$slug}” is not installed$by. Install it first under Modules › Add new.";
         }
         if ($err = self::requirementError($slug, $m)) {
             return "{$m['name']}: $err";
@@ -561,7 +561,7 @@ final class Modules
     }
 
     /**
-     * Declarative settings for a module, rendered by the standard settings screen (Settings → Modules → <name>) and
+     * Declarative settings for a module, rendered by the standard settings screen (Settings › Modules › <name>) and
      * linked as "Settings" in the module's sidebar group. Same field format as core settings:
      *   Modules::settings([['key' => 'shop_currency', 'type' => 'select', 'label' => 'Currency', 'options' => [...], 'default' => 'USD'], ...]);
      * Optional: 'label' (defaults to the module name), 'help' (intro text), 'render' => callable printing extra HTML below the fields.

@@ -53,9 +53,13 @@ function page_data(string $key, mixed $default = null): mixed
     return Frontend::$data[$key] ?? $default;
 }
 
+/**
+ * May the older "Edit on page" regions (editable(), {{edit:…}}) be used on this request? Not where the page editor
+ * (core/Slate/PageEditor.php) is active: themes then print exactly what visitors get and the page editor does the rest.
+ */
 function can_frontend_edit(): bool
 {
-    return Auth::can('frontend_edit') && Auth::can('edit_posts');
+    return Auth::can('frontend_edit') && Auth::can('edit_posts') && !\Slate\PageEditor::context();
 }
 
 /** Everything that belongs in <head>: SEO meta, schema, analytics, custom code. */
@@ -66,7 +70,7 @@ function slate_head(): void
     if (!$ownDesign) {
         echo \Slate\DesignSystem::head(), "\n"; // imported/AI pages keep exactly their own styles
     }
-    if (can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
+    if (Auth::can('frontend_edit') && Auth::can('edit_posts') && Options::get('admin_bar_frontend', true)) {
         // Admin bar styles (scoped to #slate-bar), also on pages that keep their own design.
         echo '<link rel="stylesheet" href="' . e(asset_url('admin/assets/frontend-edit.css')) . '">' . "\n";
     }
@@ -82,7 +86,7 @@ function slate_body_open(): void
         echo '<div id="slate-bar" role="toolbar" aria-label="Slate admin bar">'
             . '<a class="sb-logo" href="' . e(admin_url()) . '">' . \Slate\Icons::logo(22) . ' Slate</a>'
             . ($edit ? '<a href="' . e($edit) . '">' . icon('edit', 15) . ' Edit in dashboard</a>' : '')
-            . ($p && !\Slate\HtmlPages::$rendering && can_frontend_edit() && ContentModel::supports($p['type'], 'frontend_edit')
+            . ($p && !\Slate\HtmlPages::$rendering && !\Slate\PageEditor::context() && can_frontend_edit() && ContentModel::supports($p['type'], 'frontend_edit')
                 ? '<button type="button" id="sb-edit" data-id="' . (int)$p['id'] . '">' . icon('sparkles', 15) . ' Edit on page</button>'
                 . '<button type="button" id="sb-save" hidden>' . icon('check', 15) . ' Save changes</button>'
                 . '<button type="button" id="sb-cancel" hidden>Cancel</button>' : '')
@@ -97,7 +101,9 @@ function slate_body_open(): void
 function slate_footer(): void
 {
     echo Seo::footer(), "\n";
-    if (!\Slate\HtmlPages::$rendering && can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
+    if (!\Slate\HtmlPages::$rendering && \Slate\PageEditor::context()) {
+        echo \Slate\PageEditor::footerAssets(); // the page editor replaces the older "Edit on page" regions here
+    } elseif (!\Slate\HtmlPages::$rendering && can_frontend_edit() && Options::get('admin_bar_frontend', true)) {
         echo '<script>window.SLATE={api:' . json_encode(admin_url('api')) . ',csrf:' . json_encode(Csrf::token())
             . ',media:' . json_encode(admin_url('api/media')) . '};</script>';
         echo '<script src="' . e(asset_url('admin/assets/frontend-edit.js')) . '" defer></script>';
@@ -214,11 +220,13 @@ function editable(string $what, string $tag = 'div', ?array $post = null, array 
     }
     $tag = preg_replace('/[^a-z0-9]/', '', strtolower($tag)) ?: 'div';
     $fieldDef = null;
+    // The page editor is active for this item: same markup as visitors get, the value marked for editing in place.
+    $bind = \Slate\PageEditor::bindFor($what, $post);
     if ($what === 'title') {
         $value = e($post['title']);
         $kind = 'text';
     } elseif ($what === 'content') {
-        $value = (string)$post['content'];
+        $value = ($bind === '' ? null : \Slate\PageEditor::contentForEditor($post)) ?? (string)$post['content'];
         $kind = 'html';
     } elseif ($what === 'excerpt') {
         $value = e((string)$post['excerpt']);
@@ -233,7 +241,7 @@ function editable(string $what, string $tag = 'div', ?array $post = null, array 
         if ($kind === 'image') {
             $img = image((int)$raw, $attrs);
             if (!can_frontend_edit()) {
-                return $img;
+                return $bind !== '' && str_starts_with($img, '<img') ? '<img' . $bind . substr($img, 4) : $img;
             }
             return '<span class="slate-editable-img" data-slate-edit="' . e($what) . '" data-slate-kind="image" data-post="' . (int)$post['id'] . '">' . ($img ?: '<span class="slate-img-placeholder">Add image</span>') . '</span>';
         }
@@ -247,6 +255,9 @@ function editable(string $what, string $tag = 'div', ?array $post = null, array 
     }
     if (can_frontend_edit() && ContentModel::supports($post['type'], 'frontend_edit')) {
         $attrHtml .= ' data-slate-edit="' . e($what) . '" data-slate-kind="' . $kind . '" data-post="' . (int)$post['id'] . '"';
+    }
+    if ($what !== 'content') {
+        $attrHtml .= $bind;
     }
     return "<$tag$attrHtml>$value</$tag>";
 }
@@ -298,7 +309,9 @@ function the_content(?array $post = null): string
     if (!$post) {
         return '';
     }
-    $html = \Slate\Hooks::filter('the_content', (string)$post['content'], $post);
+    // A team member editing this item on the page gets the same content with editable ids (every other byte unchanged).
+    $stored = \Slate\PageEditor::contentForEditor($post) ?? (string)$post['content'];
+    $html = \Slate\Hooks::filter('the_content', $stored, $post);
     if (Options::get('media_lazy', true)) {
         $html = preg_replace('/<img(?![^>]*\bloading=)/i', '<img loading="lazy" decoding="async"', $html);
     }

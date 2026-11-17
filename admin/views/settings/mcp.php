@@ -20,7 +20,7 @@ $snippet = static fn(string $label, string $code) => '<div class="stack-sm"><spa
       import images and restore revisions.</p>
   </div>
   <ol class="small stack-sm" style="padding-left:1.2em;margin:0">
-    <li>Create a key under <a href="<?= e($keyUrl) ?>">your profile → API keys</a>. Choose <em>Read only</em> to let an agent look around,
+    <li>Create a key under <a href="<?= e($keyUrl) ?>">your profile › API keys</a>. Choose <em>Read only</em> to let an agent look around,
       <em>Read &amp; write</em> to let it create drafts and designs. The agent acts as you, with your role's permissions; a dedicated user with the
       Author or Editor role keeps it narrower.</li>
     <li>Add the server to your AI client with one of the snippets below, replacing <code>slt_…</code> with the key.</li>

@@ -41,6 +41,18 @@ final class Templates
 
     private static int $depth = 0;
 
+    /**
+     * While a team member edits the current item on the page (PageEditor::begin): ['post' => id] or ['term' => id].
+     * Values of that item printed as text by the page's template are then marked with data-se-bind, and lists and
+     * module output with <!--se:list--> / <!--se:mod--> comments. Visitors never get any of this.
+     */
+    public static ?array $bind = null;
+    /** Bound values found while rendering: key => kind (text|textarea|html|image). */
+    public static array $bound = [];
+    private static bool $binding = false;
+    private const BUILTIN_TAGS = ['form', 'title', 'content', 'excerpt', 'url', 'id', 'slug', 'type', 'date', 'modified', 'author', 'image',
+        'image_url', 'index', 'year', 'menu', 'breadcrumbs', 'pagination', 'edit', 'terms', 'field', 'item', 'else'];
+
     public static function all(): array
     {
         $t = Options::get('templates');
@@ -156,15 +168,19 @@ final class Templates
             self::$depth--;
             return '';
         }
+        // Only the page's own template (not modules' nested templates) marks editable values.
+        $prev = self::$binding;
+        self::$binding = self::$bind !== null && self::$depth === 1;
         try {
-            return self::renderNodes(self::parse($tpl), $ctx);
+            return self::renderNodes(self::parse($tpl, self::$binding), $ctx);
         } finally {
+            self::$binding = $prev;
             self::$depth--;
         }
     }
 
     /** Parse into a tree: text | var | raw | block(name, args, children, else). */
-    private static function parse(string $src): array
+    private static function parse(string $src, bool $track = false): array
     {
         preg_match_all('/\{\{\{\s*(.+?)\s*\}\}\}|\{\{\s*([#\/]?)([^{}]*?)\s*\}\}/s', $src, $m, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
         $tokens = [];
@@ -173,34 +189,97 @@ final class Templates
             $offset = $tok[0][1];
             if ($offset > $pos) {
                 $tokens[] = ['text', substr($src, $pos, $offset - $pos)];
+                if ($track) {
+                    $hs = self::scanHtml($tokens[count($tokens) - 1][1], $hs ?? ['m' => 'text', 'q' => '', 'raw' => '']);
+                }
             }
             $pos = $offset + strlen($tok[0][0]);
+            $where = $track ? ($hs ?? ['m' => 'text'])['m'] : '';
             if (isset($tok[1]) && $tok[1][1] !== -1 && $tok[1][0] !== '') {
-                $tokens[] = ['raw', trim($tok[1][0])];
+                $tokens[] = ['raw', trim($tok[1][0]), $where];
                 continue;
             }
             $sigil = $tok[2][0] ?? '';
             $expr = trim($tok[3][0] ?? '');
             if ($sigil === '#') {
                 [$name, $args] = array_pad(preg_split('/\s+/', $expr, 2), 2, '');
-                $tokens[] = ['open', $name, trim((string)$args)];
+                $tokens[] = ['open', $name, trim((string)$args), $where];
             } elseif ($sigil === '/') {
                 $tokens[] = ['close'];
             } elseif ($expr === 'else') {
                 $tokens[] = ['else'];
             } else {
-                $tokens[] = ['var', $expr];
+                $tokens[] = ['var', $expr, $where];
             }
         }
         if ($pos < strlen($src)) {
             $tokens[] = ['text', substr($src, $pos)];
         }
         $i = 0;
-        return self::build($tokens, $i, false)['children'];
+        return self::build($tokens, $i, false, $track)['children'];
+    }
+
+    /**
+     * Follow where template text leaves us in HTML: 'text' (between tags), 'tag' (inside a tag: attributes), 'raw'
+     * (inside <script>, <style>, <title>, <textarea>) or 'comment'. Only values in 'text' can be marked.
+     */
+    private static function scanHtml(string $t, array $st): array
+    {
+        $len = strlen($t);
+        $i = 0;
+        while ($i < $len) {
+            if ($st['m'] === 'comment') {
+                $e = strpos($t, '-->', $i);
+                if ($e === false) {
+                    return $st;
+                }
+                $i = $e + 3;
+                $st['m'] = 'text';
+            } elseif ($st['m'] === 'raw') {
+                $e = stripos($t, '</' . $st['raw'], $i);
+                if ($e === false) {
+                    return $st;
+                }
+                $i = $e;
+                $st['m'] = 'text';
+            } elseif ($st['m'] === 'tag') {
+                for (; $i < $len; $i++) {
+                    $c = $t[$i];
+                    if ($st['q'] !== '') {
+                        if ($c === $st['q']) {
+                            $st['q'] = '';
+                        }
+                    } elseif ($c === '"' || $c === "'") {
+                        $st['q'] = $c;
+                    } elseif ($c === '>') {
+                        $st['m'] = in_array($st['raw'], ['script', 'style', 'title', 'textarea'], true) ? 'raw' : 'text';
+                        $i++;
+                        break;
+                    }
+                }
+            } else {
+                $lt = strpos($t, '<', $i);
+                if ($lt === false) {
+                    return $st;
+                }
+                if (substr_compare($t, '<!--', $lt, 4) === 0) {
+                    $st['m'] = 'comment';
+                    $i = $lt + 4;
+                } elseif (preg_match('/\G<(\/?)([A-Za-z][A-Za-z0-9-]*)/', $t, $m, 0, $lt)) {
+                    $st['m'] = 'tag';
+                    $st['q'] = '';
+                    $st['raw'] = $m[1] === '' ? strtolower($m[2]) : '';
+                    $i = $lt + strlen($m[0]);
+                } else {
+                    $i = $lt + 1;
+                }
+            }
+        }
+        return $st;
     }
 
     /** @return array{children: array, else: ?array} */
-    private static function build(array $tokens, int &$i, bool $inBlock): array
+    private static function build(array $tokens, int &$i, bool $inBlock, bool $bindable = false): array
     {
         $children = [];
         $else = null;
@@ -212,6 +291,9 @@ final class Templates
                 case 'var':
                 case 'raw':
                     $node = $t[0] === 'text' ? ['t' => 'text', 'v' => $t[1]] : ['t' => $t[0], 'v' => $t[1]];
+                    if ($bindable && $t[0] !== 'text' && ($t[2] ?? '') === 'text') {
+                        $node['w'] = true;
+                    }
                     if ($else !== null) {
                         $else[] = $node;
                     } else {
@@ -219,8 +301,11 @@ final class Templates
                     }
                     break;
                 case 'open':
-                    $inner = self::build($tokens, $i, true);
+                    $inner = self::build($tokens, $i, true, $bindable && in_array($t[1], ['if', 'unless'], true));
                     $node = ['t' => 'block', 'name' => $t[1], 'args' => $t[2], 'children' => $inner['children'], 'else' => $inner['else']];
+                    if ($bindable && ($t[3] ?? '') === 'text') {
+                        $node['w'] = true;
+                    }
                     if ($else !== null) {
                         $else[] = $node;
                     } else {
@@ -244,6 +329,9 @@ final class Templates
 
     private static function renderNodes(array $nodes, array $ctx): string
     {
+        if (self::$binding) {
+            return self::renderBound($nodes, $ctx);
+        }
         $out = '';
         foreach ($nodes as $n) {
             $out .= match ($n['t']) {
@@ -255,6 +343,97 @@ final class Templates
             };
         }
         return $out;
+    }
+
+    /** renderNodes() while the current item is edited on the page: marks its values, lists and module output. */
+    private static function renderBound(array $nodes, array $ctx): string
+    {
+        $parts = [];
+        $count = count($nodes);
+        for ($i = 0; $i < $count; $i++) {
+            $n = $nodes[$i];
+            if ($n['t'] === 'text') {
+                $parts[$i] = $n['v'];
+                continue;
+            }
+            if ($n['t'] === 'block') {
+                $html = self::block($n, $ctx);
+                $parts[$i] = !empty($n['w']) && !in_array($n['name'], ['if', 'unless'], true) && $html !== '' ? '<!--se:list-->' . $html . '<!--/se:list-->' : $html;
+                continue;
+            }
+            $raw = $n['t'] === 'raw';
+            $html = self::value($n['v'], $ctx, $raw);
+            $bind = !empty($n['w']) ? self::bindKey($n['v'], $ctx) : null;
+            if (!$bind) {
+                $name = strtolower((string)preg_split('/[:|.\s]/', $n['v'], 2)[0]);
+                $parts[$i] = !empty($n['w']) && $html !== '' && !in_array($name, self::BUILTIN_TAGS, true) && !in_array($name, ['term', 'site', 'archive'], true)
+                    ? '<!--se:mod-->' . $html . '<!--/se:mod-->' : $html;
+                continue;
+            }
+            [$key, $kind] = $bind;
+            self::$bound[$key] = $kind;
+            $attr = ' data-se-bind="' . e($key) . '"';
+            if ($kind === 'image') {
+                $parts[$i] = str_starts_with($html, '<img') ? '<img' . $attr . substr($html, 4) : $html;
+                continue;
+            }
+            // Alone in an element (<h1 class="x">{{title}}</h1>): mark that element, the page's markup stays as it is.
+            $prev = $i > 0 && ($nodes[$i - 1]['t'] ?? '') === 'text' ? $parts[$i - 1] : null;
+            $next = $i + 1 < $count && ($nodes[$i + 1]['t'] ?? '') === 'text' ? $nodes[$i + 1]['v'] : null;
+            if ($prev !== null && $next !== null && preg_match('/<([A-Za-z][A-Za-z0-9-]*)\b[^<>]*>\s*$/', $prev, $pm)
+                && !str_contains($pm[0], 'data-se-bind') && !preg_match('/\/>\s*$/', $pm[0])
+                && !in_array(strtolower($pm[1]), ['br', 'img', 'input', 'hr', 'meta', 'link', 'source', 'wbr'], true)
+                && preg_match('/^\s*<\/' . preg_quote($pm[1], '/') . '\s*>/i', $next)) {
+                $gt = strrpos($prev, '>');
+                $parts[$i - 1] = substr($prev, 0, $gt) . $attr . substr($prev, $gt);
+                $parts[$i] = $html;
+                continue;
+            }
+            $parts[$i] = '<span' . $attr . ($kind === 'html' ? ' style="display:contents"' : '') . '>' . $html . '</span>';
+        }
+        return implode('', $parts);
+    }
+
+    /** The bound value an expression prints, when it belongs to the item being edited: [key, kind] or null. */
+    private static function bindKey(string $expr, array $ctx): ?array
+    {
+        $parts = array_map('trim', explode('|', $expr));
+        $key = array_shift($parts);
+        $filter = explode(':', $parts[0] ?? '', 2)[0];
+        $b = self::$bind ?? [];
+        $fieldKind = static function (?array $def, string $filter): ?string {
+            $k = $def ? PageEditor::fieldKind($def) : null;
+            if ($k === 'image') {
+                return $filter === 'image' ? 'image' : null;
+            }
+            return $k !== null && in_array($filter, ['', 'texturize', 'nl2br', 'strip'], true) ? $k : null;
+        };
+        if (isset($b['post']) && (int)($ctx['post']['id'] ?? 0) === (int)$b['post'] && !isset($ctx['item'])) {
+            $id = (int)$b['post'];
+            [$name, $arg] = array_pad(explode(':', $key, 2), 2, null);
+            if ($name === 'title' && $arg === null && in_array($filter, ['', 'texturize'], true)) {
+                return ['post:' . $id . ':title', 'text'];
+            }
+            if ($name === 'image' && $filter === '') {
+                return ['post:' . $id . ':image', 'image'];
+            }
+            if ($name === 'field' && $arg !== null && preg_match('/^[A-Za-z0-9_]{1,60}$/', $arg)) {
+                $k = $fieldKind(ContentModel::fieldsFor('post', (string)$ctx['post']['type'])[$arg] ?? null, $filter);
+                return $k ? ['post:' . $id . ':field:' . $arg, $k] : null;
+            }
+            return null;
+        }
+        if (isset($b['term']) && (int)($ctx['term']['id'] ?? 0) === (int)$b['term'] && !isset($ctx['item'])) {
+            $id = (int)$b['term'];
+            if ($key === 'term.name' && in_array($filter, ['', 'texturize'], true)) {
+                return ['term:' . $id . ':name', 'text'];
+            }
+            if (preg_match('/^term\.field:([A-Za-z0-9_]{1,60})$/', $key, $m)) {
+                $k = $fieldKind(ContentModel::fieldsFor('term', (string)$ctx['term']['taxonomy'])[$m[1]] ?? null, $filter);
+                return $k ? ['term:' . $id . ':field:' . $m[1], $k] : null;
+            }
+        }
+        return null;
     }
 
     private static function block(array $n, array $ctx): string

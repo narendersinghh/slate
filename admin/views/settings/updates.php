@@ -7,15 +7,16 @@ rsort($backups);
 ?>
 <div class="card-pad stack">
   <?php if (Updater::isGitDeploy()): ?>
-  <div class="banner banner-accent"><?= icon('refresh', 18) ?><div><strong>Deployed from Git.</strong> This site updates automatically whenever new code is pushed to its branch on GitHub (e.g. via Hostinger → Git auto-deployment). The one-click updater below is disabled to avoid conflicts.</div></div>
+  <div class="banner banner-accent"><?= icon('refresh', 18) ?><div><strong>Deployed from Git.</strong> This site updates automatically whenever new code is pushed to its branch on GitHub (e.g. via Hostinger › Git auto-deployment). The one-click updater below is disabled to avoid conflicts.</div></div>
   <?php endif; ?>
   <div class="update-box<?= $available ? ' has-update' : '' ?>">
     <div class="update-version">
       <small class="muted">Installed</small><strong><?= e(SLATE_VERSION) ?></strong>
     </div>
-    <?= icon('chevron-right', 20) ?>
+    <?php if ($available): ?><?= icon('chevron-right', 20) ?><?php endif; ?>
     <div class="update-version">
-      <small class="muted">Latest release</small><strong><?= e($info['latest'] ?? '-') ?></strong>
+      <?php if ($available): ?><small class="muted">New release</small><strong><?= e($info['latest']) ?></strong>
+      <?php else: ?><small class="muted">Status</small><strong class="update-ok"><?= icon('check', 18) ?> Up to date</strong><?php endif; ?>
       <?php if (!empty($info['checked_at'])): ?><small class="muted">checked <?= e(time_ago(gmdate('Y-m-d H:i:s', (int)$info['checked_at']))) ?></small><?php endif; ?>
     </div>
     <div class="update-actions">
@@ -26,7 +27,7 @@ rsort($backups);
     </div>
   </div>
   <?php if ($available && !empty($info['notes'])): ?>
-    <div class="release-notes"><h3><?= e($info['name'] ?? $info['latest']) ?></h3><pre><?= e($info['notes']) ?></pre><?php if (!empty($info['url'])): ?><a href="<?= e($info['url']) ?>" target="_blank" rel="noopener">View on GitHub →</a><?php endif; ?></div>
+    <div class="release-notes"><h3><?= e($info['name'] ?? $info['latest']) ?></h3><pre><?= e($info['notes']) ?></pre><?php if (!empty($info['url'])): ?><a href="<?= e($info['url']) ?>" target="_blank" rel="noopener">View on GitHub <?= icon('external', 14) ?></a><?php endif; ?></div>
   <?php endif; ?>
   <div class="muted small">
     Updates come from GitHub Releases of <code><?= e(Updater::repo()) ?></code>. Publish a release with a tag like <code>v0.2.0</code>; optionally attach a <code>slate.zip</code> asset.

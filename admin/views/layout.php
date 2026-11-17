@@ -267,7 +267,7 @@ window.SLATE = <?= json_encode([
   <div class="palette-box" role="dialog" aria-label="Command palette">
     <div class="palette-input"><?= icon('search', 18) ?><input type="text" placeholder="Search content, settings…" autocomplete="off" aria-label="Search"></div>
     <div class="palette-results" role="listbox"></div>
-    <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+    <div class="palette-foot"><span><kbd><?= icon('arrow-up', 11) ?></kbd><kbd><?= icon('arrow-down', 11) ?></kbd> navigate</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
   </div>
 </div>
 

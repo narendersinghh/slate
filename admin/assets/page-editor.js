@@ -27,7 +27,10 @@
   let hoverEl = null;
   let saving = false;
   let leaving = false;
-  const P = { text: new Map(), tag: new Map(), style: new Map(), attr: new Map(), image: new Map(), icon: new Map(), remove: new Map() };
+  const P = { text: new Map(), tag: new Map(), style: new Map(), attr: new Map(), image: new Map(), icon: new Map(), remove: new Map(), bind: new Map() };
+  // 'html': designed page (fields._html). 'content': stored content + the item's title/fields shown by a template or the theme. 'term': a term page.
+  const MODE = C.mode || 'html';
+  const BINDS = C.binds || {};
   const originals = new Map(); // id -> {html, tag, style}
 
   // ------------------------------------------------------------------ helpers
@@ -109,8 +112,12 @@
     toggle.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setOn(!on); });
     mount.toggle = toggle;
     if (/[?&]se-edit=1\b/.test(location.search)) {
+      mount.reloaded = true;
       setOn(true);
-      try { history.replaceState(null, '', location.href.replace(/([?&])se-edit=1&?/, '$1').replace(/[?&]$/, '')); } catch (e) { /* ignore */ }
+      if (MODE === 'content' && C.contentShown && /[?&]se-content=1\b/.test(location.search)) {
+        toast('This page was showing a saved copy of the original site. You are editing its stored content now; visitors get this version once you save.', '', 9000);
+      }
+      try { history.replaceState(null, '', location.href.replace(/([?&])se-(edit|content)=1&?/g, '$1').replace(/([?&])se-(edit|content)=1&?/g, '$1').replace(/[?&]$/, '')); } catch (e) { /* ignore */ }
     }
   }
 
@@ -124,6 +131,15 @@
   }
 
   function setOn(v) {
+    if (v && !mount.reloaded && MODE === 'content' && C.byTheme && C.hasContent && !C.contentShown && !C.contentLocked) {
+      // The page shows something else than the item's stored content (e.g. a snapshot of an imported page): load the editable version.
+      const u = new URL(location.href);
+      u.searchParams.set('se-edit', '1');
+      u.searchParams.set('se-content', '1');
+      location.assign(u.toString());
+      return;
+    }
+    if (v && C.contentLocked) toast('The HTML of this page\'s content cannot be edited safely here. Edit it in the dashboard.', 'error', 7000);
     if (!v && count()) {
       toast('Save or discard your changes first.', 'error');
       return;
@@ -142,12 +158,41 @@
     if (!(t instanceof Element) || host.contains(t) || t === host) return null;
     const bar = d.getElementById('slate-bar');
     if (bar && bar.contains(t)) return null;
-    const el = t.closest('[data-se],[data-se-loop]');
+    const el = t.closest('[data-se],[data-se-loop],[data-se-bind]');
     if (!el) return null;
+    if (el.hasAttribute('data-se-bind') && !BINDS[el.getAttribute('data-se-bind')]) return null;
     return el.closest('[data-se-source]') || el;
   }
 
+  // ---------- hints for parts that are not edited here (template, theme, lists, modules)
+  let marks = null;
+  function buildMarks() {
+    marks = new Map();
+    const w = d.createTreeWalker(d.body, NodeFilter.SHOW_COMMENT);
+    const starts = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) { const m = /^se:(\w+)$/.exec(n.data.trim()); if (m) starts.push([n, m[1]]); }
+    starts.forEach(([c, kind]) => {
+      for (let n = c.nextSibling; n; n = n.nextSibling) {
+        if (n.nodeType === 8 && n.data.trim() === '/se:' + kind) break;
+        if (n.nodeType === 1 && !marks.has(n)) marks.set(n, kind);
+      }
+    });
+  }
+  function hintFor(t) {
+    if (!(t instanceof Element) || t === d.body || t === d.documentElement) return '';
+    if (!marks) buildMarks();
+    for (let n = t; n && n !== d.body; n = n.parentElement) {
+      const k = marks.get(n);
+      if (k === 'list') return 'Part of a list: it repeats for each item';
+      if (k === 'mod') return 'Added by a module';
+      if (k === 'content') return 'Layout of the page content: edit it in the dashboard';
+    }
+    if (MODE === 'html') return '';
+    return 'Comes from ' + (C.where || 'the site theme');
+  }
+
   function kindOf(el) {
+    if (el.hasAttribute('data-se-bind') && !el.hasAttribute('data-se')) return 'bind';
     if (el.hasAttribute('data-se-loop') && !el.hasAttribute('data-se')) return 'loop';
     const tag = tagOf(el);
     if (tag === 'img' || tag === 'picture') return 'image';
@@ -158,6 +203,7 @@
 
   function nameOf(el) {
     const k = kindOf(el);
+    if (k === 'bind') { const b = BINDS[el.getAttribute('data-se-bind')]; return b ? b.label : 'Field'; }
     if (k === 'loop') return el.hasAttribute('data-se-source') ? 'Dynamic list' : 'Repeating group';
     if (k === 'icon') return 'Icon';
     if (tagOf(el) === 'a' && /\b(btn|button)\b/i.test(cls(el))) return 'Button';
@@ -173,7 +219,8 @@
   // ------------------------------------------------------------------ boxes, positions
   function placeBox(box, el) {
     if (!el || !el.isConnected) { box.hidden = true; return; }
-    const r = el.getBoundingClientRect();
+    let r = el.getBoundingClientRect();
+    if (!r.width && !r.height && el.firstChild) { const rg = d.createRange(); rg.selectNodeContents(el); r = rg.getBoundingClientRect(); }
     if (!r.width && !r.height) { box.hidden = true; return; }
     box.hidden = false;
     box.style.transform = 'translate(' + Math.round(r.left - 3) + 'px,' + Math.round(r.top - 3) + 'px)';
@@ -184,7 +231,8 @@
 
   function placeToolbar() {
     if (toolbar.hidden || !sel) return;
-    const r = sel.getBoundingClientRect();
+    let r = sel.getBoundingClientRect();
+    if (!r.width && !r.height) { const rg = d.createRange(); rg.selectNodeContents(sel); r = rg.getBoundingClientRect(); }
     const tb = toolbar.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -217,9 +265,16 @@
   window.addEventListener('mousemove', (e) => {
     if (!on || isUiEvent(e)) return;
     const el = pickable(e.target);
-    if (el !== hoverEl) {
-      hoverEl = el;
-      if (el) hoverBox.querySelector('.se-tagname').textContent = nameOf(el);
+    if (el) {
+      if (el !== hoverEl) { hoverEl = el; hoverBox.classList.remove('se-hint'); hoverBox.querySelector('.se-tagname').textContent = nameOf(el); }
+      return;
+    }
+    const hint = hintFor(e.target);
+    const t = hint ? e.target : null;
+    if (t !== hoverEl) {
+      hoverEl = t;
+      hoverBox.classList.toggle('se-hint', !!t);
+      if (t) hoverBox.querySelector('.se-tagname').textContent = hint;
     }
   }, true);
 
@@ -233,7 +288,7 @@
   window.addEventListener('click', (e) => {
     if (!on || isUiEvent(e)) return;
     e.stopPropagation();
-    const inside = sel && selKind === 'text' && sel.contains(e.target) && sel.isContentEditable;
+    const inside = sel && (selKind === 'text' || selKind === 'bind') && sel.contains(e.target) && sel.isContentEditable;
     e.preventDefault();
     if (inside) {
       const el = pickable(e.target);
@@ -241,7 +296,12 @@
       if (el && el !== sel && sel.contains(el) && kindOf(el) === 'text') return;
     }
     const el = pickable(e.target);
-    if (!el) { deselect(); return; }
+    if (!el) {
+      deselect();
+      const hint = hintFor(e.target);
+      if (hint) toast(hint + '.');
+      return;
+    }
     select(el, e);
   }, true);
 
@@ -275,7 +335,8 @@
     if (!originals.has(id)) originals.set(id, { html: el.innerHTML, tag: tagOf(el), style: el.getAttribute('style') || '' });
     selBox.querySelector('.se-tagname').textContent = nameOf(el);
     selBox.classList.toggle('se-dyn', el.hasAttribute('data-se-source'));
-    if (selKind === 'text') startText(el, ev);
+    if (selKind === 'bind') startBind(el, ev);
+    else if (selKind === 'text') startText(el, ev);
     else if (selKind === 'image') openImage(el);
     else if (selKind === 'icon') openIcon(el);
     else if (selKind === 'loop') openLoop(el, ev && ev.target);
@@ -284,10 +345,120 @@
 
   function deselect() {
     if (sel && selKind === 'text') stopText(sel);
+    if (sel && selKind === 'bind') stopBind(sel);
     sel = null;
     selKind = '';
     toolbar.hidden = true;
     closePanel();
+  }
+
+  // ------------------------------------------------------------------ the item's title, excerpt, fields (shown by a template)
+  const bindKey = (el) => el.getAttribute('data-se-bind');
+  const bindValue = (el, kind) => (kind === 'html' ? cleanHtml(el) : kind === 'textarea' ? el.innerText.replace(/\n$/, '') : el.textContent);
+  const shown = new WeakMap(); // element -> the rendered (filtered) HTML, put back when nothing changed
+
+  function startBind(el, ev) {
+    const key = bindKey(el);
+    const b = BINDS[key];
+    if (b.kind === 'image') { openBindImage(el, key, b); return; }
+    if (!shown.has(el)) shown.set(el, el.innerHTML);
+    if (!P.bind.has(key)) {
+      // Edit the stored value, not the filtered output (curly quotes, line breaks).
+      if (b.kind === 'html') el.innerHTML = b.value || '';
+      else if (b.kind === 'textarea') el.innerText = b.value || '';
+      else el.textContent = b.value || '';
+    }
+    el.setAttribute('contenteditable', b.kind === 'html' ? 'true' : 'plaintext-only');
+    if (el.contentEditable !== 'plaintext-only' && b.kind !== 'html') el.setAttribute('contenteditable', 'true');
+    el.setAttribute('spellcheck', 'true');
+    el.addEventListener('input', onBindInput);
+    el.addEventListener('paste', onPaste);
+    el.addEventListener('keydown', onBindKey);
+    el.focus({ preventScroll: true });
+    if (ev && d.caretRangeFromPoint) {
+      const r = d.caretRangeFromPoint(ev.clientX, ev.clientY);
+      if (r && el.contains(r.startContainer)) { const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    }
+    buildBindToolbar(el, b);
+  }
+
+  function stopBind(el) {
+    el.removeAttribute('contenteditable');
+    el.removeAttribute('spellcheck');
+    el.removeEventListener('input', onBindInput);
+    el.removeEventListener('paste', onPaste);
+    el.removeEventListener('keydown', onBindKey);
+    const key = bindKey(el);
+    if (!P.bind.has(key) && shown.has(el)) el.innerHTML = shown.get(el);
+  }
+
+  function markBind(el) {
+    const key = bindKey(el);
+    const b = BINDS[key];
+    const v = bindValue(el, b.kind);
+    if (v === (b.value || '') || (b.kind === 'html' && v === cleanHtmlString(b.value || ''))) P.bind.delete(key);
+    else P.bind.set(key, { el, kind: b.kind });
+    // The same value shown elsewhere on the page (a title in several places) follows along.
+    if (b.kind === 'text') d.querySelectorAll('[data-se-bind="' + key + '"]').forEach((o) => { if (o !== el) o.textContent = v; });
+    update();
+  }
+  function onBindInput(e) { markBind(e.currentTarget); }
+  function onBindKey(e) {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    const b = BINDS[bindKey(e.currentTarget)];
+    if (b.kind === 'html') return;
+    e.preventDefault();
+    if (b.kind === 'textarea') d.execCommand('insertLineBreak');
+  }
+
+  function buildBindToolbar(el, b) {
+    let h = '<span class="se-chip-label" title="Saved to this item">' + esc(b.label) + '</span>';
+    if (b.kind === 'html') {
+      h += '<span class="se-sep"></span><button type="button" class="se-tb" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>'
+        + '<button type="button" class="se-tb" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button>'
+        + '<button type="button" class="se-tb" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button>'
+        + '<button type="button" class="se-tb" data-pop="link" title="Link" aria-label="Link" aria-haspopup="true">' + ico.link + '</button>';
+    }
+    if (C.ai) h += '<span class="se-sep"></span><button type="button" class="se-tb se-ai" data-pop="ai" title="Rewrite with AI" aria-label="Rewrite with AI" aria-haspopup="true">✦</button>';
+    h += linkPop() + aiPop();
+    toolbar.innerHTML = h;
+    toolbar.hidden = false;
+    placeToolbar();
+  }
+
+  function openBindImage(el, key, b) {
+    let h = '<div class="se-preview"><img src="' + esc(el.getAttribute('src') || '') + '" alt=""></div>'
+      + '<p class="se-hint">' + esc(b.label) + ' of this item. Alt text comes from the media library.</p>';
+    if (C.media) {
+      h += '<div class="se-row"><label class="se-btn se-primary se-file">Upload<input type="file" accept="image/*" data-upload hidden></label>'
+        + '<button type="button" class="se-btn se-ghost" data-act="library">Media library</button></div><div class="se-lib" hidden></div>';
+    } else {
+      h += '<p class="se-hint">You cannot upload media.</p>';
+    }
+    openPanel(b.label, h);
+    const choose = (item) => {
+      el.removeAttribute('srcset');
+      el.removeAttribute('sizes');
+      el.src = item.url;
+      if (item.alt) el.alt = item.alt;
+      P.bind.set(key, { el, kind: 'image', value: item.id });
+      update();
+      openBindImage(el, key, b);
+      toast('Image replaced.');
+    };
+    const up = panel.querySelector('[data-upload]');
+    if (up) up.addEventListener('change', async () => {
+      const f = up.files[0];
+      if (!f) return;
+      const fd = new FormData();
+      fd.append('file', f);
+      up.parentNode.classList.add('se-busy');
+      const r = await json(C.media, fd);
+      up.parentNode.classList.remove('se-busy');
+      if (!r.ok || !r.items || !r.items[0]) { toast(r.error || 'Upload failed.', 'error'); return; }
+      choose(r.items[0]);
+    });
+    panel.onclick = (e) => { if (sel === el && e.target.closest('[data-act="library"]')) showLibrary(el, 1, choose); };
   }
 
   // ------------------------------------------------------------------ text
@@ -454,22 +625,29 @@
     if (inLoop) h += '<span class="se-sep"></span><button type="button" class="se-tb se-wide" data-act="loop" title="Repeating group: add, move or remove items">' + ico.loop + '<span>Group</span></button>';
     h += '<span class="se-sep"></span><button type="button" class="se-tb se-danger" data-act="remove" title="Remove element" aria-label="Remove element">' + ico.trash + '</button>';
     // Popovers
-    h += '<div class="se-pop" data-for="link" hidden><label class="se-label" for="se-href">Link address</label><input id="se-href" class="se-input" type="text" placeholder="https://… or /page" autocomplete="off">'
-      + '<label class="se-check"><input type="checkbox" id="se-blank"> Open in a new tab</label>'
-      + '<div class="se-row"><button type="button" class="se-btn se-primary" data-act="link-apply">Apply</button><button type="button" class="se-btn se-ghost" data-act="link-remove">Remove link</button></div></div>';
+    h += linkPop();
     h += '<div class="se-pop" data-for="size" hidden><label class="se-label" for="se-size">Size in px</label><div class="se-row"><input id="se-size" class="se-input se-num" type="number" min="6" max="200" step="1" value="' + Math.round(parseFloat(cs.fontSize)) + '"><button type="button" class="se-btn se-primary" data-act="size-apply">Set</button></div>'
       + '<div class="se-chips">' + [14, 16, 18, 20, 24, 32, 40, 48, 64].map((s) => '<button type="button" class="se-chip" data-size="' + s + '">' + s + '</button>').join('') + '</div></div>';
     h += '<div class="se-pop" data-for="align" hidden><div class="se-row">' + ['left', 'center', 'right', 'justify'].map((a) => '<button type="button" class="se-tb" data-align="' + a + '" aria-label="Align ' + a + '" title="Align ' + a + '">' + ico[a] + '</button>').join('') + '</div></div>';
-    if (C.ai) {
-      h += '<div class="se-pop se-menu" data-for="ai" hidden role="menu">'
-        + [['shorter', 'Shorter'], ['longer', 'Longer'], ['grammar', 'Fix grammar'], ['formal', 'More formal'], ['casual', 'More casual'], ['simpler', 'Simpler words']]
-          .map(([a, l]) => '<button type="button" role="menuitem" class="se-mi" data-ai="' + a + '">' + l + '</button>').join('')
-        + '<div class="se-row"><label class="se-sr" for="se-lang">Language</label><input id="se-lang" class="se-input" type="text" placeholder="Translate to… e.g. Spanish"><button type="button" class="se-btn se-primary" data-ai="translate">Translate</button></div></div>';
-    }
+    h += aiPop();
     toolbar.innerHTML = h;
     toolbar.hidden = false;
     placeToolbar();
   }
+
+  function linkPop() {
+    return '<div class="se-pop" data-for="link" hidden><label class="se-label" for="se-href">Link address</label><input id="se-href" class="se-input" type="text" placeholder="https://… or /page" autocomplete="off">'
+      + '<label class="se-check"><input type="checkbox" id="se-blank"> Open in a new tab</label>'
+      + '<div class="se-row"><button type="button" class="se-btn se-primary" data-act="link-apply">Apply</button><button type="button" class="se-btn se-ghost" data-act="link-remove">Remove link</button></div></div>';
+  }
+  function aiPop() {
+    if (!C.ai) return '';
+    return '<div class="se-pop se-menu" data-for="ai" hidden role="menu">'
+      + [['shorter', 'Shorter'], ['longer', 'Longer'], ['grammar', 'Fix grammar'], ['formal', 'More formal'], ['casual', 'More casual'], ['simpler', 'Simpler words']]
+        .map(([a, l]) => '<button type="button" role="menuitem" class="se-mi" data-ai="' + a + '">' + l + '</button>').join('')
+      + '<div class="se-row"><label class="se-sr" for="se-lang">Language</label><input id="se-lang" class="se-input" type="text" placeholder="Translate to… e.g. Spanish"><button type="button" class="se-btn se-primary" data-ai="translate">Translate</button></div></div>';
+  }
+  const markAny = (el) => (selKind === 'bind' ? markBind(el) : markText(el));
 
   toolbar.addEventListener('mousedown', (e) => {
     const t = e.target;
@@ -532,7 +710,7 @@
     if (b.dataset.cmd) {
       restoreRange();
       d.execCommand(b.dataset.cmd, false, null);
-      markText(sel);
+      markAny(sel);
       return;
     }
     if (b.dataset.pop) { openPop(b.dataset.pop, b); return; }
@@ -577,7 +755,7 @@
           a.setAttribute('href', url);
           if (blank) { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener'); } else { a.removeAttribute('target'); }
         }
-        markText(sel);
+        markAny(sel);
       }
       b.closest('.se-pop').hidden = true;
     } else if (act === 'link-remove') {
@@ -585,7 +763,7 @@
       if (a && a !== sel) {
         while (a.firstChild) a.parentNode.insertBefore(a.firstChild, a);
         a.remove();
-        markText(sel);
+        markAny(sel);
       }
       b.closest('.se-pop').hidden = true;
     }
@@ -614,8 +792,8 @@
     ai.classList.remove('se-busy');
     ai.disabled = false;
     if (!r.ok) { toast(r.error || 'The AI request failed.', 'error'); return; }
-    el.innerHTML = r.html;
-    markText(el);
+    if (selKind === 'bind' && BINDS[bindKey(el)].kind !== 'html') { const t = d.createElement('template'); t.innerHTML = r.html; el.textContent = t.content.textContent; } else el.innerHTML = r.html;
+    markAny(el);
     toast('Rewritten. Press Discard to undo all changes.');
   }
 
@@ -671,7 +849,8 @@
     const pos = (st.objectPosition || '').trim();
     const fit = st.objectFit || '';
     const sizeNow = (() => { const mw = st.maxWidth; if (/thumb/.test(img.src)) return 'thumb'; return mw === '640px' ? 'medium' : mw === '1024px' ? 'large' : 'full'; })();
-    const presets = [['left top', '↖'], ['center top', '↑'], ['right top', '↗'], ['left center', '←'], ['center center', '•'], ['right center', '→'], ['left bottom', '↙'], ['center bottom', '↓'], ['right bottom', '↘']];
+    const arrow = (deg) => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform:rotate(' + deg + 'deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+    const presets = [['left top', arrow(-45)], ['center top', arrow(0)], ['right top', arrow(45)], ['left center', arrow(-90)], ['center center', '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="3.5" fill="currentColor"/></svg>'], ['right center', arrow(90)], ['left bottom', arrow(-135)], ['center bottom', arrow(180)], ['right bottom', arrow(135)]];
     let h = '<div class="se-preview"><img src="' + esc(img.getAttribute('src') || '') + '" alt=""></div>';
     if (C.media) {
       h += '<div class="se-row"><label class="se-btn se-primary se-file">Upload<input type="file" accept="image/*" data-upload hidden></label>'
@@ -800,7 +979,7 @@
     panel.querySelectorAll('[data-aspect]').forEach((x) => x.setAttribute('aria-checked', x.dataset.aspect === v || (x.dataset.aspect === 'custom' && v && !['1/1', '4/3', '3/2', '16/9', '9/16'].includes(v)) ? 'true' : 'false'));
   }
 
-  async function showLibrary(el, page) {
+  async function showLibrary(el, page, choose) {
     const box = panel.querySelector('.se-lib');
     box.hidden = false;
     box.innerHTML = '<p class="se-hint">Loading…</p>';
@@ -813,8 +992,8 @@
       const b = e.target.closest('button');
       if (!b) return;
       e.stopPropagation();
-      if (b.dataset.page) { showLibrary(el, +b.dataset.page); return; }
-      applySrc(el, r.items[+b.dataset.i]);
+      if (b.dataset.page) { showLibrary(el, +b.dataset.page, choose); return; }
+      (choose || ((it) => applySrc(el, it)))(r.items[+b.dataset.i]);
     };
   }
 
@@ -910,7 +1089,7 @@
         + '<button type="button" class="se-ib" data-li="' + i + '" data-la="duplicate" aria-label="Duplicate item ' + (i + 1) + '" title="Duplicate">' + ico.copy + '</button>'
         + '<button type="button" class="se-ib se-danger" data-li="' + i + '" data-la="remove" aria-label="Delete item ' + (i + 1) + '" title="Delete"' + (n <= 1 ? ' disabled' : '') + '>' + ico.trash + '</button>'
         + '</span></li>').join('') + '</ol>';
-    h += '<details class="se-dyn"' + (n ? '' : ' open') + '><summary>Make dynamic</summary>' + dynamicForm(data) + '</details>';
+    if (MODE === 'html') h += '<details class="se-dyn"' + (n ? '' : ' open') + '><summary>Make dynamic</summary>' + dynamicForm(data) + '</details>';
     openPanel('Repeating group', h);
     wireDynamic(data);
     panel.onclick = (e) => {
@@ -1059,6 +1238,7 @@
     P.attr.forEach((v) => { if (alive(v.el)) ops.push({ op: 'attr', id: v.id, name: v.name, value: v.value }); });
     P.image.forEach((v, id) => { if (alive(v.el)) ops.push(Object.assign({ op: 'image', id }, v.op)); });
     P.icon.forEach((v, id) => { if (alive(v.el)) ops.push(Object.assign({ op: 'icon', id }, v.op)); });
+    P.bind.forEach((v, bind) => ops.push({ op: 'field', bind, value: v.kind === 'image' ? v.value : bindValue(v.el, v.kind) }));
     return ops;
   }
 
@@ -1078,6 +1258,8 @@
   async function save(extra, reload) {
     if (saving) return false;
     if (sel && selKind === 'text') markText(sel);
+    if (sel && selKind === 'bind' && sel.isContentEditable) markBind(sel);
+    const hasBinds = P.bind.size > 0;
     const ops = buildOps().concat(extra || []);
     if (!ops.length) { toast('No changes to save.'); return false; }
     saving = true;
@@ -1102,7 +1284,8 @@
     originals.clear();
     if (sel) originals.set(idOf(sel), { html: sel.innerHTML, tag: tagOf(sel), style: sel.getAttribute('style') || '' });
     update();
-    if (reload) {
+    if (reload || hasBinds) {
+      // Values of the item are shown through the template's filters again (curly quotes, line breaks…).
       leaving = true;
       const u = new URL(location.href);
       u.searchParams.set('se-edit', '1');

@@ -41,7 +41,7 @@ $urls = array_column($hooks, 'url', 'id');
     <ul class="list list-compact">
       <?php foreach ($recent as $d): ?>
         <li><span class="list-main"><span class="pill <?= $d['status'] === 'delivered' ? 'pill-success' : ($d['status'] === 'failed' ? 'pill-danger' : 'pill-warn') ?>"><?= e($d['status']) ?></span>
-          <span><strong><?= e($d['event']) ?></strong> <small>→ <?= e($urls[$d['hook_id']] ?? 'removed webhook') ?> · <?= e(time_ago($d['created_at'])) ?> · <?= (int)$d['attempts'] ?> attempt(s)<?= $d['response_code'] ? ' · HTTP ' . (int)$d['response_code'] : '' ?><?= $d['status'] !== 'delivered' && $d['response'] ? ' · ' . e(str_limit((string)$d['response'], 80)) : '' ?></small></span></span>
+          <span><strong><?= e($d['event']) ?></strong> <small><?= icon('arrow-right', 12) ?> <?= e($urls[$d['hook_id']] ?? 'removed webhook') ?> · <?= e(time_ago($d['created_at'])) ?> · <?= (int)$d['attempts'] ?> attempt(s)<?= $d['response_code'] ? ' · HTTP ' . (int)$d['response_code'] : '' ?><?= $d['status'] !== 'delivered' && $d['response'] ? ' · ' . e(str_limit((string)$d['response'], 80)) : '' ?></small></span></span>
           <?php if ($d['status'] === 'failed' && isset($urls[$d['hook_id']])): ?><button class="btn btn-sm" type="submit" formaction="<?= e(admin_url("system/webhooks/deliveries/{$d['id']}/retry")) ?>" formnovalidate>Retry</button><?php endif; ?></li>
       <?php endforeach; ?>
     </ul></div>

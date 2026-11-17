@@ -5,7 +5,7 @@ $slug = $post['type'];
 $editUrl = admin_url("content/$slug/{$post['id']}");
 ?>
 <div class="page-head">
-  <div><h1>Revisions</h1><p class="muted"><a href="<?= e($editUrl) ?>">← <?= e($post['title'] ?: '(no title)') ?></a> · <?= count($list) ?> saved version<?= count($list) === 1 ? '' : 's' ?></p></div>
+  <div><h1>Revisions</h1><p class="muted"><a href="<?= e($editUrl) ?>"><?= icon('arrow-left', 15) ?> <?= e($post['title'] ?: '(no title)') ?></a> · <?= count($list) ?> saved version<?= count($list) === 1 ? '' : 's' ?></p></div>
 </div>
 <?php if (!$list): ?>
   <div class="card empty-state"><?= icon('refresh', 36) ?><h2>No revisions yet</h2><p class="muted">Each time you save changes in the editor, the previous version is kept here.</p></div>
@@ -25,7 +25,7 @@ $editUrl = admin_url("content/$slug/{$post['id']}");
   <?php if ($rev): ?>
   <section class="card revisions-compare">
     <div class="card-head">
-      <h2>Saved <?= e(local_date($rev['created_at'], 'M j, Y g:i a')) ?> <small class="muted">→ current</small></h2>
+      <h2>Saved <?= e(local_date($rev['created_at'], 'M j, Y g:i a')) ?> <small class="muted"><?= icon('arrow-right', 13) ?> current</small></h2>
       <form method="post" action="<?= e(admin_url("content/$slug/{$post['id']}/revisions/{$rev['id']}/restore")) ?>"><?= csrf_field() ?>
         <button class="btn btn-primary" data-confirm="Restore this version? The current version is kept as a revision.">Restore this version</button></form>
     </div>

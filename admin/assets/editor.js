@@ -52,7 +52,7 @@
       this.area.dataset.placeholder = 'Start writing, or paste content…';
       this.area.innerHTML = this.store.value;
       // Form widgets are placeholders: keep them as one locked block while editing.
-      this.area.querySelectorAll('[data-slate-form-widget]').forEach((w) => { w.contentEditable = 'false'; w.classList.add('ed-form-widget'); w.title = 'Form widget: change the form under Content → Forms'; });
+      this.area.querySelectorAll('[data-slate-form-widget]').forEach((w) => { w.contentEditable = 'false'; w.classList.add('ed-form-widget'); w.title = 'Form widget: change the form under Content › Forms'; });
       this.src = document.createElement('textarea');
       this.src.className = 'ed-source';
       this.src.hidden = true;
@@ -134,8 +134,8 @@
         const range = this.saveRange();
         const r = await api('/posts?type=form');
         const forms = (r.items || []).filter((f) => f.status === 'publish');
-        if (!forms.length) { toast('Create and publish a form first (Content → Forms).', 'error', 6000); return; }
-        const m = modal({ title: 'Insert a form', body: '<label class="field"><span>Form</span><select class="input" data-pick-form>' + forms.map((f) => '<option value="' + f.id + '">' + esc(f.title) + '</option>').join('') + '</select></label><p class="muted small">The form shows here on the live page. Edit its fields under Content → Forms; entries arrive in Submissions.</p>',
+        if (!forms.length) { toast('Create and publish a form first (Content › Forms).', 'error', 6000); return; }
+        const m = modal({ title: 'Insert a form', body: '<label class="field"><span>Form</span><select class="input" data-pick-form>' + forms.map((f) => '<option value="' + f.id + '">' + esc(f.title) + '</option>').join('') + '</select></label><p class="muted small">The form shows here on the live page. Edit its fields under Content › Forms; entries arrive in Submissions.</p>',
           foot: '<button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-primary" data-insert-form>Insert form</button>' });
         await new Promise((resolve) => {
           m.addEventListener('click', (e) => {

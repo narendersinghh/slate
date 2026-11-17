@@ -222,7 +222,7 @@ final class HtmlPages
             $data['head'] = self::stripScripts((string)$data['head']);
             $data['body'] = self::stripScripts((string)$data['body']);
         }
-        $change = ['fields' => ['_html' => $data], 'content' => self::text((string)$data['body'])] + $extra;
+        $change = ['fields' => array_merge((array)($extra['fields'] ?? []), ['_html' => $data]), 'content' => self::text((string)$data['body'])] + $extra;
         Revisions::snapshot($post, $change);
         Posts::save($change, $postId);
         PageCache::purgeContent(Posts::find($postId));

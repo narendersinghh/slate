@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.17.0: edit every page, easier settings and menus
+- **Edit on the page now works on every page**, not only imported and AI-made ones: content shown by a Template or the
+  theme, the item's title, custom fields and featured image, and term pages (name and term fields). Stored content is
+  changed only where you edited (every other byte stays the same); parts that come from loops, modules or templates
+  show a hint instead. Visitors get exactly the same HTML as before.
+- **Import report**: after an import each page lists what needs attention (files missing from the upload, links to the
+  old domain, forms that post elsewhere, images without alt text, files loaded from other servers) and how many parts
+  are editable. Built in, no AI needed; "Improve with Goraiya" can fix the rest.
+- **New menu builder**: search pages, posts, any content type or terms by title (works with thousands of items), tick
+  several and add them at once, add custom links, drag and drop to reorder and to nest (up to three levels), with
+  buttons for keyboard users. Each item opens to rename it, change its link or open it in a new tab.
+- **Settings on small screens**: no more sideways scrolling or overlapping text; code samples and wide tables scroll
+  inside their box, button rows wrap, the save bar is a solid bar that no longer floats over fields.
+- Updates page says "Up to date" instead of showing an older release as the latest.
+- Arrow characters replaced with proper icons on buttons and links; paths in help texts use "Settings › AI".
+- Fix: the Goraiya button lost its colour on hover.
+
 ## 0.16.0: AI first, import, edit on the page
 - **The visual builder (GrapesJS) is removed.** Slate is AI first instead.
 - **Goraiya** (the sparrow, top bar, Ctrl/⌘ J): a chat drawer that builds the site with you. It writes complete pages

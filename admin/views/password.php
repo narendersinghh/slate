@@ -27,7 +27,7 @@ $intro = [
         <?= csrf_field() ?>
         <label class="field"><span>Username or email</span>
           <input class="input input-lg" name="login" autocomplete="username" required autofocus maxlength="191"></label>
-        <button class="btn btn-primary btn-lg btn-block" type="submit">Send reset link →</button>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">Send reset link <?= icon('arrow-right', 16) ?></button>
       </form>
     <?php elseif ($mode === 'reset'): ?>
       <form method="post" action="<?= e(admin_url('reset')) ?>" class="stack">
@@ -38,12 +38,12 @@ $intro = [
             minlength="<?= (int)Options::get('security_min_password', 10) ?>"></label>
         <label class="field"><span>Repeat new password</span>
           <input class="input input-lg" type="password" name="password2" autocomplete="new-password" required></label>
-        <button class="btn btn-primary btn-lg btn-block" type="submit">Save password →</button>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">Save password <?= icon('arrow-right', 16) ?></button>
       </form>
     <?php elseif ($mode === 'invalid'): ?>
       <a class="btn btn-primary btn-lg btn-block" href="<?= e(admin_url('forgot')) ?>">Request a new link</a>
     <?php endif; ?>
-    <p class="auth-foot"><a href="<?= e(admin_url('login')) ?>">← Back to sign in</a></p>
+    <p class="auth-foot"><a href="<?= e(admin_url('login')) ?>"><?= icon('arrow-left', 15) ?> Back to sign in</a></p>
   </div>
 </main>
 </body>

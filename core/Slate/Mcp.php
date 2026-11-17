@@ -6,10 +6,10 @@ namespace Slate;
 /**
  * MCP server (Model Context Protocol) at /api/mcp, so AI agents (Claude Desktop, Claude Code, ChatGPT, any MCP client)
  * can build and manage the site. Streamable HTTP transport, stateless: JSON-RPC 2.0 over POST, single messages or
- * batches, answered with application/json. Off until enabled under Settings → Integrations → AI agents (MCP);
+ * batches, answered with application/json. Off until enabled under Settings › Integrations › AI agents (MCP);
  * independent of the REST API switch.
  *
- * Auth: the REST API keys (Profile → API keys) as "Authorization: Bearer slt_…". A key acts as its user: read-only keys
+ * Auth: the REST API keys (Profile › API keys) as "Authorization: Bearer slt_…". A key acts as its user: read-only keys
  * can only read, and every tool checks that user's capabilities. Safety model: new content is a draft unless publishing
  * is asked for and allowed, every change keeps a revision first, HTML is sanitised like in the dashboard and never
  * carries scripts, and every write is in the activity log ("mcp_…").
@@ -55,7 +55,7 @@ final class Mcp
             exit;
         }
         if (!self::enabled()) {
-            self::send(404, self::error(null, -32601, 'The MCP server is not enabled on this site (Settings → Integrations → AI agents).'));
+            self::send(404, self::error(null, -32601, 'The MCP server is not enabled on this site (Settings › Integrations › AI agents).'));
         }
         if ($method !== 'POST') {
             header('Allow: POST, OPTIONS');
@@ -106,7 +106,7 @@ final class Mcp
         self::send(200, $r);
     }
 
-    /** One JSON-RPC message → response, or null for notifications and client responses. */
+    /** One JSON-RPC message › response, or null for notifications and client responses. */
     private static function message(mixed $msg): ?array
     {
         if (!is_array($msg) || ($msg !== [] && array_is_list($msg))) {
@@ -182,7 +182,7 @@ final class Mcp
         $token = Api::bearerToken();
         if ($token === '') {
             header('WWW-Authenticate: Bearer realm="Slate MCP"');
-            self::send(401, self::error(null, -32001, 'Authentication required: send an API key as "Authorization: Bearer slt_…" (Profile → API keys).'));
+            self::send(401, self::error(null, -32001, 'Authentication required: send an API key as "Authorization: Bearer slt_…" (Profile › API keys).'));
         }
         $res = Api::verifyToken($token);
         if (isset($res['error'])) {
@@ -299,7 +299,7 @@ final class Mcp
             'og_title' => ['type' => 'string', 'maxLength' => 300],
             'og_description' => ['type' => 'string', 'maxLength' => 500],
         ]];
-        $fields = ['type' => 'object', 'additionalProperties' => true, 'description' => 'Custom field values by field name (see get_site → content_types[].fields). Image/file fields take media ids, relation fields post ids, repeaters an array of row objects.'];
+        $fields = ['type' => 'object', 'additionalProperties' => true, 'description' => 'Custom field values by field name (see content_types[].fields in get_site). Image/file fields take media ids, relation fields post ids, repeaters an array of row objects.'];
         $terms = ['type' => 'object', 'description' => 'Terms per taxonomy slug, replacing the current ones: {"category": [3, "News"]}. Ids, or names (created when missing and the user may manage terms).',
             'additionalProperties' => ['type' => 'array', 'maxItems' => 50, 'items' => ['type' => ['integer', 'string']]]];
         $common = [
@@ -530,7 +530,7 @@ final class Mcp
     private static function requireWriteKey(): void
     {
         if ((self::$key['scope'] ?? 'read') !== 'write') {
-            throw new ToolError('This API key is read-only. Create a key with “Read & write” access under Profile → API keys to make changes.');
+            throw new ToolError('This API key is read-only. Create a key with “Read & write” access under Profile › API keys to make changes.');
         }
     }
 
@@ -811,11 +811,11 @@ final class Mcp
         $revision = Revisions::snapshot($post, $data);
         Posts::save($data, (int)$post['id']);
         $now = Posts::find((int)$post['id']);
-        log_activity('mcp_content_updated', "{$type}:{$now['title']}" . (($data['status'] ?? null) ? " → {$now['status']}" : ''));
+        log_activity('mcp_content_updated', "{$type}:{$now['title']}" . (($data['status'] ?? null) ? " ({$now['status']})" : ''));
         return ['updated' => true, 'revision_id' => $revision] + self::full($now) + ($warnings ? ['warnings' => $warnings] : []);
     }
 
-    /** Tool arguments → the input Api::writable() expects, with terms resolved to ids and fields checked. */
+    /** Tool arguments › the input Api::writable() expects, with terms resolved to ids and fields checked. */
     private static function prepare(string $type, array $a, ?array $existing, array &$warnings): array
     {
         $in = array_intersect_key($a, array_flip(['title', 'slug', 'excerpt', 'parent_id', 'menu_order', 'featured_media_id']));

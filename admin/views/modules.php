@@ -204,7 +204,7 @@ $renderScan = static function (array $scan) use ($riskPill, $riskWord): void { ?
       <div class="card-head"><h2><?= icon('sparkles', 18) ?> Create with AI</h2></div>
       <div class="card-pad stack-sm">
         <?php if (!$aiEnabled): ?>
-          <p class="muted">Turn on the AI assistant under <a href="<?= e(admin_url('settings/ai/provider')) ?>">Settings → AI</a> to describe a module and have it written for you.</p>
+          <p class="muted">Turn on the AI assistant under <a href="<?= e(admin_url('settings/ai/provider')) ?>">Settings › AI</a> to describe a module and have it written for you.</p>
         <?php else: ?>
           <p class="muted">Describe what you need. You review the code and what it can do before anything is installed.</p>
         <?php endif; ?>

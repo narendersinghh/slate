@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Optional full-page cache for anonymous visitors (Settings → Performance → Page cache). It is not static-site
+ * Optional full-page cache for anonymous visitors (Settings › Performance › Page cache). It is not static-site
  * generation: pages render dynamically and the cache simply keeps the result, so dynamic sites keep working, * signed-in users, forms, query strings, excluded paths and "bypass" cookies (e.g. a shop cart) always get fresh pages,
  * and modules can opt a request out with PageCache::skip().
  *
@@ -12,8 +12,8 @@ namespace Slate;
  *
  * Invalidation is O(1), however large the site: every cached file carries the "generation" it was built in, and a
  * purge only increments a counter, stale files are ignored on the next visit and swept up in the background.
- *   - global generation: settings, menus, templates, modules… → every page
- *   - listing generation: home, archives, taxonomy pages, search, feeds → pages that list content
+ *   - global generation: settings, menus, templates, modules… purge every page
+ *   - listing generation: home, archives, taxonomy pages, search, feeds: pages that list content
  *   - "smart" purge mode (large sites): editing one item refreshes only that item's page plus the listing pages,
  *     leaving thousands of other pages warm. "Everything" mode (default) refreshes all pages.
  * A background task re-warms the most important pages after a purge, so visitors rarely hit a cold page.
@@ -338,7 +338,7 @@ final class PageCache
     /** Default Content-Security-Policy: blocks clickjacking, <base> hijacking and plugins without restricting scripts. */
     public const DEFAULT_CSP = "base-uri 'self'; object-src 'none'; frame-ancestors 'self'";
 
-    /** Security headers from the Settings → Security options (needs the database). */
+    /** Security headers from the Settings › Security options (needs the database). */
     public static function headerLines(): array
     {
         $lines = [];

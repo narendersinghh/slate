@@ -70,7 +70,7 @@ if (Auth::can('use_ai') && Auth::can('edit_posts') && (!$aiReady || $pageCount <
   <section class="card">
     <div class="card-head"><h2>Recently edited</h2></div>
     <?php if (!$recent): ?>
-      <div class="card-pad muted">Nothing yet. <a href="<?= e(admin_url('content/post/new')) ?>">Write your first post →</a></div>
+      <div class="card-pad muted">Nothing yet. <a href="<?= e(admin_url('content/post/new')) ?>">Write your first post <?= icon('arrow-right', 16) ?></a></div>
     <?php else: ?>
     <ul class="list">
       <?php foreach ($recent as $p): $t = ContentModel::type($p['type']); ?>

@@ -5,7 +5,7 @@ namespace Slate;
 
 /**
  * Content revisions: every save from the editor keeps the previous version (title, content, excerpt, custom fields, SEO),
- * so any change can be compared and undone. Settings → General → Writing: how many to keep per item (0 = off).
+ * so any change can be compared and undone. Settings › General › Writing: how many to keep per item (0 = off).
  */
 final class Revisions
 {

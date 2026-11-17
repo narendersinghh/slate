@@ -23,7 +23,7 @@ final class Cron
         $jobs = [
             'publish_scheduled' => ['every' => 60, 'label' => 'Publish scheduled content', 'run' => [Posts::class, 'publishScheduled']],
             'cleanup' => ['every' => 86400, 'label' => 'Clean up old login attempts, activity and temporary files', 'run' => [self::class, 'cleanup']],
-            'backup' => ['every' => 3600, 'label' => 'Automatic backups (Settings → System → Backups)', 'run' => [Backup::class, 'scheduled']],
+            'backup' => ['every' => 3600, 'label' => 'Automatic backups (Settings › System › Backups)', 'run' => [Backup::class, 'scheduled']],
             'module_updates' => ['every' => 43200, 'label' => 'Check for module updates', 'run' => static fn() => ModuleInstaller::updates(true)],
             'cache_warm' => ['every' => 300, 'label' => 'Re-warm the page cache after changes', 'run' => static fn() => PageCache::warm()],
             'cache_sweep' => ['every' => 3600, 'label' => 'Remove outdated cached pages', 'run' => static fn() => PageCache::sweep()],

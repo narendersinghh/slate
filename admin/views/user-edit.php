@@ -10,7 +10,7 @@ $isSelf = (int)$u['id'] === Auth::id();
 ?>
 <div class="page-head">
   <div><h1><?= e($title) ?></h1><?php if ($user): ?><p class="muted">@<?= e($u['username']) ?> · member since <?= e(local_date($u['created_at'])) ?></p><?php endif; ?></div>
-  <?php if (!$profile): ?><div class="page-actions"><a class="btn" href="<?= e(admin_url('users')) ?>">← All users</a></div><?php endif; ?>
+  <?php if (!$profile): ?><div class="page-actions"><a class="btn" href="<?= e(admin_url('users')) ?>"><?= icon('arrow-left', 15) ?> All users</a></div><?php endif; ?>
 </div>
 
 <div class="split split-wide">
@@ -114,7 +114,7 @@ $isSelf = (int)$u['id'] === Auth::id();
   <section class="card" id="api-keys">
     <div class="card-head"><h2><?= icon('link', 16) ?> API keys</h2></div>
     <div class="card-pad stack">
-      <?php if (!\Slate\Api::enabled() && !\Slate\Mcp::enabled()): ?><div class="alert"><?= icon('info', 16) ?> The REST API and the AI agents (MCP) server are switched off (Settings → Integrations). Existing keys do nothing until one is on.</div><?php endif; ?>
+      <?php if (!\Slate\Api::enabled() && !\Slate\Mcp::enabled()): ?><div class="alert"><?= icon('info', 16) ?> The REST API and the AI agents (MCP) server are switched off (Settings › Integrations). Existing keys do nothing until one is on.</div><?php endif; ?>
       <?php if ($newKey): ?>
         <div class="alert alert-success stack-sm"><strong><?= icon('check', 16) ?> Copy your new key now, it will not be shown again.</strong>
           <code class="secret" style="user-select:all;word-break:break-all"><?= e($newKey) ?></code></div>

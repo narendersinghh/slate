@@ -369,7 +369,7 @@
       return '<input class="input" type="' + type + '" ' + attrs + ' value="' + v + '">';
     };
     const render = () => {
-      rowsEl.innerHTML = rows.map((row, ri) => '<div class="repeater-row"><div class="rr-actions"><button type="button" class="icon-btn" data-up="' + ri + '" title="Move up">↑</button><button type="button" class="icon-btn" data-del="' + ri + '" title="Remove">✕</button></div>' +
+      rowsEl.innerHTML = rows.map((row, ri) => '<div class="repeater-row"><div class="rr-actions"><button type="button" class="icon-btn" data-up="' + ri + '" title="Move up" aria-label="Move up"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button><button type="button" class="icon-btn" data-del="' + ri + '" title="Remove" aria-label="Remove"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>' +
         schema.map((f) => '<label class="field"' + (f.show_if ? ' data-show-if="' + esc(f.show_if.field) + '" data-show-in="' + esc((f.show_if.in || []).join(',')) + '"' : '') + (f.type === 'richtext' ? ' style="grid-column:1/-1"' : '') + '><span>' + esc(f.label) + '</span>' + inputFor(f, row[f.name], ri) + '</label>').join('') + '</div>').join('');
       store.value = JSON.stringify(rows);
       applyShowIf();

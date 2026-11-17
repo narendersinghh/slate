@@ -33,7 +33,7 @@ require __DIR__ . '/partials/auth-head.php';
           </span>
         </label>
       <?php endif; ?>
-      <button class="btn btn-primary btn-lg btn-block" type="submit"><?= $step === '2fa' ? 'Verify' : 'Sign in' ?> →</button>
+      <button class="btn btn-primary btn-lg btn-block" type="submit"><?= $step === '2fa' ? 'Verify' : 'Sign in' ?> <?= icon('arrow-right', 16) ?></button>
     </form>
     <?php if ($step !== '2fa' && \Slate\Passkeys::supported()): ?>
       <div class="auth-or"><span>or</span></div>
@@ -43,7 +43,7 @@ require __DIR__ . '/partials/auth-head.php';
       <div class="alert" data-passkey-msg hidden role="alert"></div>
       <script src="<?= e(asset_url('admin/assets/passkeys.js')) ?>" defer></script>
     <?php endif; ?>
-    <p class="auth-foot"><a href="<?= e(url()) ?>">← Back to <?= e(Options::get('site_title')) ?></a></p>
+    <p class="auth-foot"><a href="<?= e(url()) ?>"><?= icon('arrow-left', 15) ?> Back to <?= e(Options::get('site_title')) ?></a></p>
   </div>
 </main>
 </body>

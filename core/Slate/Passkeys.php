@@ -5,7 +5,7 @@ namespace Slate;
 
 /**
  * Passkeys (WebAuthn): sign in with Face ID, Touch ID, Windows Hello, an Android phone or a security key, no password,
- * nothing to phish. Users add passkeys under Profile → Passkeys; the login page offers "Sign in with a passkey".
+ * nothing to phish. Users add passkeys under Profile › Passkeys; the login page offers "Sign in with a passkey".
  *
  * Verification follows the WebAuthn Level 2 spec for the parts that matter for security: challenge, origin, RP ID hash,
  * user presence/verification flags, signature over authenticatorData‖SHA-256(clientDataJSON) and the signature counter.
@@ -240,7 +240,7 @@ final class Passkeys
         return $out;
     }
 
-    /** COSE_Key → PEM public key (EC2 P-256 / RSA). */
+    /** COSE_Key › PEM public key (EC2 P-256 / RSA). */
     public static function coseToPem(mixed $k): string
     {
         if (!is_array($k)) {

@@ -296,6 +296,7 @@ final class Frontend
         $vars = (array)Hooks::filter('frontend_vars', $vars, $kind);
         self::$data = array_merge(self::$data, $vars, ['kind' => $kind]);
         $tpl = self::template($kind, $vars);
+        PageEditor::begin($tpl); // a team member editing this item on the page (never for visitors)
         if ($kind === 'single' && isset($vars['post']) && HtmlPages::active($vars['post'])) {
             // Imported or AI-written page: served as its own document with its own design.
             $html = HtmlPages::render($vars['post'], self::templateContext($kind, $vars));
@@ -402,7 +403,7 @@ final class Frontend
             $keep[] = $m[0];
             return '%%SLATE' . (count($keep) - 1) . '%%';
         }, $html);
-        $html = preg_replace('/<!--(?!\[if|\s*cached).*?-->/s', '', (string)$html);
+        $html = preg_replace('/<!--(?!\[if|\s*cached|\/?se:).*?-->/s', '', (string)$html); // se: marks parts for the page editor (team members only)
         $html = preg_replace('/>\s+</', '> <', (string)$html);
         $html = preg_replace('/\s{2,}/', ' ', (string)$html);
         return preg_replace_callback('/%%SLATE(\d+)%%/', static fn($m) => $keep[(int)$m[1]], trim((string)$html));

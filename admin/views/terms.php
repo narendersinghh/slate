@@ -7,7 +7,7 @@ $t = $term ?? ['id' => 0, 'name' => '', 'slug' => '', 'description' => '', 'pare
 <div class="page-head">
   <div><h1><?= e($term ? 'Edit ' . strtolower($tax['singular']) : $tax['plural']) ?></h1>
     <p class="muted">Used by: <?= e(implode(', ', array_map(static fn($pt) => \Slate\ContentModel::type($pt)['plural'] ?? $pt, $tax['post_types']))) ?: '-' ?></p></div>
-  <?php if ($term): ?><div class="page-actions"><a class="btn" href="<?= e(admin_url("terms/$slug")) ?>">← All <?= e(strtolower($tax['plural'])) ?></a><a class="btn btn-ghost" href="<?= e(Terms::link($term)) ?>" target="_blank"><?= icon('eye', 16) ?> View</a></div><?php endif; ?>
+  <?php if ($term): ?><div class="page-actions"><a class="btn" href="<?= e(admin_url("terms/$slug")) ?>"><?= icon('arrow-left', 15) ?> All <?= e(strtolower($tax['plural'])) ?></a><a class="btn btn-ghost" href="<?= e(Terms::link($term)) ?>" target="_blank"><?= icon('eye', 16) ?> View</a></div><?php endif; ?>
 </div>
 
 <div class="split">

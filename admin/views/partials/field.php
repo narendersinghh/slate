@@ -111,7 +111,7 @@ if ($f['type'] === 'tab'): ?>
       </div>
       <?php break;
     case 'taxonomy': $sel = array_map('intval', (array)$value); $taxDef = \Slate\ContentModel::taxonomy((string)($f['taxonomy'] ?? '')); ?>
-      <?php if (!$taxDef): ?><p class="muted small">Choose a taxonomy for this field in Content model → Custom fields.</p><?php else: ?>
+      <?php if (!$taxDef): ?><p class="muted small">Choose a taxonomy for this field in Content model › Custom fields.</p><?php else: ?>
       <div class="choice-list choice-scroll" data-term-filter>
         <input type="hidden" name="<?= e($name) ?>[]" value="">
         <input class="input input-sm" type="search" placeholder="Filter <?= e(strtolower($taxDef['plural'])) ?>…" data-term-filter-input>

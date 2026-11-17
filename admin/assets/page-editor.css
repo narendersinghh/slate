@@ -40,6 +40,9 @@ html.se-editing a[data-se], html.se-editing [data-se] a { -webkit-user-drag: non
   font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap; }
 .se-hover .se-tagname { background: rgba(242, 107, 45, .9); }
 .se-dyn .se-tagname { background: #2F6FD6; }
+.se-hover.se-hint { border: 1.5px dashed rgba(122, 116, 108, .7); background: rgba(122, 116, 108, .05); }
+.se-hover.se-hint .se-tagname { background: #3A3835; font-weight: 500; }
+.se-chip-label { display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border-radius: 8px; background: #1E1E22; color: #FFAA7E; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .se-label-below .se-tagname { bottom: auto; top: 100%; margin: 3px 0 0; }
 
 /* Text toolbar */

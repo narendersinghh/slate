@@ -9,6 +9,6 @@ POST   <?= e($base) ?>/content/{type}         create      (key with write access
 PATCH  <?= e($base) ?>/content/{type}/{id}    update
 DELETE <?= e($base) ?>/content/{type}/{id}    move to trash (?force=1 deletes)
 GET    <?= e($base) ?>/terms/{taxonomy}   /menus/{location}   /media/{id}   /me</code></pre>
-  <p class="muted small">Create keys under <a href="<?= e(admin_url('profile#api-keys')) ?>">your profile → API keys</a>. Keys act with the permissions of their user.
+  <p class="muted small">Create keys under <a href="<?= e(admin_url('profile#api-keys')) ?>">your profile › API keys</a>. Keys act with the permissions of their user.
     Example: <code>curl -H "Authorization: Bearer slt_…" <?= e($base) ?>/content/post</code></p>
 </div>

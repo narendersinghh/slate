@@ -53,7 +53,7 @@ final class ModuleBuilder
     public static function generate(string $request): array
     {
         if (!Ai::enabled()) {
-            return ['ok' => false, 'error' => 'Turn on the AI assistant under Settings → AI first.'];
+            return ['ok' => false, 'error' => 'Turn on the AI assistant under Settings › AI first.'];
         }
         $request = trim($request);
         if (mb_strlen($request) < 15) {

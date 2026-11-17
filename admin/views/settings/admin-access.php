@@ -35,7 +35,7 @@ $dashUrl = AdminAccess::baseUrl() . '/' . admin_slug() . '/';
       <p>Run the dashboard on its own subdomain, e.g. <code><?= e($suggest) ?></code>, while visitors use <?= e($main) ?>. The public website then has no login
         page at all, and a problem on the public side (a bad script, a module bug) cannot touch your signed-in session.</p>
       <ol class="steps">
-        <li><strong>Create the subdomain</strong> in your hosting panel (Hostinger: <em>Domains → Subdomains</em>; cPanel: <em>Domains</em>). If the panel lets you choose its
+        <li><strong>Create the subdomain</strong> in your hosting panel (Hostinger: <em>Domains › Subdomains</em>; cPanel: <em>Domains</em>). If the panel lets you choose its
           folder, choose this website’s folder: <code><?= e(SLATE_ROOT) ?></code>.</li>
         <li><strong>Only if it got its own empty folder</strong> (you could not choose one): download the bridge kit below and upload its two files into that folder. They run this same website there.</li>
         <li><strong>Turn on SSL</strong> for the subdomain (most panels do it automatically within minutes).</li>

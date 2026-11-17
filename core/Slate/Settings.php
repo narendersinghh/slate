@@ -82,7 +82,7 @@ final class Settings
                 'uploads' => ['label' => 'Uploads', 'fields' => [
                     ['key' => 'media_max_upload_mb', 'type' => 'number', 'label' => 'Maximum upload size (MB)', 'default' => 20, 'min' => 1, 'max' => 2048],
                     ['key' => 'media_allowed', 'type' => 'text', 'label' => 'Allowed file extensions', 'default' => 'jpg,jpeg,png,gif,webp,avif,pdf,mp4,webm,mp3,wav,doc,docx,xls,xlsx,ppt,pptx,csv,txt,zip'],
-                    ['key' => 'media_rename_seo', 'type' => 'toggle', 'label' => 'Rename files to SEO-friendly slugs', 'default' => true, 'help' => '"My Photo (1).JPG" → my-photo-1.webp'],
+                    ['key' => 'media_rename_seo', 'type' => 'toggle', 'label' => 'Rename files to SEO-friendly slugs', 'default' => true, 'help' => '"My Photo (1).JPG" becomes my-photo-1.webp'],
                     ['key' => 'media_lazy', 'type' => 'toggle', 'label' => 'Lazy-load images on the frontend', 'default' => true],
                 ]],
             ]],
@@ -120,7 +120,7 @@ final class Settings
                     ['key' => 'seo_sitemap_enabled', 'type' => 'toggle', 'label' => 'Enable XML sitemap', 'default' => true, 'help' => 'Available at /sitemap.xml'],
                     ['key' => 'seo_sitemap_images', 'type' => 'toggle', 'label' => 'Include featured images', 'default' => true],
                     ['key' => 'seo_sitemap_per_page', 'type' => 'number', 'label' => 'URLs per sitemap file', 'default' => 1000, 'min' => 100, 'max' => 50000],
-                    ['type' => 'info', 'label' => 'What is included', 'help' => 'Choose which post types and taxonomies appear in the sitemap under SEO → Post types & taxonomies. Noindexed content is excluded automatically.'],
+                    ['type' => 'info', 'label' => 'What is included', 'help' => 'Choose which post types and taxonomies appear in the sitemap under SEO › Post types & taxonomies. Noindexed content is excluded automatically.'],
                 ]],
                 'robots' => ['label' => 'robots.txt', 'fields' => [
                     ['key' => 'seo_robots_txt', 'type' => 'code', 'label' => 'robots.txt content', 'rows' => 12,
@@ -196,7 +196,7 @@ final class Settings
                 ]],
                 'api' => ['label' => 'REST API', 'render' => 'api', 'fields' => [
                     ['key' => 'api_enabled', 'type' => 'toggle', 'label' => 'Enable the REST API (/api/v1)', 'default' => false,
-                        'help' => 'For headless front-ends, mobile apps and integrations. Writing always needs an API key (Profile → API keys).'],
+                        'help' => 'For headless front-ends, mobile apps and integrations. Writing always needs an API key (Profile › API keys).'],
                     ['key' => 'api_public_read', 'type' => 'toggle', 'label' => 'Allow reading published content without a key', 'default' => true, 'show_if' => 'api_enabled=1'],
                     ['key' => 'api_cors', 'type' => 'text', 'label' => 'Allowed origins (CORS)', 'default' => '', 'placeholder' => 'https://app.example.com',
                         'help' => 'Websites allowed to call the API from a browser, separated by spaces. * allows any. Empty: none.', 'show_if' => 'api_enabled=1'],
@@ -239,7 +239,7 @@ final class Settings
                 ]],
                 'access' => ['label' => 'Dashboard access', 'render' => 'admin-access', 'render_first' => true, 'fields' => [
                     ['key' => 'security_admin_slug', 'type' => 'text', 'label' => 'Admin URL slug', 'default' => 'admin', 'pattern' => '^[a-z0-9-]{3,40}$',
-                        'help' => 'Change to hide the login page from bots, e.g. "studio" → /studio/login. Bookmark it!'],
+                        'help' => 'Change to hide the login page from bots, e.g. "studio" gives /studio/login. Bookmark it!'],
                 ]],
                 'headers' => ['label' => 'HTTP security headers', 'fields' => [
                     ['key' => 'security_headers', 'type' => 'toggle', 'label' => 'Send security headers', 'help' => 'X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy and the Content-Security-Policy below.', 'default' => true],

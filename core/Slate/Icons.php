@@ -42,6 +42,8 @@ final class Icons
         'key' => '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
         'server' => '<rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M7 7h.01M7 17h.01"/>',
         'arrow-up' => '<path d="M12 19V5M5 12l7-7 7 7"/>',
+        'arrow-right' => '<path d="M5 12h14M12 5l7 7-7 7"/>',
+        'arrow-left' => '<path d="M19 12H5M12 19l-7-7 7-7"/>',
         'arrow-down' => '<path d="M12 5v14M19 12l-7 7-7-7"/>',
         'sort' => '<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>',
         'more' => '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Slate;
 
 /**
- * Global design system for the website frontend (Settings → Appearance → Design system):
+ * Global design system for the website frontend (Settings › Appearance › Design system):
  * colours, typography (fonts + type scale), layout tokens, buttons and reusable global CSS classes.
  * Output as CSS custom properties + classes in <head>; Elementor's --e-global-* variables are aliased
  * so imported Elementor designs follow these settings too.

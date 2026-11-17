@@ -7,7 +7,7 @@ namespace Slate;
  * Installs, updates and removes modules, from an uploaded zip, any zip URL, a GitHub repository (or a folder inside one,
  * e.g. https://github.com/me/slate-modules/tree/main/shop) or a module registry.
  *
- * Registries are plain JSON files anyone can publish (Settings → Modules → Registries):
+ * Registries are plain JSON files anyone can publish (Settings › Modules › Registries):
  *   {"name": "My registry", "modules": [{"slug": "shop", "name": "Shop", "description": "…", "version": "1.0.0",
  *     "requires": "0.6.0", "author": "…", "homepage": "…", "download": "https://github.com/me/repo/tree/main/shop",
  *     "sha256": "optional checksum of the zip", "tags": ["ecommerce"]}]}
@@ -62,7 +62,7 @@ final class ModuleInstaller
         if ($r['error'] || $r['status'] !== 200) {
             Updater::rrmdir($work);
             $hint = in_array($r['status'], [401, 403, 404], true) && str_contains($src['zip'], 'github')
-                ? ' If the repository is private, add a GitHub token under Modules → Sources.' : '';
+                ? ' If the repository is private, add a GitHub token under Modules › Sources.' : '';
             return ['ok' => false, 'error' => 'Download failed: ' . ($r['error'] ?: 'HTTP ' . $r['status']) . '.' . $hint];
         }
         if ($sha256 && !hash_equals(strtolower(trim($sha256)), hash_file('sha256', $zipFile))) {
@@ -436,7 +436,7 @@ final class ModuleInstaller
         return is_array($j) && isset($j['version']) ? (string)$j['version'] : null;
     }
 
-    /** GitHub token (Modules → Sources, falling back to the core updater's), only ever sent to GitHub. */
+    /** GitHub token (Modules › Sources, falling back to the core updater's), only ever sent to GitHub. */
     private static function authHeaders(string $url): array
     {
         $host = strtolower((string)parse_url($url, PHP_URL_HOST));

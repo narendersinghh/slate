@@ -182,38 +182,573 @@ final class PageEditor
 
     // ------------------------------------------------------------------ applying operations
 
-    /** Apply a batch of operations and save. Returns an error message, or null on success. */
+    /**
+     * Apply a batch of operations and save (one revision). Returns an error message, or null on success.
+     * Designed pages (HtmlPages) edit fields['_html']['body']; other items edit their stored content, changing only the
+     * edited elements (see editContent). "field" operations change the item's title, excerpt, image or fields.
+     */
     public static function apply(array $post, array $ops): ?string
     {
-        $data = HtmlPages::data($post);
-        if (!$data) {
-            return 'This page cannot be edited on the page.';
-        }
         if (!$ops || !array_is_list($ops)) {
             return 'Nothing to save.';
         }
         if (count($ops) > self::MAX_OPS) {
             return 'Too many changes at once. Save in smaller steps.';
         }
-        [$doc, $root] = HtmlPages::fragment((string)$data['body']);
-        $state = ['next' => max(1, (int)($data['next'] ?? 1))];
+        $fieldOps = [];
+        $domOps = [];
         foreach ($ops as $i => $op) {
             if (!is_array($op)) {
                 return 'Change #' . ($i + 1) . ' is not valid.';
             }
-            try {
-                $err = self::op($doc, $root, $op, $state);
-            } catch (\Throwable $e) {
-                $err = 'could not be applied';
-            }
-            if ($err !== null) {
-                return 'Change #' . ($i + 1) . ' (' . preg_replace('/[^a-z_]/', '', (string)($op['op'] ?? '?')) . '): ' . $err;
+            if (($op['op'] ?? '') === 'field') {
+                $fieldOps[$i] = $op;
+            } else {
+                $domOps[$i] = $op;
             }
         }
-        $data['body'] = HtmlPages::inner($doc, $root);
-        $data['next'] = $state['next'];
-        HtmlPages::save((int)$post['id'], $data, [], true);
+        $change = [];
+        if ($fieldOps && ($err = self::postFieldChanges($post, $fieldOps, $change))) {
+            return $err;
+        }
+        $data = HtmlPages::data($post);
+        if ($data) {
+            if ($domOps) {
+                [$doc, $root] = HtmlPages::fragment((string)$data['body']);
+                $state = ['next' => max(1, (int)($data['next'] ?? 1))];
+                foreach ($domOps as $i => $op) {
+                    if ($err = self::applyOne($doc, $root, $op, $state, $i)) {
+                        return $err;
+                    }
+                }
+                $data['body'] = HtmlPages::inner($doc, $root);
+                $data['next'] = $state['next'];
+            }
+            HtmlPages::save((int)$post['id'], $data, $change, true);
+            return null;
+        }
+        if ($domOps) {
+            $content = self::editContent((string)$post['content'], $domOps);
+            if (is_array($content)) {
+                return $content['error'];
+            }
+            $change['content'] = $content;
+        }
+        if (!$change) {
+            return null;
+        }
+        $change['slug'] = $post['slug'];
+        Revisions::snapshot($post, $change);
+        Posts::save($change, (int)$post['id']);
+        PageCache::purgeContent(Posts::find((int)$post['id']));
         return null;
+    }
+
+    private static function applyOne(\DOMDocument $doc, \DOMElement $root, array $op, array &$state, int $i): ?string
+    {
+        try {
+            $err = self::op($doc, $root, $op, $state);
+        } catch (\Throwable $e) {
+            $err = 'could not be applied';
+        }
+        return $err === null ? null : 'Change #' . ($i + 1) . ' (' . preg_replace('/[^a-z_]/', '', (string)($op['op'] ?? '?')) . '): ' . $err;
+    }
+
+    // ------------------------------------------------------------------ stored content (pages rendered by Templates or the theme)
+
+    /**
+     * Editable ids for stored content: the same deterministic annotate() as designed pages, on a parsed copy whose
+     * elements line up one to one with the source string. Elements whose text holds shortcodes or {{tags}} stay
+     * read-only (their output is not their stored text). Null when the HTML cannot be mapped safely.
+     * @return array{doc:\DOMDocument, root:\DOMElement, els:\DOMElement[], src:array, next:int}|null
+     */
+    public static function contentIds(string $html): ?array
+    {
+        if (trim($html) === '' || strlen($html) > 2_000_000) {
+            return null;
+        }
+        $src = ContentMap::elements($html);
+        $ann = HtmlPages::annotate(['body' => $html, 'next' => 1]);
+        [$doc, $root] = HtmlPages::fragment((string)$ann['body']);
+        $els = ContentMap::domElements($root);
+        if (!ContentMap::matches($src, $els)) {
+            return null;
+        }
+        foreach ($els as $el) {
+            if ($el->hasAttribute('data-se') && preg_match('/\[[a-z_][\w-]*[^\]]*\]|\{\{|\{%/i', $el->textContent)) {
+                $el->removeAttribute('data-se');
+            }
+        }
+        return ['doc' => $doc, 'root' => $root, 'els' => $els, 'src' => $src, 'next' => (int)$ann['next']];
+    }
+
+    /** Stored content with data-se ids added to its start tags (every other byte unchanged), for the editor's view. */
+    public static function annotateContent(string $html): ?array
+    {
+        $m = self::contentIds($html);
+        if (!$m) {
+            return null;
+        }
+        $add = [];
+        foreach ($m['els'] as $i => $el) {
+            $a = '';
+            foreach (['data-se', 'data-se-loop', 'data-se-item'] as $at) {
+                if ($el->hasAttribute($at)) {
+                    $a .= ' ' . $at . '="' . e($el->getAttribute($at)) . '"';
+                }
+            }
+            if ($a !== '') {
+                $add[$i] = $a;
+            }
+        }
+        return ['html' => ContentMap::insertAttrs($html, $m['src'], $add), 'body' => HtmlPages::inner($m['doc'], $m['root'])];
+    }
+
+    /**
+     * Apply element operations to stored content and splice only the changed elements back into the original string.
+     * Returns the new content, or ['error' => message].
+     */
+    public static function editContent(string $html, array $ops): string|array
+    {
+        $fail = static fn(string $msg) => ['error' => $msg];
+        $m = self::contentIds($html);
+        if (!$m) {
+            return $fail('The HTML of this content cannot be edited safely on the page. Edit it in the dashboard.');
+        }
+        ['doc' => $doc, 'root' => $root, 'els' => $els, 'src' => $src] = $m;
+        foreach ($els as $k => $el) {
+            $el->setAttribute('data-se-k', (string)$k);
+        }
+        $index = static function (string $attr, string $id) use ($els): ?int {
+            foreach ($els as $k => $el) {
+                if ($el->getAttribute($attr) === $id) {
+                    return $k;
+                }
+            }
+            return null;
+        };
+        // Which part of the source each operation changes: the start tag, the inside or the whole element.
+        $regions = [];
+        foreach ($ops as $i => $op) {
+            $type = (string)($op['op'] ?? '');
+            $id = (string)($op['id'] ?? '');
+            if (in_array($type, ['loop_dynamic', 'loop_static'], true)) {
+                return $fail('Change #' . ($i + 1) . ': live lists are only available on designed pages.');
+            }
+            $isLoop = str_starts_with($type, 'loop') || ($type === 'style' && str_starts_with($id, 'l'));
+            $k = $index($isLoop ? 'data-se-loop' : 'data-se', $id);
+            if ($k === null) {
+                return $fail('Change #' . ($i + 1) . ' (' . preg_replace('/[^a-z_]/', '', $type) . '): element not found');
+            }
+            $el = $els[$k];
+            $tag = strtolower($el->tagName);
+            $mode = match ($type) {
+                'text', 'loop' => 'inner',
+                'tag', 'remove' => 'outer',
+                'icon' => isset($op['svg']) ? 'outer' : 'start',
+                default => 'start',
+            };
+            if (in_array($type, ['image', 'attr'], true)) {
+                $pic = $tag === 'picture' ? $el : ($el->parentNode instanceof \DOMElement && strtolower($el->parentNode->tagName) === 'picture' ? $el->parentNode : null);
+                if ($pic) {
+                    $k = (int)$pic->getAttribute('data-se-k');
+                    $mode = 'outer';
+                }
+            }
+            $regions[] = ['k' => $k, 'mode' => $mode, 'attr' => $isLoop ? 'data-se-loop' : 'data-se', 'id' => $id];
+        }
+        $state = ['next' => $m['next']];
+        foreach ($ops as $i => $op) {
+            if ($err = self::applyOne($doc, $root, $op, $state, $i)) {
+                return $fail($err);
+            }
+        }
+        // Source ranges, outermost first; drop regions inside another one.
+        $range = static function (array $r) use ($src): ?array {
+            $s = $src[$r['k']];
+            return match ($r['mode']) {
+                'start' => [$s['start'], $s['open_end']],
+                'inner' => $s['close'] !== null && $s['close'] >= $s['open_end'] && $s['end'] !== $s['open_end'] ? [$s['open_end'], $s['close']] : null,
+                default => $s['end'] !== null ? [$s['start'], $s['end']] : null,
+            };
+        };
+        $list = [];
+        foreach ($regions as $r) {
+            $rg = $range($r);
+            if ($rg === null) {
+                return $fail('This element has no closing tag in the stored HTML. Edit it in the dashboard.');
+            }
+            $list[] = $r + ['from' => $rg[0], 'to' => $rg[1]];
+        }
+        usort($list, static fn($a, $b) => [$a['from'], -$a['to']] <=> [$b['from'], -$b['to']]);
+        $keep = [];
+        foreach ($list as $r) {
+            foreach ($keep as $o) {
+                if ($r['from'] >= $o['from'] && $r['to'] <= $o['to']) {
+                    continue 2;
+                }
+                if ($r['from'] < $o['to'] && $r['to'] > $o['from']) {
+                    return $fail('These changes overlap. Save them one at a time.');
+                }
+            }
+            $keep[] = $r;
+        }
+        // Find the edited elements, then remove the editor's attributes everywhere before writing HTML.
+        $all = iterator_to_array($root->getElementsByTagName('*'), false);
+        $live = array_values(array_filter($all, static function (\DOMElement $el) use ($root): bool {
+            for ($q = $el->parentNode; $q instanceof \DOMElement && $q !== $root; $q = $q->parentNode) {
+                if (strtolower($q->tagName) === 'template') {
+                    return false;
+                }
+            }
+            return true;
+        }));
+        $locate = static function (array $r) use ($live): ?\DOMElement {
+            foreach ($live as $el) {
+                if ($el->getAttribute('data-se-k') === (string)$r['k']) {
+                    return $el;
+                }
+            }
+            foreach ($live as $el) {
+                if ($r['id'] !== '' && $el->getAttribute($r['attr']) === $r['id']) {
+                    return $el; // replaced element (pasted SVG icon)
+                }
+            }
+            return null;
+        };
+        foreach ($keep as $j => $r) {
+            $keep[$j]['el'] = $locate($r);
+        }
+        foreach ($all as $el) {
+            foreach (['data-se', 'data-se-loop', 'data-se-item', 'data-se-k'] as $at) {
+                $el->removeAttribute($at);
+            }
+        }
+        usort($keep, static fn($a, $b) => $b['from'] <=> $a['from']);
+        $out = $html;
+        foreach ($keep as $r) {
+            $el = $r['el'];
+            if ($r['mode'] === 'outer') {
+                $rep = $el ? self::outer($doc, $el) : '';
+            } elseif (!$el) {
+                return $fail('An element was removed while it was being changed. Save again.');
+            } elseif ($r['mode'] === 'inner') {
+                $rep = HtmlPages::inner($doc, $el);
+            } else {
+                $s = $src[$r['k']];
+                $rep = '<' . substr($html, $s['start'] + 1, strlen($el->tagName));
+                foreach ($el->attributes as $at) {
+                    $rep .= ' ' . $at->name . '="' . htmlspecialchars($at->value, ENT_COMPAT | ENT_SUBSTITUTE, 'UTF-8') . '"';
+                }
+                $rep .= $s['insert'] < $s['open_end'] - 1 ? ' />' : '>';
+            }
+            $out = substr($out, 0, $r['from']) . $rep . substr($out, $r['to']);
+        }
+        // The result must be exactly what the edited document says (nothing else may have moved).
+        $norm = static function (string $h): string {
+            [$d, $r] = HtmlPages::fragment($h);
+            return HtmlPages::inner($d, $r);
+        };
+        if ($norm($out) !== $norm(HtmlPages::inner($doc, $root))) {
+            return $fail('This change could not be made without touching other parts of the content. Edit it in the dashboard.');
+        }
+        return $out;
+    }
+
+    private static function outer(\DOMDocument $doc, \DOMElement $el): string
+    {
+        $h = (string)$doc->saveHTML($el);
+        return str_contains($h, '%7B%7B') ? (string)preg_replace_callback('/%7B%7B([^"\'<>\s]*?)%7D%7D/', static fn($m) => '{{' . rawurldecode($m[1]) . '}}', $h) : $h;
+    }
+
+    // ------------------------------------------------------------------ fields, title, featured image (bound in Templates)
+
+    /** "post:12:title" / "post:12:field:tagline" / "post:12:image" / "term:4:name" / "term:4:field:lead" */
+    public static function parseBind(string $bind): ?array
+    {
+        if (!preg_match('/^(post|term):(\d{1,10}):(title|excerpt|image|name|field:([A-Za-z0-9_]{1,60}))$/', $bind, $m)) {
+            return null;
+        }
+        return ['kind' => $m[1], 'id' => (int)$m[2], 'what' => isset($m[4]) && $m[4] !== '' ? 'field' : $m[3], 'field' => $m[4] ?? ''];
+    }
+
+    /** Field types edited in place, and how. */
+    public static function fieldKind(array $def): ?string
+    {
+        return match ($def['type'] ?? 'text') {
+            'text', 'email', 'tel', 'url', 'number' => 'text',
+            'textarea' => 'textarea',
+            'richtext' => 'html',
+            'image' => 'image',
+            default => null,
+        };
+    }
+
+    private static function postFieldChanges(array $post, array $ops, array &$change): ?string
+    {
+        $defs = ContentModel::fieldsFor('post', (string)$post['type']);
+        $unfiltered = Auth::can('unfiltered_html');
+        foreach ($ops as $i => $op) {
+            $b = self::parseBind((string)($op['bind'] ?? ''));
+            $pre = 'Change #' . ($i + 1) . ' (field): ';
+            if (!$b || $b['kind'] !== 'post' || $b['id'] !== (int)$post['id']) {
+                return $pre . 'this value does not belong to this page';
+            }
+            $v = $op['value'] ?? null;
+            if ($b['what'] === 'title') {
+                $t = trim(strip_tags((string)$v));
+                if ($t === '' || mb_strlen($t) > 255) {
+                    return $pre . 'the title cannot be empty';
+                }
+                $change['title'] = $t;
+            } elseif ($b['what'] === 'excerpt') {
+                $change['excerpt'] = trim(strip_tags((string)$v));
+            } elseif ($b['what'] === 'image') {
+                if ($v !== null && $v !== '' && !(($m = Media::find((int)$v)) && Media::isImage($m))) {
+                    return $pre . 'image not found in the media library';
+                }
+                $change['featured_media_id'] = $v ? (int)$v : null;
+            } elseif ($b['what'] === 'field') {
+                $def = $defs[$b['field']] ?? null;
+                $kind = $def ? self::fieldKind($def) : null;
+                if (!$kind) {
+                    return $pre . 'this field cannot be edited on the page';
+                }
+                if ($kind === 'image' && $v !== null && $v !== '' && !(($m = Media::find((int)$v)) && Media::isImage($m))) {
+                    return $pre . 'image not found in the media library';
+                }
+                if (!is_scalar($v) && $v !== null) {
+                    return $pre . 'invalid value';
+                }
+                $change['fields'][$b['field']] = ContentModel::sanitizeValue($def, $kind === 'html' ? self::cleanFieldHtml((string)$v) : $v, $unfiltered);
+            } else {
+                return $pre . 'this value cannot be edited here';
+            }
+        }
+        return null;
+    }
+
+    /** Save field operations on a taxonomy term (name and term fields). */
+    public static function applyTerm(array $term, array $ops): ?string
+    {
+        if (!$ops || !array_is_list($ops) || count($ops) > self::MAX_OPS) {
+            return 'Nothing to save.';
+        }
+        $defs = ContentModel::fieldsFor('term', (string)$term['taxonomy']);
+        $unfiltered = Auth::can('unfiltered_html');
+        $name = (string)$term['name'];
+        $fields = is_array($term['fields'] ?? null) ? $term['fields'] : [];
+        foreach ($ops as $i => $op) {
+            $pre = 'Change #' . ($i + 1) . ' (' . preg_replace('/[^a-z_]/', '', (string)($op['op'] ?? '?')) . '): ';
+            $b = is_array($op) && ($op['op'] ?? '') === 'field' ? self::parseBind((string)($op['bind'] ?? '')) : null;
+            if (!$b || $b['kind'] !== 'term' || $b['id'] !== (int)$term['id']) {
+                return $pre . 'only this term\'s name and fields can be changed here';
+            }
+            $v = $op['value'] ?? null;
+            if ($b['what'] === 'name') {
+                $name = trim(strip_tags((string)$v));
+                if ($name === '') {
+                    return $pre . 'the name cannot be empty';
+                }
+            } elseif ($b['what'] === 'field') {
+                $def = $defs[$b['field']] ?? null;
+                $kind = $def ? self::fieldKind($def) : null;
+                if (!$kind || (!is_scalar($v) && $v !== null)) {
+                    return $pre . 'this field cannot be edited on the page';
+                }
+                if ($kind === 'image' && $v !== null && $v !== '' && !(($m = Media::find((int)$v)) && Media::isImage($m))) {
+                    return $pre . 'image not found in the media library';
+                }
+                $fields[$b['field']] = ContentModel::sanitizeValue($def, $kind === 'html' ? self::cleanFieldHtml((string)$v) : $v, $unfiltered);
+            } else {
+                return $pre . 'this value cannot be edited here';
+            }
+        }
+        Terms::save((string)$term['taxonomy'], ['name' => $name, 'slug' => $term['slug'], 'description' => (string)$term['description'],
+            'parent_id' => $term['parent_id'] ?? null, 'fields' => $fields, 'seo' => is_array($term['seo'] ?? null) ? $term['seo'] : []], (int)$term['id']);
+        return null;
+    }
+
+    /** Rich text typed in the page: no editor attributes, no scripts. */
+    private static function cleanFieldHtml(string $html): string
+    {
+        $html = (string)preg_replace('/\s(contenteditable|spellcheck|data-se[a-z-]*)="[^"]*"/i', '', $html);
+        return HtmlPages::stripScripts($html);
+    }
+
+    // ------------------------------------------------------------------ pages rendered by Templates or the theme
+
+    private static ?array $ctx = null;
+    private static bool $ctxDone = false;
+    private static string $where = '';
+    private static bool $byTheme = false;
+    private static ?array $content = null;
+    private static bool $contentLocked = false;
+
+    /** The item a team member is editing on this request: ['kind' => 'post'|'term', 'post'|'term' => …] or null. */
+    public static function context(): ?array
+    {
+        if (self::$ctxDone) {
+            return self::$ctx;
+        }
+        $kind = (string)(Frontend::$data['kind'] ?? '');
+        if ($kind === '' || !Auth::id()) {
+            return null; // not resolved yet (or nobody signed in): ask again later
+        }
+        self::$ctxDone = true;
+        if (!Options::get('admin_bar_frontend', true) || !Auth::can('frontend_edit') || !Auth::can('edit_posts')) {
+            return null;
+        }
+        $post = Frontend::$data['post'] ?? null;
+        if ($kind === 'single' && is_array($post) && !empty($post['id']) && !HtmlPages::active($post) && self::canEdit($post)) {
+            return self::$ctx = ['kind' => 'post', 'post' => $post];
+        }
+        $term = Frontend::$data['term'] ?? null;
+        if ($kind === 'taxonomy' && is_array($term) && !empty($term['id']) && Auth::can('manage_terms')) {
+            return self::$ctx = ['kind' => 'term', 'term' => $term];
+        }
+        return null;
+    }
+
+    /** Called by Frontend before rendering: turns on field binding in Templates and keeps the page out of the cache. */
+    public static function begin(?array $tpl): void
+    {
+        $c = self::context();
+        if (!$c) {
+            return;
+        }
+        PageCache::skip();
+        if ($c['kind'] === 'post' && isset($_GET['se-edit']) && isset(Frontend::$data['post'])) {
+            // Editing: show the item's stored content even where a theme shows a saved snapshot of an imported page
+            // until the item changes (wp-mirror). Only this editor's view; saving makes it what visitors get.
+            Frontend::$data['post']['updated_at'] = gmdate('Y-m-d H:i:s');
+        }
+        self::$where = $tpl ? 'the “' . (string)$tpl['name'] . '” template (Templates)' : 'the site theme';
+        self::$byTheme = $tpl === null;
+        Templates::$bind = $c['kind'] === 'post' ? ['post' => (int)$c['post']['id']] : ['term' => (int)$c['term']['id']];
+    }
+
+    /** the_content() for the item being edited: stored content with editable ids (unchanged bytes otherwise). */
+    public static function contentForEditor(array $post): ?string
+    {
+        $c = self::context();
+        if (!$c || $c['kind'] !== 'post' || (int)$c['post']['id'] !== (int)($post['id'] ?? 0)) {
+            return null;
+        }
+        static $memo = [];
+        $h = md5((string)$post['content']);
+        $a = $memo[$h] ??= (self::annotateContent((string)$post['content']) ?? false);
+        if (!$a) {
+            self::$contentLocked = trim((string)$post['content']) !== '';
+            return null;
+        }
+        self::$content = $a;
+        return '<!--se:content-->' . $a['html'] . '<!--/se:content-->';
+    }
+
+    /** Editor config + assets for pages rendered by Templates or the theme (printed by slate_footer()). */
+    public static function footerAssets(): string
+    {
+        $c = self::context();
+        if (!$c) {
+            return '';
+        }
+        $binds = [];
+        foreach (Templates::$bound as $key => $kind) {
+            $info = self::bindInfo($key, $kind, $c);
+            if ($info) {
+                $binds[$key] = $info;
+            }
+        }
+        $isPost = $c['kind'] === 'post';
+        $id = (int)($isPost ? $c['post']['id'] : $c['term']['id']);
+        $cfg = [
+            'mode' => $isPost ? 'content' : 'term',
+            'postId' => $isPost ? $id : 0,
+            'termId' => $isPost ? 0 : $id,
+            'title' => (string)($isPost ? $c['post']['title'] : $c['term']['name']),
+            'updated' => $isPost ? (string)($c['post']['updated_at'] ?? '') : '',
+            'save' => admin_url($isPost ? 'page-editor/' . $id . '/save' : 'page-editor/term/' . $id . '/save'),
+            'ai' => self::aiAvailable() ? admin_url('page-editor/ai') : null,
+            'csrf' => Csrf::token(),
+            'media' => Auth::can('upload_media') ? admin_url('api/media') : null,
+            'terms' => admin_url('page-editor/terms'),
+            'dashboard' => $isPost ? admin_url('content/' . $c['post']['type'] . '/' . $id) : admin_url('terms/' . $c['term']['taxonomy'] . '/' . $id),
+            'css' => asset_url('admin/assets/page-editor.css'),
+            'sources' => ['types' => [], 'taxonomies' => []],
+            'loops' => self::$content ? self::loops((string)self::$content['body']) : [],
+            'binds' => (object)$binds,
+            'where' => self::$where,
+            'contentLocked' => self::$contentLocked,
+            'contentShown' => self::$content !== null,
+            'byTheme' => self::$byTheme,
+            'hasContent' => $isPost && trim((string)$c['post']['content']) !== '',
+        ];
+        $json = json_encode($cfg, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP);
+        return "\n" . '<script type="application/json" id="se-config">' . $json . '</script>' . "\n"
+            . '<link rel="stylesheet" href="' . e(asset_url('admin/assets/page-editor.css')) . '">' . "\n"
+            . '<script src="' . e(asset_url('admin/assets/page-editor.js')) . '" defer></script>' . "\n";
+    }
+
+    /**
+     * editable('title'|'excerpt'|'field:x'|'content') while the page editor is active for this item: the attribute
+     * that marks the value (' data-se-bind="post:12:title"'), ' ' for content, or '' when not editing.
+     */
+    public static function bindFor(string $what, array $post): string
+    {
+        $c = self::context();
+        if (!$c || $c['kind'] !== 'post' || (int)$c['post']['id'] !== (int)($post['id'] ?? 0)) {
+            return '';
+        }
+        $id = (int)$post['id'];
+        if ($what === 'content') {
+            return ' ';
+        }
+        if ($what === 'title' || $what === 'excerpt') {
+            $key = 'post:' . $id . ':' . $what;
+            $kind = $what === 'title' ? 'text' : 'textarea';
+        } elseif (str_starts_with($what, 'field:') && ($def = ContentModel::fieldsFor('post', (string)$post['type'])[substr($what, 6)] ?? null) && ($kind = self::fieldKind($def))) {
+            $key = 'post:' . $id . ':' . $what;
+        } else {
+            return '';
+        }
+        Templates::$bound[$key] = $kind;
+        return ' data-se-bind="' . e($key) . '"';
+    }
+
+    /** Raw value and label of a bound value, for editing in place. */
+    private static function bindInfo(string $key, string $kind, array $c): ?array
+    {
+        $b = self::parseBind($key);
+        if (!$b) {
+            return null;
+        }
+        if ($b['kind'] === 'post') {
+            $p = $c['post'];
+            if ($b['what'] === 'title') {
+                return ['kind' => 'text', 'label' => 'Title', 'value' => (string)$p['title']];
+            }
+            if ($b['what'] === 'excerpt') {
+                return ['kind' => 'textarea', 'label' => 'Excerpt', 'value' => (string)$p['excerpt']];
+            }
+            if ($b['what'] === 'image') {
+                return ['kind' => 'image', 'label' => 'Featured image', 'value' => (int)($p['featured_media_id'] ?? 0) ?: null];
+            }
+            $def = ContentModel::fieldsFor('post', (string)$p['type'])[$b['field']] ?? null;
+            $raw = $p['fields'][$b['field']] ?? null;
+        } else {
+            $t = $c['term'];
+            if ($b['what'] === 'name') {
+                return ['kind' => 'text', 'label' => 'Name', 'value' => (string)$t['name']];
+            }
+            $def = ContentModel::fieldsFor('term', (string)$t['taxonomy'])[$b['field']] ?? null;
+            $raw = (is_array($t['fields'] ?? null) ? $t['fields'] : [])[$b['field']] ?? null;
+        }
+        $fk = $def ? self::fieldKind($def) : null;
+        if (!$fk) {
+            return null;
+        }
+        return ['kind' => $fk, 'label' => (string)($def['label'] ?? $b['field']), 'value' => $fk === 'image' ? ((int)$raw ?: null) : (is_scalar($raw) ? (string)$raw : '')];
     }
 
     private static function op(\DOMDocument $doc, \DOMElement $root, array $op, array &$state): ?string

@@ -195,7 +195,7 @@ final class Updater
         }
         Options::delete('update_info');
         PageCache::clear();
-        log_activity('core_update', SLATE_VERSION . ' → ' . $info['latest']);
+        log_activity('core_update', SLATE_VERSION . ' to ' . $info['latest']);
         return ['ok' => true, 'version' => $info['latest'], 'backup' => basename($backup['file'])];
     }
 

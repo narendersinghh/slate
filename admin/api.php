@@ -75,7 +75,7 @@ function admin_api_routes(Router $r): void
     $r->post('/api/ai', static function () {
         Auth::require('use_ai');
         if (!Ai::enabled()) {
-            json_response(['ok' => false, 'error' => 'AI is not configured. Go to Settings → AI.'], 400);
+            json_response(['ok' => false, 'error' => 'AI is not configured. Go to Settings › AI.'], 400);
         }
         $in = json_input();
         $res = Ai::action((string)($in['action'] ?? ''), [
@@ -178,14 +178,14 @@ function admin_api_routes(Router $r): void
             foreach ($tab['sections'] as $sk => $sec) {
                 $hay = mb_strtolower($tab['label'] . ' ' . $sec['label'] . ' ' . implode(' ', array_column($sec['fields'] ?? [], 'label')));
                 if ($ql === '' || str_contains($hay, $ql)) {
-                    $out[] = ['group' => 'Settings', 'label' => $tab['label'] . ' → ' . $sec['label'], 'hint' => '', 'url' => admin_url("settings/$tk/$sk"), 'icon' => $tab['icon']];
+                    $out[] = ['group' => 'Settings', 'label' => $tab['label'] . ' › ' . $sec['label'], 'hint' => '', 'url' => admin_url("settings/$tk/$sk"), 'icon' => $tab['icon']];
                 }
             }
         }
         foreach (\Slate\Modules::adminGroups() as $g) {
             foreach ($g['pages'] as $mp) {
                 if (Auth::can($mp['cap']) && ($ql === '' || str_contains(mb_strtolower($g['name'] . ' ' . $mp['label']), $ql))) {
-                    $out[] = ['group' => 'Modules', 'label' => $g['name'] . ($mp['label'] !== $g['name'] ? ' → ' . $mp['label'] : ''), 'hint' => '', 'url' => admin_url('m/' . $mp['slug']), 'icon' => $mp['icon']];
+                    $out[] = ['group' => 'Modules', 'label' => $g['name'] . ($mp['label'] !== $g['name'] ? ' › ' . $mp['label'] : ''), 'hint' => '', 'url' => admin_url('m/' . $mp['slug']), 'icon' => $mp['icon']];
                 }
             }
         }

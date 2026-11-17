@@ -330,3 +330,156 @@ test('server rejects bad operations; people without edit rights get no editor', 
   // Signed-out visitors: no editor either.
   expect(await visitorHtml()).not.toContain('page-editor.js');
 });
+
+// ---------------------------------------------------------------- pages that are not designed pages
+// Stored content (WordPress-like HTML), the item's title and fields shown by a Template or the theme, and term pages.
+
+const run = (args) => JSON.parse(execSync(SETUP + ' ' + args, { encoding: 'utf8' }).trim().split('\n').pop());
+async function visitorAt(url) {
+  const ctx = await pwRequest.newContext();
+  const res = await ctx.get(`${BASE}${url}`);
+  expect(res.status()).toBe(200);
+  const html = await res.text();
+  await ctx.dispose();
+  return html;
+}
+// What the editor's marks add; without them a team member gets the same markup as visitors.
+const unmark = (h) => h.replace(/ data-se(-bind|-loop|-item)?="[^"]*"/g, '').replace(/<!--\/?se:[a-z]+-->/g, '');
+const noMarks = (h) => !/data-se(-bind|-loop|-item)?="/.test(h) && !h.includes('<!--se:') && !h.includes('se-config');
+const caretAtEnd = (page, sel) => page.evaluate((s) => {
+  const el = document.querySelector(s); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+  const g = getSelection(); g.removeAllRanges(); g.addRange(r);
+}, sel);
+const selectAll = (page, sel) => page.evaluate((s) => {
+  const el = document.querySelector(s); const r = document.createRange(); r.selectNodeContents(el);
+  const g = getSelection(); g.removeAllRanges(); g.addRange(r);
+}, sel);
+const nbsp = (s) => s.replace(/ /g, '&nbsp;');
+
+test('page shown by a Template: title, field and stored content edited in place; only the edited elements change', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const T = PAGE.tpl;
+  await login(page);
+  const visitorBefore = await visitorAt(T.url);
+  expect(noMarks(visitorBefore)).toBe(true);
+  // Signed in, before editing: same markup as visitors apart from the editor's marks.
+  const editorRaw = await (await page.request.get(`${BASE}${T.url}`)).text();
+  const region = (h) => h.match(/<section class="pe-t">[\s\S]*?<\/section>/)[0];
+  expect(region(unmark(editorRaw))).toBe(region(visitorBefore));
+  expect(editorRaw).toContain('<h1 class="t-title" data-se-bind="post:' + T.id + ':title">');
+  expect(editorRaw).toContain('alt="Template page"'); // values inside attributes are never marked
+  expect(editorRaw).not.toContain('data-slate-edit');
+
+  await page.goto(`${BASE}${T.url}`);
+  await expect(page.locator('#sb-edit')).toHaveCount(0); // the older region editor is retired here
+  await page.click('#se-toggle');
+  // Title: edited as stored (not the curly-quoted output).
+  await page.click('h1.t-title');
+  await expect(page.locator('.se-toolbar .se-chip-label')).toHaveText('Title');
+  await selectAll(page, 'h1.t-title');
+  await page.keyboard.type('Edited title');
+  await page.click('p.t-sub');
+  await selectAll(page, 'p.t-sub');
+  await page.keyboard.type('New subtitle');
+  // Stored content: a paragraph and an image.
+  await page.click('.t-body p.intro');
+  await caretAtEnd(page, '.t-body p.intro');
+  await page.keyboard.type(', edited');
+  await page.click('.t-body img');
+  await page.fill('#se-alt', 'New alt');
+  // Featured image ({{image}}): replaced through the image panel, saved as the item's featured image.
+  await page.click('figure.t-fig img');
+  await expect(page.locator('#se-panel-title')).toHaveText('Featured image');
+  const file = path.join(SHOTS, 'pe-feature-new.png');
+  fs.writeFileSync(file, PNG);
+  const up = page.waitForResponse((r) => r.url().includes('/api/media') && r.request().method() === 'POST');
+  await page.setInputFiles('[data-upload]', file);
+  const newId = (await (await up).json()).items[0].id;
+  await page.keyboard.press('Escape');
+  // Content that is not stored text (shortcodes, {{tags}}) is not editable.
+  expect(await page.locator('.t-body p:has-text("[gallery")').getAttribute('data-se')).toBeNull();
+  // Lists from the template explain where they come from.
+  await page.hover('.t-item >> nth=0');
+  await expect(page.locator('.se-hover .se-tagname')).toHaveText(/Part of a list/);
+  await page.screenshot({ path: `${SHOTS}/pe-template-page.png` });
+  const resp = page.waitForResponse((r) => r.url().endsWith(`/page-editor/${T.id}/save`));
+  await Promise.all([page.waitForEvent('load'), page.keyboard.press('Control+s')]);
+  expect((await resp).status()).toBe(200);
+  await expect(page.locator('.se-bar')).toBeVisible(); // back in edit mode after the reload
+
+  const html = await visitorAt(T.url);
+  expect(noMarks(html)).toBe(true);
+  expect(html).toContain('<h1 class="t-title">Edited title</h1>');
+  expect(html).toContain('<p class="t-sub">New subtitle</p>');
+  expect(html).toContain('<img class="t-alt" alt="Edited title"');
+  // Stored content: every byte outside the two edited elements is unchanged (comments, quotes, entities, SVG case, shortcodes).
+  const stored = run('content ' + T.id);
+  expect(stored.title).toBe('Edited title');
+  expect(stored.fields.subtitle).toBe('New subtitle');
+  expect(stored.featured).toBe(newId);
+  expect(nbsp(stored.content)).toBe(PAGE.stored
+    .replace('Intro text &amp; more&nbsp;here</p>', 'Intro text &amp; more&nbsp;here, edited</p>')
+    .replace('<img src="/content/uploads/pe-photo.png" alt="Pic" width="24" height="16"/>', '<img src="/content/uploads/pe-photo.png" alt="New alt" width="24" height="16" />'));
+  expect(errors).toEqual([]);
+});
+
+test('page shown by the theme: title and content edited in place', async ({ page }) => {
+  const T = PAGE.theme;
+  await login(page);
+  const visitorBefore = await visitorAt(T.url);
+  const editorRaw = await (await page.request.get(`${BASE}${T.url}`)).text();
+  const region = (h) => h.match(/<article class="wrap narrow entry">[\s\S]*?<\/article>/)[0];
+  expect(region(unmark(editorRaw))).toBe(region(visitorBefore)); // no extra wrappers for team members
+  await page.goto(`${BASE}${T.url}`);
+  await page.click('#se-toggle');
+  await page.click('h1.entry-title');
+  await selectAll(page, 'h1.entry-title');
+  await page.keyboard.type('Theme page edited');
+  await page.click('.entry-content h2#sec');
+  await caretAtEnd(page, '.entry-content h2#sec');
+  await page.keyboard.type(' two');
+  await page.selectOption('#se-tag', 'h3');
+  await page.screenshot({ path: `${SHOTS}/pe-theme-page.png` });
+  await Promise.all([page.waitForEvent('load'), page.keyboard.press('Control+s')]);
+  const html = await visitorAt(T.url);
+  expect(noMarks(html)).toBe(true);
+  expect(html).toContain('<h1 class="entry-title">Theme page edited</h1>');
+  expect(html).toContain('<h3 id="sec">Section heading two</h3>');
+  const stored = run('content ' + T.id).content;
+  expect(stored).toBe(PAGE.stored.replace('<h2 id="sec">Section heading</h2>', '<h3 id="sec">Section heading two</h3>'));
+});
+
+test('term page: name and a term field edited in place', async ({ page }) => {
+  const T = PAGE.term;
+  await login(page);
+  await page.goto(`${BASE}${T.url}`);
+  await page.click('#se-toggle');
+  await page.click('p.tl');
+  await expect(page.locator('p.tl')).toHaveText("Topic lead's text");
+  await caretAtEnd(page, 'p.tl');
+  await page.keyboard.type(' More.');
+  await page.click('h1.tt');
+  await selectAll(page, 'h1.tt');
+  await page.keyboard.type('PE Topic renamed');
+  await page.screenshot({ path: `${SHOTS}/pe-term-page.png` });
+  await Promise.all([page.waitForEvent('load'), page.keyboard.press('Control+s')]);
+  const html = await visitorAt(T.url);
+  expect(noMarks(html)).toBe(true);
+  expect(html).toContain('<h1 class="tt">PE Topic renamed</h1>');
+  expect(html).toMatch(/<p class="tl">Topic lead(&#039;|')s text More\.<\/p>/);
+  const t = run('term ' + T.id);
+  expect(t.name).toBe('PE Topic renamed');
+  expect(t.fields.lead).toBe("Topic lead's text More.");
+  // Without manage_terms the term save is refused.
+  const ctx = await page.context().browser().newContext();
+  const p2 = await ctx.newPage();
+  await login(p2, 'peauthor', 'author-password-123');
+  const csrf = (await (await p2.request.get(`${BASE}/admin/`)).text()).match(/"csrf":"([a-f0-9]+)"/)[1];
+  const r = await p2.request.post(`${BASE}/admin/page-editor/term/${T.id}/save`, {
+    headers: { 'X-CSRF-Token': csrf, Accept: 'application/json', 'Content-Type': 'application/json' },
+    data: { ops: [{ op: 'field', bind: `term:${T.id}:name`, value: 'Hacked' }] },
+  });
+  expect(r.status()).toBe(403);
+  await ctx.close();
+});

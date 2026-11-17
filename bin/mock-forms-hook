@@ -1,0 +1,44 @@
+<?php
+// Tests only: a tiny webhook receiver for tests/forms.spec.mjs (Forms module "Actions").
+//   php -S 127.0.0.1:8193 bin/mock-forms-hook
+// POST /anything   records the request (headers and body), answers 200 ({"ok":true})
+// POST /fail       records it and answers 500 (to test retries and the delivery log)
+// GET  /log        every recorded request as JSON, newest last
+// POST /reset      forgets them
+declare(strict_types=1);
+
+$file = sys_get_temp_dir() . '/slate-forms-hook-' . (int)($_SERVER['SERVER_PORT'] ?? 0) . '.json';
+$path = (string)parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+header('Content-Type: application/json');
+
+if ($method === 'GET' && $path === '/log') {
+    echo is_file($file) ? file_get_contents($file) : '[]';
+    return;
+}
+if ($method === 'POST' && $path === '/reset') {
+    @unlink($file);
+    echo '{"ok":true}';
+    return;
+}
+if ($method !== 'POST') {
+    http_response_code(405);
+    echo '{"ok":false}';
+    return;
+}
+$log = is_file($file) ? (json_decode((string)file_get_contents($file), true) ?: []) : [];
+$headers = [];
+foreach ($_SERVER as $k => $v) {
+    if (str_starts_with($k, 'HTTP_')) {
+        $headers[strtolower(str_replace('_', '-', substr($k, 5)))] = $v;
+    }
+}
+$headers['content-type'] = $_SERVER['CONTENT_TYPE'] ?? '';
+$log[] = ['path' => $path, 'headers' => $headers, 'body' => (string)file_get_contents('php://input'), 'at' => time()];
+file_put_contents($file, json_encode(array_slice($log, -50), JSON_UNESCAPED_SLASHES), LOCK_EX);
+if ($path === '/fail') {
+    http_response_code(500);
+    echo '{"ok":false,"error":"failing on purpose"}';
+    return;
+}
+echo '{"ok":true}';

@@ -44,6 +44,8 @@ jobs:
         run: |
           php -S 127.0.0.1:8191 -t tests/fixtures > fixtures.log 2>&1 &
           php bin/ci-import
+      - name: Webhook receiver for the Forms module actions (tests/forms.spec.mjs; skipped when Forms is not installed)
+        run: php -S 127.0.0.1:8193 bin/mock-forms-hook > forms-hook.log 2>&1 &
       - name: Fake module registry (automatic module updates)
         run: php -S 127.0.0.1:8199 bin/mock-registry > mock-registry.log 2>&1 &
       - name: Start PHP

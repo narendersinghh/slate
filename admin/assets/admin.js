@@ -96,6 +96,19 @@
     if (el && !confirm(el.dataset.confirm)) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
 
+  // ---------- Masonry: cards keep reading order, each spans as many 4px rows as it is tall ----------
+  $$('[data-masonry]').forEach((grid) => {
+    const layout = () => {
+      const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+      if (cols < 2) { grid.classList.remove('is-masonry'); [...grid.children].forEach((c) => { c.style.gridRowEnd = ''; }); return; }
+      grid.classList.add('is-masonry');
+      [...grid.children].forEach((c) => { c.style.gridRowEnd = 'span ' + Math.ceil((c.getBoundingClientRect().height + 20) / 4); });
+    };
+    layout();
+    if ('ResizeObserver' in window) { const ro = new ResizeObserver(() => requestAnimationFrame(layout)); [...grid.children].forEach((c) => ro.observe(c)); ro.observe(grid); }
+    window.addEventListener('resize', debounce(layout, 100));
+  });
+
   // ---------- Copy ----------
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-copy]');

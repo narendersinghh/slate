@@ -1812,3 +1812,6 @@ body.tpl-all .tpl-group + .tpl-group { margin-top: 18px; }
 .repeater-row.is-sized > .rw-75 { grid-column: span 9; }
 .repeater-row.is-sized > .rw-100 { grid-column: 1 / -1; }
 @media (max-width: 760px) { .repeater-row.is-sized > .field { grid-column: 1 / -1; } }
+/* Masonry: cards take only their own height (rows of 4px, spans set by admin.js) */
+.dash-main[data-masonry].is-masonry { grid-auto-rows: 4px; row-gap: 0; align-items: start; }
+.dash-main[data-masonry].is-masonry > * { margin: 0 0 20px; }

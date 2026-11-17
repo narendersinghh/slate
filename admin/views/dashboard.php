@@ -67,7 +67,7 @@ if (Auth::can('use_ai') && Auth::can('edit_posts') && (!$aiReady || $pageCount <
 </div>
 
 <div class="dash-layout">
-<div class="dash-main grid-2">
+<div class="dash-main grid-2" data-masonry>
   <section class="card">
     <div class="card-head"><h2>Recently edited</h2></div>
     <?php if (!$recent): ?>

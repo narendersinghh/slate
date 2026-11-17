@@ -313,6 +313,11 @@ final class ContentModel
                 'post_type' => implode(',', array_filter(array_map(static fn($t) => preg_replace('/[^a-z0-9_-]/', '', (string)$t),
                     is_array($f['post_type'] ?? null) ? $f['post_type'] : explode(',', (string)($f['post_type'] ?? ''))))),
             ];
+            if ($depth > 0) {
+                // Width inside a repeater row: "auto" (several per line, the default) or a share of the row.
+                $rw = (string)($f['row_width'] ?? 'auto');
+                $field['row_width'] = in_array($rw, ['auto', '25', '33', '50', '66', '75', '100'], true) ? $rw : 'auto';
+            }
             if ($f['type'] === 'taxonomy') {
                 $field['taxonomy'] = self::taxonomy((string)($f['taxonomy'] ?? '')) ? (string)$f['taxonomy'] : '';
             }

@@ -162,6 +162,8 @@
         (s._saved && !s._unlock
           ? '<span class="fb-sub-cell"><span>Name</span><span class="fb-name-locked is-sm"><code>' + esc(s.name) + '</code><button type="button" class="icon-btn" data-act="sub-unlock" data-si="' + si + '" title="Change the name" aria-label="Change the name">' + IC.lock + '</button></span></span>'
           : '<label class="fb-sub-cell"><span>Name</span><input class="input input-sm" data-sk="name" data-si="' + si + '" value="' + esc(s.name) + '" spellcheck="false" autocomplete="off"></label>') +
+        '<label class="fb-sub-cell"><span>Width</span><select class="input input-sm" data-sk="row_width" data-si="' + si + '">' +
+          [['auto', 'Auto']].concat(WIDTHS.map(([w, l]) => [w, w === '100' ? 'Full row' : l])).map(([w, l]) => '<option value="' + w + '"' + (String(s.row_width || 'auto') === w ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' +
         '<button type="button" class="icon-btn fb-del" data-act="sub-del" data-si="' + si + '" title="Remove" aria-label="Remove">' + IC.trash + '</button>' +
         (s.type === 'select' ? '<label class="fb-sub-cell fb-sub-wide"><span>Choices, one per line</span><textarea class="input input-sm" rows="3" data-sk="options" data-si="' + si + '">' + esc((s.options || []).join('\n')) + '</textarea></label>' : '') +
         '</li>').join('') + '</ol>' : '<p class="muted small fb-subs-empty">No fields in the rows yet.</p>') +

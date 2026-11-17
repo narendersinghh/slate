@@ -278,7 +278,7 @@ a.cm-chip:hover .ic { color: var(--accent); }
 .fb-subs-head strong { font-weight: 600; }
 .fb-subs-empty { margin: 0; }
 .fb-sub-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.fb-srow { display: grid; grid-template-columns: auto minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.fb-srow { display: grid; grid-template-columns: auto minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(110px, .8fr) auto; gap: 8px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
 .fb-sub-move { display: flex; flex-direction: column; align-self: center; }
 .fb-sub-move .icon-btn { height: 22px; }
 .fb-sub-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

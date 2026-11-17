@@ -1801,3 +1801,14 @@ body.tpl-all .tpl-group + .tpl-group { margin-top: 18px; }
 .term-pick-list .choice[hidden] { display: none; }
 .term-pick-list .choice span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-pick-list > p { grid-column: 1 / -1; margin: 4px; }
+
+/* Repeater rows with widths from the field builder */
+.repeater-row.is-sized { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.repeater-row.is-sized > .field { grid-column: span 4; }
+.repeater-row.is-sized > .rw-25 { grid-column: span 3; }
+.repeater-row.is-sized > .rw-33 { grid-column: span 4; }
+.repeater-row.is-sized > .rw-50 { grid-column: span 6; }
+.repeater-row.is-sized > .rw-66 { grid-column: span 8; }
+.repeater-row.is-sized > .rw-75 { grid-column: span 9; }
+.repeater-row.is-sized > .rw-100 { grid-column: 1 / -1; }
+@media (max-width: 760px) { .repeater-row.is-sized > .field { grid-column: 1 / -1; } }
